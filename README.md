@@ -60,10 +60,18 @@ Repozitoriyada tayyor `render.yaml` bor.
 1. [render.com](https://render.com) da **New → Blueprint** ni tanlang va repozitoriyani ulang.
 2. Render `render.yaml` ni o'qiydi va xizmatni yaratadi.
 3. **Environment** bo'limida quyidagilarni kiriting:
-   - `SEED_DIRECTOR_PASSWORD` — direktor paroli
+   - `SEED_DIRECTOR_PASSWORD` — direktor paroli.
+     **Bo'sh qoldirsangiz birinchi kirish `admin` / `1234` bo'ladi** —
+     tizim kirgandan keyin parolni almashtirishni so'raydi.
    - `TELEGRAM_BOT_TOKEN` — @BotFather bergan token
    - `TELEGRAM_BOT_USERNAME` — bot nomi (masalan `albyana_bot`)
 4. Deploy tugagach havola beriladi — shu manzilga kiring.
+   Birinchi kirish: login `admin`, parol `1234` (yoki siz kiritgan parol).
+   Kirgandan keyin **Sozlamalar → Foydalanuvchilar** da parolni almashtiring.
+
+Zaxira nusxalar `/var/data/backups` papkasida, har kuni avtomatik olinadi
+(oxirgi 30 tasi saqlanadi). Sozlamalar → Ma'lumotlar bo'limida qo'lda zaxira
+olish va zaxiradan tiklash tugmalari bor.
 
 **Muhim:** ma'lumotlar `/var/data` diskida saqlanadi. Bepul tarifda disk yo'q —
 xizmat uxlab qolganda ma'lumot yo'qolishi mumkin. Haqiqiy ish uchun disk bor
