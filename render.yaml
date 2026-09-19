@@ -1,8 +1,13 @@
 # Render.com uchun tayyor sozlama.
 # Repozitoriyani Render'ga ulaganda shu fayl avtomatik o'qiladi.
+#
+# MUHIM: DATABASE_URL ga Render'ning "Internal Database URL" manzilini qo'ying
+# (dpg-xxxxxxxx-a/albayan ko'rinishida, nuqtasiz). U tezroq, bepul va SSL talab
+# qilmaydi. "External Database URL" faqat tashqaridan ulanish uchun kerak
+# (kompyuterdan tekshirish, ma'lumot ko'chirish, sinov).
 services:
   - type: web
-    name: albyana-erp
+    name: albayan-cairo-erp
     runtime: node
     plan: starter          # doimiy disk uchun eng kam tarif
     buildCommand: npm install && node build.js
@@ -11,12 +16,24 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: APP_NAME
+        value: AlBayan Cairo
       - key: DATA_DIR
         value: /var/data
       - key: BACKUP_DIR
         value: /var/data/backups
+      - key: BACKUP_KEEP
+        value: "30"
       - key: DATABASE_URL
-        sync: false        # Neon "Pooled connection" manzili; bo'sh bo'lsa diskdagi fayl bazasi
+        sync: false        # Render "Internal Database URL"; bo'sh bo'lsa diskdagi fayl bazasi
+      - key: PG_POOL_MAX
+        value: "4"
+      - key: PG_IDLE_MS
+        value: "15000"
+      - key: PG_CONNECT_MS
+        value: "15000"
+      - key: SESSION_MAX_AGE_DAYS
+        value: "7"
       - key: SEED_DIRECTOR_LOGIN
         value: admin
       - key: SEED_DIRECTOR_PASSWORD
@@ -26,6 +43,6 @@ services:
       - key: TELEGRAM_BOT_USERNAME
         sync: false
     disk:
-      name: albyana-data
+      name: albayan-data
       mountPath: /var/data
       sizeGB: 1

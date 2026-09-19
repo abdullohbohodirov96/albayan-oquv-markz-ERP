@@ -1469,7 +1469,7 @@
   function validateDump(dump) {
     var errors = [], warnings = [];
     if (!dump || typeof dump !== 'object') return { ok: false, errors: ['Fayl JSON emas.'], warnings: [], byCollection: {}, count: 0, docs: {} };
-    if (dump.app && dump.app !== 'albyana-erp') errors.push('Bu fayl Albyana zaxirasi emas.');
+    if (dump.app && dump.app !== 'albyana-erp') errors.push('Bu fayl AlBayan Cairo zaxirasi emas.');
     var docs = dumpDocs(dump);
     var byCollection = {};
     Object.keys(docs).forEach(function (p) {
@@ -1527,7 +1527,7 @@
                     UI.toast('Serverda zaxira olindi: ' + r.file.name, 'ok');
                   } catch (err) { UI.toast(err.message, 'bad'); }
                 }
-                await UI.saveText('albyana-zaxira-' + A.today() + '.json',
+                await UI.saveText('albayan-zaxira-' + A.today() + '.json',
                   JSON.stringify(localDump()));
                 refresh();
               });
@@ -1701,7 +1701,7 @@
                 UI.toast('Tiklandi: ' + r.restored + ' yozuv. Oldingi holat "' + r.safety + '" fayliga saqlandi.', 'ok');
                 await D.loadBootstrap();
               } else {
-                await UI.saveText('albyana-tiklashdan-oldin-' + A.today() + '.json', JSON.stringify(localDump()));
+                await UI.saveText('albayan-tiklashdan-oldin-' + A.today() + '.json', JSON.stringify(localDump()));
                 await localRestore(check.docs);
                 UI.toast('Tiklandi: ' + Object.keys(check.docs).length + ' yozuv.', 'ok');
               }

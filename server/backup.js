@@ -53,7 +53,7 @@ async function makeBackup(store, reason, prefix) {
   const dump = await dumpOf(store);
   dump.reason = reason || 'qo’lda';
   dump.checksum = checksum(dump);
-  const name = tsName(prefix || 'albyana');
+  const name = tsName(prefix || 'albayan');
   const file = path.join(DIR, name);
   const tmp = file + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(dump), { mode: 0o600 });
@@ -64,7 +64,8 @@ async function makeBackup(store, reason, prefix) {
 
 function prune() {
   try {
-    const files = list().filter(f => f.name.indexOf('albyana-') === 0);
+    // eski ("albyana-") va yangi ("albayan-") nomdagi kunlik zaxiralar birga hisoblanadi
+    const files = list().filter(f => /^(albayan|albyana)-/.test(f.name));
     files.slice(KEEP).forEach(f => { try { fs.unlinkSync(path.join(DIR, f.name)); } catch (e) { } });
   } catch (e) { }
 }
@@ -103,7 +104,7 @@ const REQUIRED = ['users'];
 function validate(dump) {
   const errors = [], warnings = [];
   if (!dump || typeof dump !== 'object') return { ok: false, errors: ['Fayl JSON emas.'], warnings, byCollection: {}, count: 0 };
-  if (dump.app && dump.app !== 'albyana-erp') errors.push('Bu fayl Albyana zaxirasi emas.');
+  if (dump.app && dump.app !== 'albyana-erp') errors.push('Bu fayl AlBayan Cairo zaxirasi emas.');
   const docs = dump.collections ? flattenOld(dump) : dump.docs;
   if (!docs || typeof docs !== 'object') errors.push('Ichida ma’lumot yo’q.');
 

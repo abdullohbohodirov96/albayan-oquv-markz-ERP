@@ -59,15 +59,35 @@ Repozitoriyada tayyor `render.yaml` bor.
 
 1. [render.com](https://render.com) da **New → Blueprint** ni tanlang va repozitoriyani ulang.
 2. Render `render.yaml` ni o'qiydi va xizmatni yaratadi.
-3. **Environment** bo'limida quyidagilarni kiriting:
-   - `SEED_DIRECTOR_PASSWORD` — direktor paroli.
-     **Bo'sh qoldirsangiz birinchi kirish `admin` / `1234` bo'ladi** —
-     tizim kirgandan keyin parolni almashtirishni so'raydi.
-   - `TELEGRAM_BOT_TOKEN` — @BotFather bergan token
-   - `TELEGRAM_BOT_USERNAME` — bot nomi (masalan `albyana_bot`)
+3. **Environment** bo'limida quyidagilarni kiriting (to'liq ro'yxat quyida).
 4. Deploy tugagach havola beriladi — shu manzilga kiring.
    Birinchi kirish: login `admin`, parol `1234` (yoki siz kiritgan parol).
    Kirgandan keyin **Sozlamalar → Foydalanuvchilar** da parolni almashtiring.
+
+### Muhit o'zgaruvchilari (Render → Environment)
+
+Nusxa olib qo'yish uchun tayyor ro'yxat. `render.yaml` dagilar avtomatik
+qo'yiladi — qo'lda faqat "siz kiritasiz" deb belgilanganlari kerak.
+
+| Nomi | Qiymati | Kim qo'yadi |
+|---|---|---|
+| `NODE_ENV` | `production` | avtomatik |
+| `APP_NAME` | `AlBayan Cairo` | avtomatik |
+| `DATA_DIR` | `/var/data` | avtomatik |
+| `BACKUP_DIR` | `/var/data/backups` | avtomatik |
+| `BACKUP_KEEP` | `30` | avtomatik |
+| `PG_POOL_MAX` | `4` | avtomatik |
+| `PG_IDLE_MS` | `15000` | avtomatik |
+| `PG_CONNECT_MS` | `15000` | avtomatik |
+| `SESSION_MAX_AGE_DAYS` | `7` | avtomatik |
+| `SEED_DIRECTOR_LOGIN` | `admin` | avtomatik |
+| `DATABASE_URL` | **Internal Database URL** (pastga qarang) | **siz kiritasiz** |
+| `SEED_DIRECTOR_PASSWORD` | bo'sh qoldiring → birinchi parol `1234` | **siz kiritasiz** |
+| `TELEGRAM_BOT_TOKEN` | @BotFather bergan token | **siz kiritasiz** |
+| `TELEGRAM_BOT_USERNAME` | bot nomi, masalan `albayan_bot` | **siz kiritasiz** |
+
+`DATABASE_URL` ni umuman qo'ymasangiz ham ishlaydi — u holda ma'lumot
+`/var/data` diskidagi faylda saqlanadi.
 
 Vaqt mintaqasi hamma joyda **Asia/Tashkent (UTC+5)**: serverda ham, brauzerda ham.
 Xodimning kompyuteri boshqa mintaqada bo'lsa ham sana bir xil bo'ladi — davomat,
@@ -89,6 +109,35 @@ Tizim uchta rejimda ishlaydi — kodni o'zgartirish shart emas, faqat `DATABASE_
 |---|---|---|
 | Fayl (standart) | `DATABASE_URL` bo'sh | Diskdagi joy (Render'da 1 GB) |
 | PostgreSQL | `DATABASE_URL` berilgan | Xizmat tarifiga qarab |
+
+### Ichki (Internal) va tashqi (External) manzil — qaysi biri qayerda
+
+Render Postgres yaratsangiz, sizga **ikkita** manzil beradi. Ular bir xil bazaga
+olib boradi, lekin turli yo'ldan:
+
+| | Internal Database URL | External Database URL |
+|---|---|---|
+| Ko'rinishi | `postgresql://…@dpg-xxxxxxxx-a/albayan` (nuqtasiz, qisqa) | `postgresql://…@dpg-xxxxxxxx-a.frankfurt-postgres.render.com/albayan` |
+| Qayerdan ishlaydi | faqat Render ichidan | butun internetdan |
+| Tezligi | tezroq (bir xil markazda) | sekinroq |
+| Trafik puli | bepul | hisoblanadi |
+| SSL | kerak emas | shart (o'zi yoqiladi) |
+| Qayerda ishlatiladi | **Render'dagi ilova — `DATABASE_URL` shu bo'lsin** | kompyuterdan tekshirish, ko'chirish, pgAdmin/DBeaver, sinov |
+
+Qoida oddiy: **serverda ichki, kompyuterda tashqi.**
+
+```bash
+# Kompyuterdan ulanishni tekshirish (TASHQI manzil bilan):
+DATABASE_URL="postgresql://…@dpg-xxxxxxxx-a.frankfurt-postgres.render.com/albayan" npm run check:db
+```
+
+Tekshiruv nima qiladi: manzilni tahlil qiladi, ulanadi, o'z yo'lida bitta yozuv
+yozib-o'qib-o'chiradi va bazada nechta yozuv borligini aytadi. Parol hech qayerda
+ko'rsatilmaydi va sizning ma'lumotingizga tegilmaydi.
+
+SSL o'zi to'g'ri tanlanadi (ichki manzil va `localhost` uchun o'chiq, qolganiga
+yoqiq). Kerak bo'lsa majburan belgilash mumkin: `PGSSLMODE=require` yoki
+`PGSSLMODE=disable`.
 
 ### Neon (bepul PostgreSQL) ga ulash
 
@@ -312,7 +361,8 @@ node tests/advance-test.js   <port> <parol>    # avansdan qoplash
 node tests/autoinvoice-test.js <port> <parol>  # avtomatik oylik hisoblar
 node tests/pwa-test.js       <port> <parol>    # o'rnatish, kesh, internetsiz holat
 
-# PostgreSQL (Neon) bilan:
+# PostgreSQL (Neon yoki Render) bilan — TASHQI manzil kerak:
+DATABASE_URL="postgresql://..." npm run check:db     # ulanish tekshiruvi
 DATABASE_URL="postgresql://..." node tests/db-test.js
 ```
 

@@ -24,7 +24,7 @@
     }
     return {
       username: s.username || '',
-      welcome: s.welcome || 'Assalomu alaykum! Albyana o’quv markazi botiga xush kelibsiz.',
+      welcome: s.welcome || 'Assalomu alaykum! AlBayan Cairo o’quv markazi botiga xush kelibsiz.',
       notify: {
         davomat: on('davomat', s.notifyAttendance),
         tolov: on('tolov', s.notifyPayment),

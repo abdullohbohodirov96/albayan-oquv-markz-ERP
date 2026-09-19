@@ -115,7 +115,7 @@ function section(t) { out.push('\n' + t); }
     await new Promise(r2 => setTimeout(r2, 1100));   // nom soniyaga bog'liq
     await backup.makeBackup(store, 'sinov');
   }
-  const files = backup.list().filter(f => f.name.indexOf('albyana-') === 0);
+  const files = backup.list().filter(f => /^(albayan|albyana)-/.test(f.name));
   ok('Faqat ' + process.env.BACKUP_KEEP + ' ta saqlandi (' + files.length + ')', files.length <= 3);
 
   section('Kunlik jadval holati');

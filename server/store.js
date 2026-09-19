@@ -85,21 +85,52 @@ function makeSqlite() {
 /* PostgreSQL (Neon, Supabase, Render Postgres yoki o'z serveringiz).
    Neon uchun muhim: ulanish bo'sh turganda yopiladi — shunda Neon "compute"ni
    uxlatadi va bepul tarifdagi soatlar behuda sarflanmaydi.                   */
+/**
+ * Ulanish manzilini tahlil qilish: SSL kerakmi va qaysi serverga ulanyapmiz.
+ * — Render'ning ICHKI manzili (dpg-xxxx-a kabi, nuqtasiz) va localhost: SSL kerak emas
+ * — Neon, Supabase, Render'ning TASHQI manzili: SSL shart
+ * — PGSSLMODE=disable / require bilan majburan belgilash mumkin
+ */
+function pgConf(url) {
+  let host = '', db = '';
+  try {
+    const u = new URL(url);
+    host = u.hostname;
+    db = (u.pathname || '').replace(/^\//, '');
+  } catch (e) { /* manzil g'alati bo'lsa quyidagi qoidalar ishlaydi */ }
+
+  const mode = String(process.env.PGSSLMODE || '').toLowerCase();
+  const local = /^(localhost|127\.0\.0\.1|::1)$/.test(host) || /localhost|127\.0\.0\.1/.test(url);
+  const internal = host && host.indexOf('.') < 0 && !local;   // Render ichki tarmog'i
+  const asked = /sslmode=require|sslmode=verify/.test(url);
+
+  let ssl;
+  if (mode === 'disable') ssl = false;
+  else if (mode === 'require') ssl = true;
+  else if (asked) ssl = true;
+  else ssl = !(local || internal);
+
+  return { host, db, ssl, local, internal };
+}
+
 function makePostgres(url) {
   let Pool;
   try { Pool = require('pg').Pool; }
   catch (e) { throw new Error('pg o’rnatilmagan. "npm install" ni ishga tushiring.'); }
 
-  const local = /localhost|127\.0\.0\.1/.test(url);
+  const conf = pgConf(url);
   const pool = new Pool({
     connectionString: url,
-    ssl: local ? false : { rejectUnauthorized: false },
+    ssl: conf.ssl ? { rejectUnauthorized: false } : false,
     max: Number(process.env.PG_POOL_MAX || 4),
     idleTimeoutMillis: Number(process.env.PG_IDLE_MS || 15000),   // bo'sh ulanish yopilsin
     connectionTimeoutMillis: Number(process.env.PG_CONNECT_MS || 15000),
     allowExitOnIdle: true
   });
   pool.on('error', e => console.error('  Baza ulanishi uzildi: ' + e.message));
+  console.log('  Baza: ' + (conf.host || '?') + (conf.db ? '/' + conf.db : '') +
+    ' · SSL: ' + (conf.ssl ? 'ha' : 'yo’q') +
+    (conf.internal ? ' · ichki tarmoq' : (conf.local ? ' · shu kompyuter' : '')));
 
   let ready = init();
   async function init() {
@@ -166,4 +197,4 @@ function createStore() {
   return makeSqlite() || makeJsonFile();
 }
 
-module.exports = { createStore, DATA_DIR };
+module.exports = { createStore, DATA_DIR, pgConf };

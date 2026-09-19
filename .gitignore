@@ -8,6 +8,8 @@
 # Haqiqiy ma'lumotlar va zaxiralar (hech qachon commit qilinmasin)
 data/
 albyana-zaxira-*.json
+albayan-zaxira-*.json
+albayan-*.json
 backup/
 backups/
 zaxira/

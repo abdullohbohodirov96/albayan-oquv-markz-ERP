@@ -1,7 +1,7 @@
 {
-  "name": "albyana-oquv-markaz-erp",
+  "name": "albayan-cairo-erp",
   "version": "2.0.0",
-  "description": "Albyana o'quv markazi uchun ERP tizimi: o'quvchilar, guruhlar, jadval, davomat, to'lovlar, ish haqi, hisobotlar, ichki chat, vazifalar va Telegram bot",
+  "description": "AlBayan Cairo o'quv markazi uchun ERP tizimi: o'quvchilar, guruhlar, jadval, davomat, to'lovlar, ish haqi, hisobotlar, ichki chat, vazifalar va Telegram bot",
   "private": true,
   "main": "server/index.js",
   "engines": {
@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node server/index.js",
     "build": "node build.js",
+    "check:db": "node server/check-db.js",
     "test": "node tests/run-tests.js",
     "test:browser": "node tests/smoke.js",
     "test:server": "node tests/server-test.js",
