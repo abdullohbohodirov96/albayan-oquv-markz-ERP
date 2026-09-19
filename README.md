@@ -239,6 +239,57 @@ ishga tushgach yuboriladi — hech biri yo'qolmaydi.
 
 ---
 
+## 4-b. O'quvchi kabineti — shaxsiy kod
+
+Har bir o'quvchiga **4 xonali shaxsiy kod** beriladi (masalan `4077`). Kod
+o'zgarmaydi va takrorlanmaydi; server o'zi beradi — o'quvchi qo'shilganda
+avtomatik, mavjudlariga esa server birinchi ishga tushganda.
+
+Kod bilan o'quvchi **ikki joyda** o'z ma'lumotini ko'radi:
+
+**1) Telegram botda.** `/start` → kodini yozadi → darhol to'liq ma'lumot chiqadi
+va suhbat o'sha o'quvchiga bog'lanadi (keyingi safar kod so'ralmaydi).
+Keyin "Ma'lumotim" tugmasi shu ma'lumotni qayta ko'rsatadi.
+
+**2) Saytda, kirishsiz.** Kirish sahifasida **"O'quvchimisiz? → Shaxsiy kod bilan
+kirish"**, yoki to'g'ridan-to'g'ri havola: `https://…/#kabinet?kod=4077`
+(bu havolani o'quvchiga yuborsangiz, sahifa o'zi ochiladi).
+
+Nimalar ko'rinadi:
+
+- ism, shaxsiy kod;
+- guruhlari: guruh kodi va nomi, o'qituvchi, dars kunlari, vaqti, xona;
+- to'lov: qarz yoki avans, keyingi to'lov summasi va sanasi, muddati o'tgani;
+- davomat: keldi / kelmadi / kechikdi / sababli, foizi va oxirgi darslar.
+
+Nimalar **ko'rinmaydi**: telefon raqamlari, ota-ona ma'lumoti, manzil, boshqa
+o'quvchilar — javobda umuman yuborilmaydi.
+
+### Kodni qayerdan olish va almashtirish
+
+O'quvchi kartasida kod tepada turadi — bosilsa katta ko'rinishda chiqadi,
+nusxalash va kabinet havolasi bor. Kod boshqaga ma'lum bo'lib qolsa
+**"Yangi kod berish"** — eski kod darhol ishlamay qoladi (bu amal tarixga
+yoziladi). Kodlar o'quvchilar ro'yxatida, qidiruvda (kodni yozsangiz topadi)
+va Excel eksportida ham bor.
+
+### Xavfsizlik haqida ochiq gap
+
+4 xonali kod — **eslash oson, lekin maxfiy parol emas**: jami 9000 ta variant.
+Shuning uchun:
+
+- bitta IP yoki suhbatdan **5 ta noto'g'ri urinish** → 15 daqiqa qulf
+  (`KABINET_MAX_TRIES`, `KABINET_LOCK_MS`, `BOT_CODE_*`);
+- qulf paytida to'g'ri kod ham kutadi, javob sekinlashtiriladi;
+- ko'p noto'g'ri urinish bo'lsa **direktorga xabar** boradi va tarixga yoziladi;
+- noto'g'ri kod javobida hech qanday ism yoki ma'lumot bo'lmaydi.
+
+Shunga qaramay, kod bilan ochiladigan ma'lumot — o'quvchining o'z guruhi, to'lovi
+va davomati. Agar bu ham juda maxfiy deb hisoblansa, kodni 6 xonali qilish yoki
+telefon raqamining oxirgi 4 raqamini so'rash mumkin — ayting, qo'shamiz.
+
+---
+
 ## 5. Rollar va ruxsatlar
 
 Tayyor rollar: **Direktor, Administrator, O'qituvchi, Buxgalter.**
@@ -361,6 +412,7 @@ npm run test:menu        # telefondagi menyu: ikonka/qator o'lchami, 4 til, scre
 npm run test:perm        # tegishlilik: davomat, ish haqi tasdig'i, suhbat, vazifa
 npm run test:bot-idle    # bot bo'sh turganda baza so'rovlari sanaladi
 npm run test:sw          # eski brauzer profiliga yangi versiya yetib boradimi
+npm run test:kabinet-bot # botda shaxsiy kod bilan ulanish (soxta Telegram)
 node tests/mobile-test.js       # 360 / 390 / 430 px
 node tests/export-test.js       # Excel va CSV fayli haqiqatan yuklanadimi
 node tests/ui-backup-test.js    # zaxira oynasi
@@ -373,6 +425,8 @@ node tests/security-test.js  <port> <parol>    # maxfiy fayllar, huquqlar, pul
 node tests/perm-test.js      <port> <parol>    # yozuv kimga tegishli va holat o'zgarishi
 node tests/chat-test.js      <port> <parol>    # suhbat maxfiyligi va xabar yuborish
 node tests/chat-ui-test.js   <port> <parol>    # suhbat brauzer tomoni
+node tests/kabinet-test.js   <port> <parol>    # shaxsiy kod, ma'lumot va himoya
+node tests/kabinet-ui-test.js <port> <parol>   # kabinet sahifasi (brauzer)
 node tests/advance-test.js   <port> <parol>    # avansdan qoplash
 node tests/autoinvoice-test.js <port> <parol>  # avtomatik oylik hisoblar
 node tests/pwa-test.js       <port> <parol>    # o'rnatish, kesh, internetsiz holat

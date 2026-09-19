@@ -11,6 +11,7 @@ try { require('dotenv').config(); } catch (e) { /* dotenv ixtiyoriy */ }
 const { createStore } = require('./store');
 const { A, writePermFor, readBlocked, safeUser, safeStaff, visibleData, GENERAL_CHAT } = require('./shared');
 const backup = require('./backup');
+const kabinet = require('./kabinet');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
 function backupReadSafe(name) {
@@ -113,6 +114,35 @@ function loginFail(req, login) {
   if (loginTries.size > 5000) loginTries.clear();
 }
 function loginOk(req, login) { loginTries.delete(gateKey(req, login)); }
+
+/* ---------------- O'quvchi kabineti: kod taxmin qilishdan himoya ----------------
+   4 xonali kodni taxmin qilish mumkin (9000 ta variant), shuning uchun:
+   — 5 ta noto'g'ri urinishdan keyin 15 daqiqa qulf;
+   — 20 ta noto'g'ri urinishdan keyin direktorga xabar;
+   — to'g'ri kod kiritilsa sanoq tozalanadi.                                    */
+const kabinetTries = new Map();
+const KAB_MAX = Number(process.env.KABINET_MAX_TRIES || 5);
+const KAB_LOCK_MS = Number(process.env.KABINET_LOCK_MS || 15 * 60 * 1000);
+const KAB_NOTIFY_AT = 20;
+function kabinetGate(ip) {
+  const rec = kabinetTries.get(ip);
+  if (!rec) return { ok: true };
+  if (Date.now() - rec.first > KAB_LOCK_MS) { kabinetTries.delete(ip); return { ok: true }; }
+  if (rec.n < KAB_MAX) return { ok: true };
+  return { ok: false, wait: Math.max(1, Math.ceil((KAB_LOCK_MS - (Date.now() - rec.first)) / 60000)) };
+}
+function kabinetFail(ip) {
+  const rec = kabinetTries.get(ip);
+  if (!rec || Date.now() - rec.first > KAB_LOCK_MS) {
+    kabinetTries.set(ip, { n: 1, first: Date.now(), total: (rec && rec.total || 0) + 1 });
+  } else {
+    rec.n++; rec.total = (rec.total || 0) + 1;
+  }
+  if (kabinetTries.size > 5000) kabinetTries.clear();
+  const cur = kabinetTries.get(ip) || { n: 1, total: 1 };
+  return { n: cur.total, notify: cur.total === KAB_NOTIFY_AT };
+}
+function kabinetOk(ip) { kabinetTries.delete(ip); }
 
 /* ---------------- Sessiyalar ---------------- */
 const sessions = new Map();               // token -> {userId, at}
@@ -546,6 +576,25 @@ async function guardWrite(user, p, method, next) {
   const old = await store.get(p);
   const no = (msg) => ({ code: 403, error: msg || 'Sizda bu amal uchun ruxsat yo’q.' });
 
+  /* --- O'quvchi: shaxsiy kodni server beradi va u o'zgarmaydi --- */
+  if (col === 'students' && method === 'PUT') {
+    const data = Object.assign({}, next);
+    if (old && kabinet.validCode(old.code)) {
+      data.code = old.code;                       // mijoz kodni o'zgartira olmaydi
+    } else if (!kabinet.validCode(data.code)) {
+      const c = await kabinet.ensureCode(store, Object.assign({ id: seg[1] }, data));
+      if (c) data.code = c;
+    } else {
+      // yangi o'quvchi kod bilan kelgan bo'lsa — band emasligini tekshiramiz
+      const busy = await kabinet.byCode(store, data.code);
+      if (busy && busy.id !== seg[1]) {
+        const c = await kabinet.ensureCode(store, Object.assign({ id: seg[1] }, data, { code: '' }));
+        if (c) data.code = c;
+      }
+    }
+    return { data };
+  }
+
   /* --- Davomat: o'qituvchi faqat o'ziga biriktirilgan guruhga --- */
   if (col === 'lessons' && user.role === 'oqituvchi') {
     const gid = String(seg[1] || '').split('__')[0];
@@ -711,6 +760,40 @@ async function handleApi(req, res, url) {
 
   if (route === 'health') return send(res, 200, { ok: true, mode: store.kind });
 
+  /* ---------- O'quvchi kabineti: shaxsiy kod bo'yicha ma'lumot ----------
+     Kirishsiz ishlaydi. Kod 4 xonali bo'lgani uchun taxmin qilish xavfi bor:
+     har bir IP uchun urinishlar qattiq cheklanadi, uzoq davom etsa qulflanadi
+     va direktorga xabar boradi. Javobda telefon, ota-ona va manzil YO'Q.      */
+  if (route === 'kabinet' && req.method === 'POST') {
+    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+    const gate = kabinetGate(ip);
+    if (!gate.ok) {
+      return send(res, 429, {
+        error: 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin qayta urinib ko’ring.'
+      });
+    }
+    const body = await readBody(req);
+    const code = kabinet.normCode(body.code);
+    if (!kabinet.validCode(code)) {
+      kabinetFail(ip);
+      return send(res, 400, { error: 'Kod ' + kabinet.CODE_LEN + ' ta raqamdan iborat.' });
+    }
+    const student = await kabinet.byCode(store, code);
+    if (!student) {
+      const f = kabinetFail(ip);
+      if (f.notify) {
+        await writeAudit(null, 'Kabinet: ko’p noto’g’ri kod', ip, f.n + ' ta urinish');
+        await notifyDirectors('Diqqat: ' + ip + ' manzilidan o’quvchi kabinetiga ' +
+          f.n + ' marta noto’g’ri kod kiritildi. Kodlarni taxmin qilishga urinish bo’lishi mumkin.');
+      }
+      await new Promise(r => setTimeout(r, 400));     // taxmin qilishni sekinlashtirish
+      return send(res, 404, { error: 'Bunday kod topilmadi. Administratordan so’rang.' });
+    }
+    kabinetOk(ip);
+    const sum = await kabinet.summary(store, student);
+    return send(res, 200, sum);
+  }
+
   /* Kirish sahifasi uchun ochiq ma'lumot: faqat markaz nomi.
      (U kirish sahifasida baribir ko'rinadi — boshqa hech narsa berilmaydi.) */
   if (route === 'public' && req.method === 'GET') {
@@ -802,6 +885,24 @@ async function handleApi(req, res, url) {
 
   if (route === 'me') return send(res, 200, { user: safeUser(user) });
   if (route === 'bootstrap') return send(res, 200, await apiBootstrap(user));
+
+  /* O'quvchining shaxsiy kodini yangilash (kod boshqaga ma'lum bo'lib qolsa) */
+  if (route === 'student/code' && req.method === 'POST') {
+    if (!A.can(user, 'student.edit')) return send(res, 403, { error: 'Ruxsat yo’q.' });
+    const body = await readBody(req);
+    const id = String(body.studentId || '');
+    if (!/^[A-Za-z0-9_\-]+$/.test(id)) return send(res, 400, { error: 'O’quvchi topilmadi.' });
+    const st = await store.get('students/' + id);
+    if (!st) return send(res, 404, { error: 'O’quvchi topilmadi.' });
+    const code = await kabinet.ensureCode(store, st, { force: true });
+    if (!code) return send(res, 400, { error: 'Bo’sh kod qolmadi.' });
+    const oldCode = st.code || '';
+    st.code = code;
+    await store.set('students/' + id, st);
+    await writeAudit(user, 'O’quvchi kodi yangilandi',
+      (st.lastName || '') + ' ' + (st.firstName || ''), oldCode + ' → ' + code);
+    return send(res, 200, { ok: true, code });
+  }
 
   /* ---------- Suhbat: xabar qo'shish faqat shu yerda ----------
      Butun ro'yxat qayta yozilmaydi — faqat bitta yangi xabar qo'shiladi.
@@ -1128,6 +1229,10 @@ const server = http.createServer(async (req, res) => {
 
 (async function start() {
   await ensureSeed();
+  try {
+    const added = await kabinet.ensureAllCodes(store);
+    if (added) console.log('  O’quvchi kodlari berildi: ' + added + ' ta');
+  } catch (e) { console.error('  Kod berishda xato: ' + e.message); }
   server.listen(PORT, () => {
     console.log('\n  AlBayan Cairo ERP ishga tushdi: http://localhost:' + PORT);
     console.log('  Ombor: ' + store.kind + (store.file ? ' (' + store.file + ')' : ''));

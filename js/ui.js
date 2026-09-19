@@ -29,6 +29,7 @@
   function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); return node; }
 
   var ICONS = {
+    key: 'M15 7a4 4 0 1 1-3.9 5H8v3H5v3H2v-3l6.1-6.1A4 4 0 0 1 15 7z',
     home: 'M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5',
     users: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.87',
     phone: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.6a2 2 0 0 1-.5 2.1L8.1 9.6a16 16 0 0 0 6 6l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.6 2.6.7a2 2 0 0 1 1.7 2z',
@@ -152,16 +153,50 @@
     return { close: close, body: body, box: box, markClean: markClean };
   }
 
+  /** Matnni nusxalash (brauzer ruxsat bermasa — tanlab qo'yamiz) */
+  function copy(text) {
+    var t = String(text == null ? '' : text);
+    function done() { toast('Nusxalandi: ' + t, 'ok'); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(done, fallback);
+    } else { fallback(); }
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = t;
+        ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+        done();
+      } catch (e) { toast('Nusxalanmadi. Kod: ' + t, 'info'); }
+    }
+  }
+
   function confirm(title, text, okLabel, danger) {
     return new Promise(function (resolve) {
+      /* Javob bir marta beriladi.
+         Ilgari: tugma bosilganda avval oyna yopilar, yopilish esa onClose orqali
+         "yo'q" deb javob berardi — shuning uchun "Ha, yopilsin" ishlamasdi va
+         forma oynasi ochiq qolib ketardi. */
+      var answered = false;
+      function answer(v) {
+        if (answered) return;
+        answered = true;
+        resolve(v);
+      }
       var m = modal({
         title: title,
         body: h('p', { style: 'margin:0;font-size:14px' }, text),
         actions: [
-          { label: 'Bekor qilish', onClick: function (c) { c(); resolve(false); } },
-          { label: okLabel || 'Tasdiqlash', cls: danger ? 'danger' : 'primary', onClick: function (c) { c(); resolve(true); } }
+          { label: 'Bekor qilish', onClick: function (c) { answer(false); c(); } },
+          {
+            label: okLabel || 'Tasdiqlash', cls: danger ? 'danger' : 'primary',
+            onClick: function (c) { answer(true); c(); }
+          }
         ],
-        onClose: function () { resolve(false); }
+        onClose: function () { answer(false); }
       });
       void m;
     });
@@ -1013,6 +1048,7 @@
 
   global.A.UI = {
     h: h, clear: clear, icon: icon, ICONS: ICONS, toast: toast, modal: modal, confirm: confirm,
+    copy: copy,
     askReason: askReason, field: field, form: form, busy: busy, table: table, empty: empty,
     pill: pill, tile: tile, pageHead: pageHead, card: card, tabs: tabs, avatar: avatar,
     suggest: suggest, exportCsv: exportCsv, exportRows: exportRows, safeCell: safeCell, saveText: saveText,

@@ -13,6 +13,33 @@
 
   /* uz -> [ru, en, ar] */
   var T = {
+    /* --- O'quvchi kabineti (shaxsiy kod) --- */
+    'O’quvchi kabineti': ['Кабинет ученика', 'Student cabinet', 'صفحة الطالب'],
+    'O’quvchimisiz?': ['Вы ученик?', 'Are you a student?', 'هل أنت طالب؟'],
+    'Shaxsiy kod bilan kirish': ['Войти по личному коду', 'Enter with personal code', 'الدخول بالرمز الشخصي'],
+    'Xodimlar kirishi': ['Вход для сотрудников', 'Staff login', 'دخول الموظفين'],
+    'Shaxsiy kodingiz': ['Ваш личный код', 'Your personal code', 'رمزك الشخصي'],
+    'Shaxsiy kod': ['Личный код', 'Personal code', 'الرمز الشخصي'],
+    'Kod': ['Код', 'Code', 'الرمز'],
+    'Ko’rish': ['Посмотреть', 'View', 'عرض'],
+    'Guruhlarim': ['Мои группы', 'My groups', 'مجموعاتي'],
+    'Kod 4 ta raqamdan iborat.': ['Код состоит из 4 цифр.', 'The code has 4 digits.', 'الرمز يتكون من ٤ أرقام.'],
+    'Markaz bergan 4 xonali kodingizni kiriting — ma’lumotlaringiz shu yerda chiqadi.': [
+      'Введите 4-значный код, выданный центром — здесь появятся ваши данные.',
+      'Enter the 4-digit code given by the centre — your information will appear here.',
+      'أدخل الرمز المكوّن من ٤ أرقام الذي منحه المركز — ستظهر بياناتك هنا.'],
+    'Hozircha guruhga yozilmagansiz.': ['Вы пока не записаны в группу.', 'You are not enrolled in a group yet.', 'لم يتم تسجيلك في مجموعة بعد.'],
+    'Hozircha davomat yozuvi yo’q.': ['Записей о посещаемости пока нет.', 'No attendance records yet.', 'لا توجد سجلات حضور بعد.'],
+    'Keyingi to’lov': ['Следующий платёж', 'Next payment', 'الدفعة القادمة'],
+    'Keyingi hisob': ['Следующий счёт', 'Next invoice', 'الفاتورة القادمة'],
+    'Muddati o’tgan': ['Просрочено', 'Overdue', 'متأخر'],
+    'Jami dars': ['Всего занятий', 'Lessons total', 'إجمالي الدروس'],
+    'Qarz yo’q': ['Долга нет', 'No debt', 'لا يوجد دين'],
+    'Yangi kod berish': ['Выдать новый код', 'Issue a new code', 'إصدار رمز جديد'],
+    'Nusxalash': ['Копировать', 'Copy', 'نسخ'],
+    'Kabinet havolasi: ': ['Ссылка на кабинет: ', 'Cabinet link: ', 'رابط الصفحة: '],
+    'Kodni yangilash': ['Обновить код', 'Update the code', 'تحديث الرمز'],
+    'Ism, telefon yoki kod': ['Имя, телефон или код', 'Name, phone or code', 'الاسم أو الهاتف أو الرمز'],
     /* --- Menyu va rollar --- */
     'Bosh sahifa': ['Главная', 'Dashboard', 'الرئيسية'],
     'Murojaatlar': ['Обращения', 'Leads', 'الطلبات'],

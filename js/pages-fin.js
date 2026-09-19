@@ -1027,6 +1027,31 @@
       }), null, null, true));
   };
 
+  /** Lavozimdan mos rolni tanlash */
+  function roleForPosition(pos) {
+    return {
+      'O’qituvchi': 'oqituvchi', 'Administrator': 'admin',
+      'Direktor': 'direktor', 'Buxgalter': 'buxgalter'
+    }[pos] || 'oqituvchi';
+  }
+  /** Ismdan login taklif qilish: "Ali Valiyev" → "ali.valiyev" */
+  function loginFromName(name) {
+    var base = String(name || '').toLowerCase()
+      .replace(/[’'`]/g, '')
+      .replace(/[^a-z0-9\s.]/g, '')
+      .trim().replace(/\s+/g, '.');
+    return base.slice(0, 20) || 'xodim';
+  }
+  function freeLogin(base, exceptId) {
+    var taken = {};
+    D.all('users').forEach(function (u) {
+      if (u.id !== exceptId) taken[String(u.login || '').toLowerCase()] = 1;
+    });
+    if (!taken[base]) return base;
+    for (var i = 2; i < 100; i++) { if (!taken[base + i]) return base + i; }
+    return base + Date.now().toString(36).slice(-3);
+  }
+
   function staffForm(staff, App) {
     App.guard('staff.edit');
     var isNew = !staff;
@@ -1050,6 +1075,66 @@
         options: [{ value: 'faol', label: 'Faol' }, { value: 'arxiv', label: 'Arxivlangan' }]
       }
     ]);
+    /* --- Tizimga kirish: xodim qo'shilayotganda darhol login/parol --- */
+    var canAccount = App.can('users.manage');
+    var linked = s.id ? D.all('users').filter(function (u) { return u.staffId === s.id; })[0] : null;
+    var accBox = h('div', { class: 'acc-box' });
+    var acc = null;                     // login/parol maydonlari
+
+    function paintAccount() {
+      UI.clear(accBox);
+      if (!canAccount) return;
+      var on = accOn.checked;
+      accBox.hidden = !on;
+      if (!on) return;
+      acc = UI.form([
+        {
+          name: 'login', label: 'Login', required: true,
+          value: (linked && linked.login) || freeLogin(loginFromName(f.get('name').input.value), linked && linked.id),
+          validate: function (v) {
+            if (!/^[a-z0-9_.]+$/i.test(v)) return 'Faqat harf, raqam, nuqta va _ belgisi.';
+            var dup = D.all('users').filter(function (x) {
+              return x.id !== (linked && linked.id) && String(x.login).toLowerCase() === v.toLowerCase();
+            });
+            return dup.length ? 'Bu login band.' : null;
+          }
+        },
+        {
+          name: 'password', label: linked ? 'Yangi parol (bo’sh qoldirsangiz o’zgarmaydi)' : 'Parol',
+          type: 'password', required: !linked, value: '',
+          validate: function (v) {
+            if (!v && linked) return null;
+            return String(v || '').length < 4 ? 'Parol kamida 4 belgidan iborat bo’lsin.' : null;
+          }
+        },
+        {
+          name: 'role', label: 'Rol', type: 'select',
+          value: (linked && linked.role) || roleForPosition(f.get('position').input.value),
+          options: Object.keys(A.ROLES).map(function (r) { return { value: r, label: A.ROLES[r] }; }),
+          help: 'O’qituvchi roli: faqat o’ziga biriktirilgan guruhlarni ko’radi va davomat oladi.'
+        }
+      ]);
+      accBox.appendChild(acc.node);
+    }
+
+    var accOn = h('input', {
+      type: 'checkbox', id: 'staff-acc',
+      checked: (linked || isNew) ? true : null
+    });
+    accOn.addEventListener('change', paintAccount);
+    var accRow = canAccount ? h('div', { class: 'acc-row' }, [
+      h('label', { for: 'staff-acc' }, [accOn, h('b', {}, 'Tizimga kirish huquqi')]),
+      h('span', { class: 'small muted' },
+        linked ? 'Hisob mavjud: ' + linked.login : 'Login va parol shu yerda yaratiladi')
+    ]) : null;
+    f.node.appendChild(h('div', {}, [accRow, accBox].filter(Boolean)));
+    if (canAccount) paintAccount();
+    // lavozim o'zgarsa — rolni ham moslaymiz (agar hisob yangi bo'lsa)
+    f.get('position').input.addEventListener('change', function () {
+      if (!canAccount || linked || !accOn.checked || !acc) return;
+      acc.get('role').input.value = roleForPosition(f.get('position').input.value);
+    });
+
     UI.modal({
       title: isNew ? 'Yangi xodim' : 'Xodimni tahrirlash',
       wide: true,
@@ -1059,12 +1144,62 @@
         {
           label: 'Saqlash', cls: 'primary', onClick: function (c, btn) {
             if (!f.validate()) return;
+            if (canAccount && accOn.checked && acc && !acc.validate()) return;
             UI.busy(btn, async function () {
               var rec = Object.assign({}, s, f.values(), { phone: A.normPhone(f.values().phone) });
               if (isNew) rec.id = A.uid('stf');
               await D.save('staff', rec);
               await A.Ops.audit(App.user, isNew ? 'Xodim qo’shildi' : 'Xodim tahrirlandi', rec.name, rec.position);
-              c(); UI.toast('Saqlandi.', 'ok'); App.render();
+
+              var made = '';
+              if (canAccount && accOn.checked && acc) {
+                var v = acc.values();
+                var urec = Object.assign({}, linked || {}, {
+                  id: (linked && linked.id) || A.uid('usr'),
+                  login: String(v.login).toLowerCase().trim(),
+                  name: rec.name,
+                  role: v.role,
+                  staffId: rec.id,
+                  active: rec.status === 'faol'
+                });
+                try {
+                  await D.saveUser(urec, v.password || '');
+                  await A.Ops.audit(App.user, linked ? 'Hisob yangilandi' : 'Hisob yaratildi',
+                    rec.name, urec.login + ' · ' + (A.ROLES[urec.role] || urec.role));
+                  made = urec.login;
+                } catch (e) {
+                  UI.toast('Xodim saqlandi, lekin hisob yaratilmadi: ' + (e.message || e), 'bad');
+                }
+              } else if (canAccount && !accOn.checked && linked && linked.active !== false) {
+                // kirish huquqi olib tashlandi
+                var off = A.clone(linked);
+                off.active = false;
+                await D.saveUser(off, '');
+                await A.Ops.audit(App.user, 'Hisob o’chirildi', rec.name, off.login);
+              }
+
+              c();
+              UI.toast('Saqlandi.', 'ok');
+              App.render();
+              if (made && !linked) {
+                UI.modal({
+                  title: 'Hisob tayyor',
+                  body: [
+                    h('p', { style: 'margin:0' }, rec.name + ' endi tizimga kira oladi.'),
+                    h('dl', { class: 'kv' }, [
+                      h('dt', {}, 'Login'), h('dd', {}, h('b', {}, made)),
+                      h('dt', {}, 'Parol'), h('dd', {}, 'siz kiritgan parol')
+                    ]),
+                    h('p', { class: 'small muted', style: 'margin:0' },
+                      'Login va parolni xodimga yetkazing. Birinchi kirishdan keyin ' +
+                      'parolni almashtirishni tavsiya qilamiz.')
+                  ],
+                  actions: [
+                    { label: 'Loginni nusxalash', onClick: function () { UI.copy(made); } },
+                    { label: 'Yopish', cls: 'primary' }
+                  ]
+                });
+              }
             });
           }
         }

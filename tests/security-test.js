@@ -99,7 +99,9 @@ async function login(l, p) {
   await put('memberships/m1', { id: 'm1', studentId: 's1', groupId: 'g1', joinedAt: '2026-09-01', status: 'faol' }, dirCookie);
   await put('memberships/m2', { id: 'm2', studentId: 's2', groupId: 'g2', joinedAt: '2026-09-01', status: 'faol' }, dirCookie);
   const gen = await req('/api/invoices/generate', { method: 'POST', body: { month: '2026-09' }, cookie: dirCookie });
-  ok('Hisoblar yaratildi', gen.json && gen.json.created >= 2, JSON.stringify(gen.json));
+  const invAll = await req('/api/collection?name=invoices', { cookie: dirCookie });
+  const mineInv = Object.values(invAll.json.items || {}).filter(i => i.studentId === 's1' || i.studentId === 's2');
+  ok('Hisoblar yaratildi', mineInv.length >= 2, JSON.stringify(gen.json) + ' / o’ziniki: ' + mineInv.length);
   const gen2 = await req('/api/invoices/generate', { method: 'POST', body: { month: '2026-09' }, cookie: dirCookie });
   eq('Takroriy hisob yaratilmadi', gen2.json.created, 0);
 
@@ -160,7 +162,7 @@ async function login(l, p) {
   /* ---------- 6. Administrator cheklovlari ---------- */
   section('6. Administrator huquqlari');
   const invRow = await req('/api/collection?name=invoices', { cookie: adminCookie });
-  const invId = Object.keys(invRow.json.items)[0];
+  const invId = Object.keys(invRow.json.items).find(k => invRow.json.items[k].studentId === 's1');
   const payA = await req('/api/payment', {
     method: 'POST', cookie: adminCookie,
     body: { id: 'pay_a1', studentId: 's1', amount: 200000, date: '2026-09-05', method: 'naqd', allocations: [{ invoiceId: invId, amount: 200000 }] }
@@ -175,6 +177,8 @@ async function login(l, p) {
 
   section('   Buxgalter huquqlari (hisoblash mumkin, tasdiqlash mumkin emas)');
   const PRP = 'payroll/2026-09__stf_t1';
+  // oldingi ishga tushishdan qolgan yozuv bo'lmasin (direktor o'chira oladi)
+  await req('/api/doc?path=' + encodeURIComponent(PRP), { method: 'DELETE', cookie: dirCookie });
   const prRead = async () => (await req('/api/doc?path=' + encodeURIComponent(PRP), { cookie: dirCookie })).json.data;
 
   const payrollPut = await put(PRP,

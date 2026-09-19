@@ -126,6 +126,68 @@
   }
   A.balancePill = balancePill;
 
+
+  /**
+   * O'qituvchi uchun davomat kartasi — bosh sahifadagi eng birinchi blok.
+   * Bugungi har bir dars katta qator: bosilsa shu guruhning davomati ochiladi.
+   * Davomat olinmagan eski darslar ham shu yerda eslatib turiladi.
+   */
+  function teacherAttendanceCard(lessonsToday, ym, today, App) {
+    var live = lessonsToday.filter(function (l) { return l.status !== 'bekor'; });
+
+    function row(l, late) {
+      var g = D.one('groups', l.groupId);
+      var marked = l.attendance && Object.keys(l.attendance).length;
+      var members = Q.membersOf(l.groupId).length;
+      return h('button', {
+        class: 'att-row' + (marked ? ' done' : ''), type: 'button',
+        onclick: function () { App.go('attendance', { groupId: l.groupId, date: l.date }); }
+      }, [
+        h('span', { class: 'att-time mono' }, late ? A.dateLabel(l.date).slice(0, 6) : l.start),
+        h('span', { class: 'att-main' }, [
+          h('b', {}, g ? g.name : '—'),
+          h('span', { class: 'small muted' },
+            (late ? A.dateLabel(l.date) + ' · ' : l.start + '–' + l.end + ' · ') +
+            members + ' ta o’quvchi' + (Q.roomName(l.roomId) ? ' · ' + Q.roomName(l.roomId) : ''))
+        ]),
+        marked ? UI.pill('Olingan', 'ok') : h('span', { class: 'btn sm primary' }, 'Davomat olish')
+      ]);
+    }
+
+    // davomati olinmagan o'tgan darslar (oxirgi 7 kun)
+    var late = [];
+    Q.activeGroups(App.user).forEach(function (g) {
+      var doc = D.lessonsCached(g.id, ym);
+      A.monthLessons(g, ym, doc).forEach(function (l) {
+        if (l.date >= today || l.status === 'bekor') return;
+        if (l.attendance && Object.keys(l.attendance).length) return;
+        if (A.addDays(l.date, 7) < today) return;
+        late.push(l);
+      });
+    });
+    late.sort(function (a, b) { return b.date.localeCompare(a.date); });
+
+    var body = h('div', { class: 'att-list' });
+    if (live.length) {
+      live.forEach(function (l) { body.appendChild(row(l, false)); });
+    } else {
+      body.appendChild(UI.empty({
+        title: 'Bugun darsingiz yo’q',
+        text: 'Jadvalga qarang yoki davomat bo’limidan boshqa kunni tanlang.',
+        action: { label: 'Davomat bo’limi', onClick: function () { App.go('attendance'); } }
+      }));
+    }
+    if (late.length) {
+      body.appendChild(h('div', { class: 'att-late' }, [
+        h('b', {}, 'Davomati olinmagan darslar'),
+        h('div', { class: 'small muted' }, 'Oxirgi 7 kun ichida ' + late.length + ' ta')
+      ]));
+      late.slice(0, 5).forEach(function (l) { body.appendChild(row(l, true)); });
+    }
+
+    return UI.card('Bugungi davomat', body, null, true);
+  }
+
   /* ================= BOSH SAHIFA ================= */
   A.Pages.dashboard = function (view, route, App) {
     var user = App.user;
@@ -225,9 +287,24 @@
       myGroups.forEach(function (g) { Q.membersOf(g.id).forEach(function (m) { myStudents[m.studentId] = 1; }); });
       tiles.appendChild(UI.tile({ label: 'O’quvchilarim', value: Object.keys(myStudents).length, onClick: function () { App.go('students'); } }));
     }
-    view.appendChild(tiles);
 
-    if (App.can('payment.create') || App.can('student.edit')) {
+    /* O'qituvchi uchun eng kerakli narsa — DAVOMAT. Shuning uchun u eng tepada:
+       bugungi darslar katta tugma bo'lib turadi, bosilsa to'g'ri davomat sahifasi. */
+    if (user.role === 'oqituvchi') {
+      view.appendChild(teacherAttendanceCard(lessonsToday, ym, today, App));
+      view.appendChild(tiles);
+      view.appendChild(h('div', { class: 'rowflex', style: 'margin-bottom:16px' }, [
+        h('button', {
+          class: 'btn', onclick: function () { App.go('attendance'); }
+        }, [UI.icon('check'), 'Davomat bo’limi']),
+        h('button', { class: 'btn', onclick: function () { App.go('schedule'); } }, [UI.icon('calendar'), 'Jadvalim']),
+        h('button', { class: 'btn', onclick: function () { App.go('groups'); } }, [UI.icon('layers'), 'Guruhlarim'])
+      ]));
+    } else {
+      view.appendChild(tiles);
+    }
+
+    if (user.role !== 'oqituvchi' && (App.can('payment.create') || App.can('student.edit'))) {
       view.appendChild(h('div', { class: 'rowflex', style: 'margin-bottom:16px' }, [
         App.can('student.edit') ? h('button', {
           class: 'btn primary', onclick: function () { A.studentForm(null, App); }
@@ -574,7 +651,8 @@
       if (status !== 'all' && s.status !== status) return false;
       if (groupId && !Q.membershipsOf(s.id).some(function (m) { return m.groupId === groupId && m.status === 'faol'; })) return false;
       if (q) {
-        var hay = (s.lastName + ' ' + s.firstName + ' ' + s.phone + ' ' + (s.parentName || '') + ' ' + (s.parentPhone || '')).toLowerCase();
+        var hay = (s.lastName + ' ' + s.firstName + ' ' + s.phone + ' ' + (s.parentName || '') + ' ' +
+          (s.parentPhone || '') + ' ' + (s.code || '')).toLowerCase();
         if (hay.indexOf(q) < 0 && A.phoneDigits(s.phone).indexOf(A.phoneDigits(q)) < 0) return false;
       }
       return true;
@@ -589,10 +667,10 @@
       h('button', {
         class: 'btn', onclick: function () {
           var bmap = Q.balanceMap();
-          UI.exportRows('oquvchilar', [['Familiya', 'Ism', 'Telefon', 'Ota-ona', 'Ota-ona telefoni', 'Guruhlar', 'Holat', 'Qarz', 'Avans']].concat(
+          UI.exportRows('oquvchilar', [['Kod', 'Familiya', 'Ism', 'Telefon', 'Ota-ona', 'Ota-ona telefoni', 'Guruhlar', 'Holat', 'Qarz', 'Avans']].concat(
             list.map(function (s) {
               var b = bmap[s.id] || { debt: 0, advance: 0 };
-              return [s.lastName, s.firstName, s.phone, s.parentName || '', s.parentPhone || '',
+              return [s.code || '', s.lastName, s.firstName, s.phone, s.parentName || '', s.parentPhone || '',
               Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; }).map(function (m) { return Q.groupName(m.groupId); }).join(', '),
               s.status, b.debt, b.advance];
             })));
@@ -600,7 +678,7 @@
       }, [UI.icon('down'), 'Excel'])
     ]));
 
-    var fq = UI.field({ label: 'Qidiruv', value: route.q || '', placeholder: 'Ism yoki telefon' });
+    var fq = UI.field({ label: 'Qidiruv', value: route.q || '', placeholder: 'Ism, telefon yoki kod' });
     var fst = UI.field({
       label: 'Holat', type: 'select', value: status,
       options: [{ value: 'all', label: 'Barchasi' }, { value: 'faol', label: 'Faol' },
@@ -660,7 +738,11 @@
           return h('div', { class: 'rowflex', style: 'gap:9px;flex-wrap:nowrap' }, [
             UI.avatar(s.lastName + ' ' + s.firstName),
             h('div', {}, [h('b', {}, s.lastName + ' ' + s.firstName),
-            h('div', { class: 'small muted mono' }, s.phone || '—')])
+            h('div', { class: 'small muted' }, [
+              s.code ? h('span', {}, 'Kod') : null,
+              s.code ? h('span', { class: 'mono' }, ' ' + s.code + ' · ') : null,
+              h('span', { class: 'mono' }, s.phone || '—')
+            ])])
           ]);
         }
       },
@@ -769,6 +851,53 @@
     ]);
   }
 
+
+  /** Shaxsiy kod oynasi: ko'rsatish, nusxalash, kabinet havolasi, yangilash */
+  function codeCard(s, App) {
+    var link = location.origin + location.pathname + '#kabinet?kod=' + s.code;
+    var body = [
+      h('p', { class: 'small muted', style: 'margin:0' },
+        'O’quvchi shu kodni botga yozadi yoki kabinet sahifasiga kiritadi — ' +
+        'guruhi, jadvali, to’lovi va davomati chiqadi.'),
+      h('div', { style: 'text-align:center;padding:10px 0' },
+        h('span', { class: 'code-chip', style: 'font-size:28px;letter-spacing:.18em;padding:10px 18px' },
+          String(s.code || '—'))),
+      h('div', { class: 'kv-row small' }, [
+        h('b', {}, 'Kabinet havolasi: '),
+        h('span', { class: 'muted', style: 'word-break:break-all' }, link)
+      ])
+    ];
+    var m = UI.modal({
+      title: s.lastName + ' ' + s.firstName + ' — shaxsiy kod',
+      body: body,
+      actions: [
+        { label: 'Nusxalash', onClick: function () { UI.copy(String(s.code)); } },
+        App.can('student.edit') ? {
+          label: 'Yangi kod berish', cls: 'danger', onClick: function (close, btn) {
+            UI.confirm('Kodni yangilash',
+              'Eski kod ishlamay qoladi. O’quvchiga yangi kodni aytishingiz kerak. Davom etamizmi?',
+              'Ha, yangilansin', true).then(function (yes) {
+                if (!yes) return;
+                UI.busy(btn, async function () {
+                  try {
+                    var r = await D.api('POST', 'api/student/code', { studentId: s.id });
+                    var cur = A.clone(D.one('students', s.id) || s);
+                    cur.code = r.code;
+                    D.putLocal('students', cur);
+                    close(true);
+                    UI.toast('Yangi kod: ' + r.code, 'ok');
+                    App.render();
+                  } catch (e) { UI.toast(e.message || 'Yangilanmadi.', 'bad'); }
+                });
+              });
+          }
+        } : null,
+        { label: 'Yopish', cls: 'primary' }
+      ].filter(Boolean)
+    });
+    return m;
+  }
+
   A.Pages.student = function (view, route, App) {
     App.guard('student.view');
     var s = D.one('students', route.id);
@@ -783,6 +912,10 @@
     view.appendChild(UI.pageHead(s.lastName + ' ' + s.firstName,
       (s.phone || '') + (s.parentName ? ' · Ota-ona: ' + s.parentName + ' ' + (s.parentPhone || '') : ''),
       [
+        s.code ? h('button', {
+          class: 'btn', title: 'Shaxsiy kod — bot va kabinet uchun',
+          onclick: function () { codeCard(s, App); }
+        }, [UI.icon('key'), h('span', { class: 'code-chip' }, String(s.code))]) : null,
         // Asosiy amallar pastdagi tezkor kartada — bu yerda faqat tahrirlash
         App.can('student.edit') ? h('button', { class: 'btn', onclick: function () { A.studentForm(s, App); } },
           [UI.icon('edit'), 'Tahrirlash']) : null
@@ -818,6 +951,7 @@
     if (tab === 'umumiy') {
       var dl = h('dl', { class: 'kv' });
       [['Familiya, ism', s.lastName + ' ' + s.firstName],
+      ['Shaxsiy kod', s.code || '—'],
       ['Telefon', s.phone || '—'],
       ['Ota-ona / vasiy', s.parentName || '—'],
       ['Ota-ona telefoni', s.parentPhone || '—'],

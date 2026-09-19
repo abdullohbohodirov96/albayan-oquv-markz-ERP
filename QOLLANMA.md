@@ -158,13 +158,42 @@ Xodim o'zi "Boshlash" va "Bajarildi" tugmalari bilan holatni o'zgartiradi.
 
 ---
 
+## O'quvchining shaxsiy kodi
+
+Har bir o'quvchida **4 xonali kod** bor (masalan `4077`). U o'quvchi kartasining
+tepasida turadi — bosilsa katta qilib ko'rsatiladi, nusxalash tugmasi va
+kabinet havolasi bilan. Kodni o'quvchiga (yoki ota-onasiga) bering.
+
+O'quvchi shu kod bilan **ikki joyda** o'z ma'lumotini ko'radi:
+
+1. **Botda:** `/start` → kodni yozadi. Darhol chiqadi: guruhi, o'qituvchisi,
+   dars kunlari va vaqti, qarzi, keyingi to'lov sanasi, davomati. Bir marta
+   yozsa yetadi — keyin "Ma'lumotim" tugmasi bor.
+2. **Saytda:** kirish sahifasida "O'quvchimisiz? → Shaxsiy kod bilan kirish",
+   yoki to'g'ridan-to'g'ri havola (kod oynasida ko'rsatilgan).
+
+Kodni boshqa odam bilib qolsa — o'sha oynada **"Yangi kod berish"**. Eski kod
+darhol ishlamay qoladi.
+
+Qidiruvga kodni yozsangiz ham o'quvchi topiladi. Excel eksportida ham kod bor.
+
+**Diqqat:** kod — parol emas. U faqat o'quvchining o'z guruhi, to'lovi va
+davomatini ko'rsatadi; telefon raqamlari va ota-ona ma'lumoti ko'rinmaydi.
+Kodni taxmin qilishga urinilsa, tizim 5 ta xatodan keyin 15 daqiqaga
+to'xtatadi va sizga (direktorga) xabar yozadi.
+
+---
+
 ## Telegram bot
 
 Bot faqat serverli versiyada ishlaydi (README ga qarang).
 
-**O'quvchini ulash:** o'quvchi botga `/start` bosadi, ism-familiyasi va
-guruh kodini yozadi. So'rov **Telegram bot → Holat** bo'limiga tushadi —
-siz kimligini tanlab "Ulash" ni bosasiz.
+**O'quvchini ulash (eng oson yo'l):** o'quvchiga shaxsiy kodini ayting —
+u `/start` bosib kodni yozadi, tamom.
+
+**Kodsiz ulash:** o'quvchi ism-familiyasi va guruh kodini yozadi. So'rov
+**Telegram bot → Holat** bo'limiga tushadi — siz kimligini tanlab
+"Ulash" ni bosasiz.
 
 **Guruh kodi** har bir guruhda ko'rsatilgan (masalan `A001`). Uni guruh
 tahrirlash oynasida o'zgartirish mumkin.

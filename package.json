@@ -24,7 +24,10 @@
     "test:perm": "node tests/perm-test.js",
     "test:bot-idle": "node tests/bot-idle-test.js",
     "test:chat": "node tests/chat-test.js",
-    "test:sw": "node tests/sw-update-test.js"
+    "test:sw": "node tests/sw-update-test.js",
+    "test:kabinet": "node tests/kabinet-test.js",
+    "test:kabinet-bot": "node tests/kabinet-bot-test.js",
+    "test:ui": "node tests/ui-flow-test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

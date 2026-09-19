@@ -8,6 +8,8 @@
    yuborilgan/xato holati saqlanadi va xato bo'lsa qayta urinadi.            */
 'use strict';
 
+const kabinet = require('./kabinet');
+
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API = 'https://api.telegram.org/bot' + TOKEN + '/';
 
@@ -50,8 +52,9 @@ async function sendMessage(chatId, text, keyboard) {
 }
 
 const MENU = [
-  [{ text: 'To’lovim' }, { text: 'Davomatim' }],
-  [{ text: 'Jadvalim' }, { text: 'Markazga yozish' }]
+  [{ text: 'Ma’lumotim' }, { text: 'To’lovim' }],
+  [{ text: 'Davomatim' }, { text: 'Jadvalim' }],
+  [{ text: 'Markazga yozish' }]
 ];
 
 /* ---------------- Ma'lumot yordamchilari ---------------- */
@@ -118,6 +121,27 @@ async function studentByCode(code) {
     return true;
   })[0] || null;
 }
+
+/* ---------------- Shaxsiy kod urinishlari (taxmin qilishdan himoya) ----------------
+   Bitta suhbatdan 5 ta noto'g'ri urinishdan keyin 15 daqiqa kutiladi.          */
+const codeTries = new Map();
+const CODE_MAX = Number(process.env.BOT_CODE_MAX_TRIES || 5);
+const CODE_LOCK_MS = Number(process.env.BOT_CODE_LOCK_MS || 15 * 60 * 1000);
+function codeGate(chatId) {
+  const rec = codeTries.get(String(chatId));
+  if (!rec) return { ok: true };
+  if (Date.now() - rec.first > CODE_LOCK_MS) { codeTries.delete(String(chatId)); return { ok: true }; }
+  if (rec.n < CODE_MAX) return { ok: true };
+  return { ok: false, wait: Math.max(1, Math.ceil((CODE_LOCK_MS - (Date.now() - rec.first)) / 60000)) };
+}
+function codeFail(chatId) {
+  const k = String(chatId);
+  const rec = codeTries.get(k);
+  if (!rec || Date.now() - rec.first > CODE_LOCK_MS) codeTries.set(k, { n: 1, first: Date.now() });
+  else rec.n++;
+  if (codeTries.size > 5000) codeTries.clear();
+}
+function codeOk(chatId) { codeTries.delete(String(chatId)); }
 
 /* ---------------- Moliya: har bir yozuv alohida hujjatda ---------------- */
 async function finData() {
@@ -373,14 +397,38 @@ async function linkWithCode(chatId, student, from, st) {
   st.step = 'linked';
   st.studentId = rec.id;
   await setState(chatId, st);
+  // Ulangan zahoti to'liq ma'lumot — qayta so'rash shart emas
+  let info = '';
+  try { info = kabinet.summaryText(await kabinet.summary(store, rec)); } catch (e) { info = ''; }
   await sendMessage(chatId,
     'Tayyor! Siz <b>' + rec.lastName + ' ' + rec.firstName + '</b> sifatida ulandingiz.\n' +
-    'Endi davomat va to’lovlar haqida xabar olasiz.', MENU);
+    (info ? '\n' + info + '\n' : '') +
+    '\nEndi davomat va to’lovlar haqida xabar olasiz.', MENU);
 }
 
 async function handleLinkFlow(chatId, text, from, st) {
-  /* 1) Kod kutilmoqda */
+  /* 1) Kod kutilmoqda.
+     Ikki xil kod qabul qilinadi:
+       — shaxsiy kod: 4 xonali raqam (masalan 4077), o'quvchida doim bitta;
+       — bir martalik kod: 6 belgili (eski usul, administrator beradi).       */
   if (st.step === 'code') {
+    const digits = kabinet.normCode(text);
+    if (kabinet.validCode(digits) && /^\s*\d{4}\s*$/.test(text)) {
+      const gate = codeGate(chatId);
+      if (!gate.ok) {
+        await sendMessage(chatId, 'Juda ko’p urinish. ' + gate.wait +
+          ' daqiqadan keyin qayta urinib ko’ring.');
+        return;
+      }
+      const s = await kabinet.byCode(store, digits);
+      if (s) { codeOk(chatId); return linkWithCode(chatId, s, from, st); }
+      codeFail(chatId);
+      st.codeTries = (st.codeTries || 0) + 1;
+      await setState(chatId, st);
+      await sendMessage(chatId, 'Bunday kod topilmadi. Kodingizni markazdan so’rang.\n' +
+        'Kodingiz bo’lmasa, <b>ismim</b> deb yozing.');
+      return;
+    }
     const code = normCode(text);
     if (code.length === 6) {
       const s = await studentByCode(code);
@@ -406,7 +454,7 @@ async function handleLinkFlow(chatId, text, from, st) {
       await sendMessage(chatId, 'Ism va familiyangizni to’liq yozing.');
       return;
     }
-    await sendMessage(chatId, 'Kod 6 ta belgidan iborat, masalan: <code>7KQ3M2</code>');
+    await sendMessage(chatId, 'Shaxsiy kodingizni yozing — 4 ta raqam, masalan: <code>4077</code>');
     return;
   }
 
@@ -465,16 +513,19 @@ async function onMessage(msg) {
     if (student) {
       st.step = 'linked'; st.studentId = student.id;
       await setState(chatId, st);
+      let info = '';
+      try { info = kabinet.summaryText(await kabinet.summary(store, student)); } catch (e) { info = ''; }
       await sendMessage(chatId,
-        conf.welcome + '\n\nSiz <b>' + student.lastName + ' ' + student.firstName +
-        '</b> sifatida ulangansiz.', MENU);
+        conf.welcome + '\n\n' + (info || ('Siz <b>' + student.lastName + ' ' + student.firstName +
+          '</b> sifatida ulangansiz.')), MENU);
       return;
     }
     st = { chatId: String(chatId), step: 'code', codeTries: 0 };
     await setState(chatId, st);
     await sendMessage(chatId,
-      conf.welcome + '\n\nUlanish uchun administrator bergan <b>6 belgili kodni</b> yozing.\n' +
-      'Masalan: <code>7KQ3M2</code>\n\nKodingiz bo’lmasa, <b>ismim</b> deb yozing.');
+      conf.welcome + '\n\n<b>Shaxsiy kodingizni</b> yozing — 4 ta raqam, masalan: <code>4077</code>\n' +
+      'Kodni markaz administratoridan olasiz.\n\n' +
+      'Kodingiz bo’lmasa, <b>ismim</b> deb yozing.');
     return;
   }
 
@@ -482,7 +533,7 @@ async function onMessage(msg) {
     if (st.step === 'start') {
       st.step = 'code'; st.codeTries = 0;
       await setState(chatId, st);
-      await sendMessage(chatId, 'Boshlash uchun administrator bergan 6 belgili kodni yozing. ' +
+      await sendMessage(chatId, 'Boshlash uchun shaxsiy kodingizni yozing — 4 ta raqam (masalan 4077). ' +
         'Kodingiz bo’lmasa, "ismim" deb yozing.');
       return;
     }
@@ -502,6 +553,9 @@ async function onMessage(msg) {
     return;
   }
 
+  if (text === 'Ma’lumotim' || text === '/malumot' || text === '/info') {
+    return sendMessage(chatId, kabinet.summaryText(await kabinet.summary(store, student)), MENU);
+  }
   if (text === 'To’lovim' || text === '/tolov') return sendMessage(chatId, await balanceText(student), MENU);
   if (text === 'Davomatim' || text === '/davomat') return sendMessage(chatId, await attendanceText(student), MENU);
   if (text === 'Jadvalim' || text === '/jadval') return sendMessage(chatId, await scheduleText(student), MENU);
@@ -627,6 +681,7 @@ function _test(ctx) {
     onMessage, flushQueue, enqueue, remindDebtors, notifyApproved,
     makeCode, normCode, studentByCode, botConf, getState, setState,
     balanceText, attendanceText, scheduleText, daysBetween, KINDS, MAX_TRIES,
+    handleLinkFlow, findStudentByChat,
     wake,
     /** Sinovda navbatchini qo'lda ishga tushirish/to'xtatish */
     startQueue: function (opts) { running = true; queueLoop(opts); },

@@ -156,6 +156,8 @@
       await D.save('students', {
         id: id, firstName: n[0], lastName: n[1], phone: '+9989' + String(20000000 + i * 3571).slice(0, 8),
         parentName: n[2], parentPhone: famPhone, birthDate: '',
+        // shaxsiy kod (bot va kabinet uchun) — serverli rejimda uni server beradi
+        code: String(1000 + ((i * 137 + 421) % 8999)),
         status: i === 17 ? 'toxtatgan' : 'faol', note: '', createdAt: A.monthStart(ym) + ' 09:00', demo: true
       });
       studentIds.push(id);

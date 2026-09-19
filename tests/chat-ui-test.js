@@ -39,7 +39,8 @@ function section(t) { out.push('\n' + t); }
   await page.waitForTimeout(800);
 
   section('1. Xabar yuborish');
-  await page.evaluate(() => window.A.App.go('chat'));
+  // aniq bir suhbatni ochamiz — boshqa sinovlar qoldirgan suhbat aralashmasin
+  await page.evaluate(() => window.A.App.go('chat', { chatId: 'chat_umumiy' }));
   await page.waitForSelector('#chat-input', { timeout: 10000 });
   const text = 'Brauzerdan yozildi ' + Date.now().toString(36);
   calls.length = 0;
@@ -56,7 +57,7 @@ function section(t) { out.push('\n' + t); }
   section('2. Sahifa yangilangandan keyin');
   await page.reload();
   await page.waitForSelector('#app:not([hidden])', { timeout: 20000 });
-  await page.evaluate(() => window.A.App.go('chat'));
+  await page.evaluate(() => window.A.App.go('chat', { chatId: 'chat_umumiy' }));
   await page.waitForTimeout(1200);
   const afterReload = await page.evaluate(t => document.body.innerText.indexOf(t) >= 0, text);
   ok('Xabar joyida turibdi', afterReload, text);
@@ -74,10 +75,8 @@ function section(t) { out.push('\n' + t); }
 
   const serverSide = await page.evaluate(async () => {
     // ilova qaysi suhbatni ochgan bo'lsa — o'shani bazadan o'qiymiz
-    const head = document.querySelector('.chat-main .card-head h2');
-    const all = window.A.Data.all('chats');
-    const active = all.filter(c => (c.messages || []).length).sort((a, b) =>
-      String(b.updatedAt).localeCompare(String(a.updatedAt)))[0] || { id: 'chat_umumiy' };
+    const id = (window.A.App.route && window.A.App.route.chatId) || 'chat_umumiy';
+    const active = { id: id };
     const r = await fetch('api/doc?path=' + encodeURIComponent('chats/' + active.id),
       { credentials: 'same-origin' });
     const j = await r.json();

@@ -101,6 +101,12 @@ function makeOld(dir) {
 }
 
 async function loginAndOpenMenu(page) {
+  // ilova yuklanib bo'lsin: yo kirish oynasi, yo ichki ekran
+  await page.waitForFunction(() => {
+    const app = document.getElementById('app');
+    const inp = document.getElementById('login-user');
+    return (app && !app.hasAttribute('hidden')) || (inp && inp.offsetParent !== null);
+  }, null, { timeout: 25000 });
   // allaqachon kirgan bo'lsa qayta kirmaymiz
   const logged = await page.evaluate(() => {
     const app = document.getElementById('app');
