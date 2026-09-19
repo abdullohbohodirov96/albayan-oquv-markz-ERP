@@ -69,6 +69,10 @@ Repozitoriyada tayyor `render.yaml` bor.
    Birinchi kirish: login `admin`, parol `1234` (yoki siz kiritgan parol).
    Kirgandan keyin **Sozlamalar → Foydalanuvchilar** da parolni almashtiring.
 
+Vaqt mintaqasi hamma joyda **Asia/Tashkent (UTC+5)**: serverda ham, brauzerda ham.
+Xodimning kompyuteri boshqa mintaqada bo'lsa ham sana bir xil bo'ladi — davomat,
+to'lov va hisoblar Toshkent kuni bo'yicha yoziladi.
+
 Zaxira nusxalar `/var/data/backups` papkasida, har kuni avtomatik olinadi
 (oxirgi 30 tasi saqlanadi). Sozlamalar → Ma'lumotlar bo'limida qo'lda zaxira
 olish va zaxiradan tiklash tugmalari bor.
@@ -299,6 +303,7 @@ node tests/mobile-test.js       # 360 / 390 / 430 px
 node tests/export-test.js       # Excel va CSV fayli haqiqatan yuklanadimi
 node tests/ui-backup-test.js    # zaxira oynasi
 node tests/lang-switch-test.js  # 4 til: aralash matn chiqmasligi
+node tests/time-test.js         # Toshkent vaqti va "bugun" (turli mintaqalarda)
 node tests/i18n-audit.js        # tarjima qamrovi
 
 # Server ishlab turganda (alohida baza bilan):

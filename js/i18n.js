@@ -1113,6 +1113,33 @@
     }
   };
 
+  /* ---------- Arab raqamlari (٠١٢٣٤٥٦٧٨٩) ---------- */
+  var AR_DIGITS = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+
+  /**
+   * Raqamlarni arabcha ko'rinishga o'tkazish.
+   * Lotin harfi bor bo'laklar (B020, ALB-202609-0001, admin1) tegilmaydi —
+   * ular kod va login, o'zgarsa ish buziladi.
+   */
+  function toArabicDigits(str) {
+    var out = String(str == null ? '' : str)
+      .replace(/[A-Za-z][A-Za-z0-9._@-]*|[A-Za-z0-9._@-]*[A-Za-z]|\d/g, function (m) {
+        return (m.length === 1 && m >= '0' && m <= '9') ? AR_DIGITS[Number(m)] : m;
+      });
+    // O'ngdan chapga matnda "4 250 000" yoki "17:00–18:30" teskari ko'rinmasin:
+    // butun sonni chapdan-o'ngga majburlaymiz va ichidagi bo'shliqni
+    // uzilmas bo'shliqqa almashtiramiz.
+    return out.replace(/[٠-٩][٠-٩\s.,:\/\u2013\u2014-]*[٠-٩]|[٠-٩]/g, function (m) {
+      return '\u202D' + m.replace(/ /g, '\u00A0') + '\u202C';
+    });
+  }
+  /** Teskarisi — kerak bo'lsa (masalan, qidiruvda) */
+  function fromArabicDigits(str) {
+    return String(str == null ? '' : str).replace(/[٠-٩]/g, function (c) {
+      return String(AR_DIGITS.indexOf(c));
+    });
+  }
+
   var I18N = {
     langs: LANGS,
     lang: 'uz',
@@ -1291,6 +1318,7 @@
       }
       if (!src.trim()) return;
       var t = this.text(src);
+      if (this.lang === 'ar') t = toArabicDigits(t);
       if (t !== n.nodeValue) n.nodeValue = t;
       n.__albSrc = src; n.__albOut = t;
     },
@@ -1331,5 +1359,7 @@
 
   global.A = global.A || {};
   global.A.I18N = I18N;
+  global.A.arDigits = toArabicDigits;
+  global.A.latinDigits = fromArabicDigits;
   global.A.t = function (s) { return I18N.text(s); };
 })(typeof window !== 'undefined' ? window : globalThis);

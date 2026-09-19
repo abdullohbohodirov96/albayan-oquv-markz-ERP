@@ -1075,12 +1075,21 @@
       view.appendChild(UI.card(null, UI.empty({ title: 'Faol guruh yo’q', text: 'Avval guruh oching va o’quvchi yozing.' })));
       return;
     }
-    var groupId = route.groupId || groups[0].id;
+    /* Hech narsa tanlanmagan bo'lsa — BUGUNGI dars o'zi ochiladi:
+       bugun darsi bor guruh va bugungi sana. Toshkent vaqti bo'yicha. */
+    var today = A.today();
+    var auto = null;
+    if (!route.groupId && !route.date) {
+      var mine = Q.lessonsOn(today, App.user).filter(function (l) { return l.status !== 'bekor'; });
+      if (mine.length) auto = { groupId: mine[0].groupId, date: today };
+    }
+
+    var groupId = route.groupId || (auto && auto.groupId) || groups[0].id;
     var g = D.one('groups', groupId) || groups[0];
     if (!A.canSeeGroup(App.user, g)) { view.appendChild(UI.empty({ title: 'Ruxsat yo’q' })); return; }
     var ym = route.date ? A.ymOf(route.date) : A.thisMonth();
 
-    view.appendChild(UI.pageHead('Davomat', 'Guruh va dars sanasini tanlang'));
+    view.appendChild(UI.pageHead('Davomat', A.dateLabel(today) + ' · bugungi dars o’zi tanlanadi'));
 
     // Eng tepada — bugungi darslar. Belgilanganini darrov ko'rish uchun.
     view.appendChild(todayStrip(App, g.id, date0(route)));
@@ -1091,10 +1100,14 @@
       return;
     }
     var lessons = A.monthLessons(g, ym, D.lessonsCached(g.id, ym)).filter(function (l) { return l.status !== 'bekor'; });
-    var date = route.date;
+    var date = route.date || (auto && auto.date);
     if (!date || !lessons.some(function (l) { return l.date === date; })) {
-      var past = lessons.filter(function (l) { return l.date <= A.today(); });
-      date = past.length ? past[past.length - 1].date : (lessons[0] ? lessons[0].date : null);
+      // 1) bugun dars bo'lsa — bugun; 2) bo'lmasa — oxirgi o'tgan dars; 3) oyning birinchi darsi
+      if (lessons.some(function (l) { return l.date === today; })) date = today;
+      else {
+        var past = lessons.filter(function (l) { return l.date <= today; });
+        date = past.length ? past[past.length - 1].date : (lessons[0] ? lessons[0].date : null);
+      }
     }
 
     var fg = UI.field({
@@ -1106,7 +1119,10 @@
       label: 'Dars sanasi', type: 'select', value: date || '',
       options: lessons.length ? lessons.map(function (l) {
         var marked = l.attendance && Object.keys(l.attendance).length;
-        return { value: l.date, label: A.dateLabel(l.date) + ' ' + l.start + (marked ? ' ✓' : '') };
+        return {
+          value: l.date,
+          label: (l.date === today ? 'Bugun · ' : '') + A.dateLabel(l.date) + ' ' + l.start + (marked ? ' ✓' : '')
+        };
       }) : [{ value: '', label: 'Dars yo’q' }]
     });
     fd.input.addEventListener('change', function () { App.go('attendance', { groupId: g.id, date: fd.input.value }); });

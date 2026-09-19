@@ -16,7 +16,9 @@
     "test:perf": "node tests/perf-test.js",
     "test:db": "node tests/db-test.js",
     "test:bot": "node tests/bot-test.js",
-    "test:backup": "node tests/backup-test.js"
+    "test:backup": "node tests/backup-test.js",
+    "test:time": "node tests/time-test.js",
+    "test:lang": "node tests/lang-switch-test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

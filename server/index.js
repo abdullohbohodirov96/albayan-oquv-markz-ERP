@@ -716,14 +716,14 @@ async function handleApi(req, res, url) {
       try {
         const r = await withLock('backup', () => backup.makeBackup(store, 'qo’lda'));
         await backup.writeState(store, {
-          lastOkDate: new Date().toISOString().slice(0, 10),
-          lastOkAt: new Date().toISOString(),
+          lastOkDate: backup.tzDate(),
+          lastOkAt: backup.tzStamp(),
           lastFile: r.name, lastBytes: r.bytes, lastCount: r.count, lastError: '', lastErrorAt: ''
         });
         await writeAudit(user, 'Zaxira nusxa olindi', r.name, r.count + ' yozuv');
         return send(res, 200, { ok: true, file: r });
       } catch (e) {
-        await backup.writeState(store, { lastError: String(e.message), lastErrorAt: new Date().toISOString() });
+        await backup.writeState(store, { lastError: String(e.message), lastErrorAt: backup.tzStamp() });
         return send(res, 500, { error: e.message });
       }
     }

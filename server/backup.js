@@ -14,11 +14,17 @@ const FORMAT = 3;
 
 function ensureDir() { fs.mkdirSync(DIR, { recursive: true, mode: 0o700 }); }
 
+/* Barcha sana va vaqt Toshkent (UTC+5) bo'yicha — markaz shu yerda ishlaydi */
+const TZ_MS = 5 * 3600 * 1000;
+function tzNow() { return new Date(Date.now() + TZ_MS); }
+function tzDate() { return tzNow().toISOString().slice(0, 10); }
+function tzStamp() { return tzNow().toISOString().slice(0, 19).replace('T', ' '); }
+
 function tsName(prefix) {
-  const d = new Date();
+  const d = tzNow();
   const p = n => (n < 10 ? '0' + n : '' + n);
-  return prefix + '-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
-    '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '.json';
+  return prefix + '-' + d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) +
+    '-' + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds()) + '.json';
 }
 
 /** Zaxira ichidagi barcha hujjatlar: { "students/st_1": {...}, ... } */
@@ -29,7 +35,7 @@ async function dumpOf(store) {
   return {
     format: FORMAT,
     app: 'albyana-erp',
-    createdAt: new Date().toISOString(),
+    createdAt: tzStamp(),
     count: Object.keys(docs).length,
     docs
   };
@@ -218,17 +224,17 @@ function startSchedule(store, onFail) {
   async function tick() {
     try {
       const st = await readState(store);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = tzDate();
       if (st.lastOkDate === today) return;
       const r = await makeBackup(store, 'avtomatik');
       await writeState(store, {
-        lastOkDate: today, lastOkAt: new Date().toISOString(),
+        lastOkDate: today, lastOkAt: tzStamp(),
         lastFile: r.name, lastBytes: r.bytes, lastCount: r.count,
         lastError: '', lastErrorAt: ''
       });
       console.log('  Zaxira olindi: ' + r.name + ' (' + r.count + ' yozuv)');
     } catch (e) {
-      await writeState(store, { lastError: String(e.message || e), lastErrorAt: new Date().toISOString() })
+      await writeState(store, { lastError: String(e.message || e), lastErrorAt: tzStamp() })
         .catch(() => { });
       console.error('  Zaxira XATO: ' + e.message);
       if (onFail) { try { await onFail(e); } catch (x) { } }
@@ -242,7 +248,7 @@ function startSchedule(store, onFail) {
 }
 
 module.exports = {
-  DIR, FORMAT,
+  DIR, FORMAT, tzDate, tzStamp,
   makeBackup, list, read, validate, preview, restore,
   readState, writeState, startSchedule, dumpOf, checksum, flattenOld, safeName
 };
