@@ -653,6 +653,86 @@
   };
 
   /* ================= O'QUVCHI KARTASI ================= */
+  /** O'quvchining keyingi darsi: bugundan boshlab 30 kun ichida */
+  function nextLessonOf(studentId) {
+    var mems = Q.membershipsOf(studentId).filter(function (m) { return m.status === 'faol'; });
+    var today = A.today();
+    var best = null;
+    mems.forEach(function (m) {
+      var g = D.one('groups', m.groupId);
+      if (!g) return;
+      var months = [A.thisMonth(), A.addMonths(A.thisMonth(), 1)];
+      months.forEach(function (ym) {
+        var doc = D.lessonsCached(g.id, ym);
+        A.monthLessons(g, ym, doc).forEach(function (l) {
+          if (l.canceled) return;
+          if (l.date < today) return;
+          if (!best || l.date < best.date || (l.date === best.date && l.start < best.start)) {
+            best = { date: l.date, start: l.start, end: l.end, group: g };
+          }
+        });
+      });
+    });
+    return best;
+  }
+
+  /** O'quvchi kartasining tepasidagi tezkor bo'lim */
+  function quickCard(s, bal, over, App) {
+    var mems = Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; });
+    var next = nextLessonOf(s.id);
+    var phone = s.phone || s.parentPhone || '';
+
+    var money = bal.debt > 0
+      ? h('div', { class: 'q-money bad' }, [
+          h('span', {}, over > 0 ? 'Muddati o’tgan qarz' : 'Qarz'),
+          h('b', {}, A.som(bal.debt) + ' so’m')
+        ])
+      : (bal.advance > 0
+        ? h('div', { class: 'q-money ok' }, [h('span', {}, 'Avans'), h('b', {}, A.som(bal.advance) + ' so’m')])
+        : h('div', { class: 'q-money ok' }, [h('span', {}, 'Qarz'), h('b', {}, 'Yo’q')]));
+
+    var lines = h('div', { class: 'q-lines' }, [
+      h('div', {}, [
+        h('span', { class: 'muted small' }, 'Faol guruhlar: '),
+        mems.length
+          ? h('b', {}, mems.map(function (m) { return Q.groupLabel(m.groupId); }).join(', '))
+          : h('span', { class: 'muted' }, 'yo’q')
+      ]),
+      h('div', {}, [
+        h('span', { class: 'muted small' }, 'Keyingi dars: '),
+        next
+          ? h('b', {}, A.dateLabel(next.date) + ' · ' + next.start + '–' + next.end + ' · ' + A.groupLabel(next.group))
+          : h('span', { class: 'muted' }, 'rejada yo’q')
+      ]),
+      h('div', {}, [
+        h('span', { class: 'muted small' }, 'Telefon: '),
+        phone ? h('a', { href: 'tel:' + phone.replace(/\s/g, ''), class: 'mono' }, phone)
+          : h('span', { class: 'muted' }, 'kiritilmagan')
+      ])
+    ]);
+
+    var canApply = bal.advance > 0 && Q.openInvoices(s.id).length > 0;
+    var actions = h('div', { class: 'q-actions' }, [
+      App.can('payment.create') ? h('button', {
+        class: 'btn primary', onclick: function () { A.paymentForm(s.id, App); }
+      }, [UI.icon('money'), 'To’lov']) : null,
+      (canApply && App.can('payment.create')) ? h('button', {
+        class: 'btn', onclick: function () { A.advanceModal(s.id, App); }
+      }, 'Avansdan qoplash') : null,
+      App.can('student.edit') ? h('button', {
+        class: 'btn', onclick: function () { A.membershipForm(s, null, App); }
+      }, [UI.icon('plus'), 'Guruhga yozish']) : null,
+      phone ? h('a', {
+        class: 'btn', href: 'tel:' + phone.replace(/\s/g, '')
+      }, [UI.icon('phone'), 'Qo’ng’iroq qilish']) : null
+    ]);
+
+    return h('section', { class: 'card quick-card' }, [
+      h('div', { class: 'q-top' }, [money, lines]),
+      actions
+    ]);
+  }
+
   A.Pages.student = function (view, route, App) {
     App.guard('student.view');
     var s = D.one('students', route.id);
@@ -667,14 +747,13 @@
     view.appendChild(UI.pageHead(s.lastName + ' ' + s.firstName,
       (s.phone || '') + (s.parentName ? ' · Ota-ona: ' + s.parentName + ' ' + (s.parentPhone || '') : ''),
       [
-        App.can('payment.create') ? h('button', {
-          class: 'btn primary', onclick: function () { A.paymentForm(s.id, App); }
-        }, [UI.icon('money'), 'To’lov qabul qilish']) : null,
+        // Asosiy amallar pastdagi tezkor kartada — bu yerda faqat tahrirlash
         App.can('student.edit') ? h('button', { class: 'btn', onclick: function () { A.studentForm(s, App); } },
-          [UI.icon('edit'), 'Tahrirlash']) : null,
-        App.can('student.edit') ? h('button', { class: 'btn', onclick: function () { A.membershipForm(s, null, App); } },
-          [UI.icon('plus'), 'Guruhga yozish']) : null
+          [UI.icon('edit'), 'Tahrirlash']) : null
       ]));
+
+    /* --- Tezkor karta: eng kerakli ma'lumot va uchta amal --- */
+    view.appendChild(quickCard(s, bal, over, App));
 
     var tiles = h('div', { class: 'tiles' });
     tiles.appendChild(UI.tile({ label: 'Holat', value: s.status === 'faol' ? 'Faol' : (s.status === 'toxtatgan' ? 'To’xtatgan' : 'Arxiv') }));
@@ -834,10 +913,24 @@
         pays.length ? UI.table([
           { label: 'Sana', render: function (p) { return A.dateLabel(p.date); } },
           { label: 'Chek', render: function (p) { return h('span', { class: 'mono small' }, p.receiptNo); } },
-          { label: 'Turi', render: function (p) { return p.type === 'refund' ? UI.pill('Qaytarish', 'bad') : UI.pill('To’lov', 'ok'); } },
-          { label: 'Usul', render: function (p) { return ({ naqd: 'Naqd', karta: 'Karta', bank: 'Bank o’tkazmasi' })[p.method] || p.method; } },
+          {
+            label: 'Turi', render: function (p) {
+              if (p.type === 'refund') return UI.pill('Qaytarish', 'bad');
+              if (p.type === 'advance') return UI.pill('Avansdan qoplash', 'info');
+              return UI.pill('To’lov', 'ok');
+            }
+          },
+          {
+            label: 'Usul', render: function (p) {
+              return ({ naqd: 'Naqd', karta: 'Karta', bank: 'Bank o’tkazmasi', avans: 'Avansdan' })[p.method] || p.method;
+            }
+          },
           {
             label: 'Summa', right: true, render: function (p) {
+              if (p.type === 'advance') {
+                var used = p.applied || (p.allocations || []).reduce(function (t, a) { return t + a.amount; }, 0);
+                return h('span', { class: 'mono', title: 'Yangi pul emas — avansdan hisobga o’tkazildi' }, A.som(used) + '*');
+              }
               return h('span', { class: 'mono strong', style: p.voided ? 'text-decoration:line-through;opacity:.6' : '' },
                 (p.type === 'refund' ? '−' : '') + A.som(p.amount));
             }
@@ -849,6 +942,46 @@
             }
           }
         ], pays) : h('p', { class: 'muted' }, 'To’lov yo’q.'), null, null, true));
+
+      /* --- Avans tarixi: qancha kelgan, qancha ishlatilgan, qancha qolgan --- */
+      var advUsed = pays.filter(function (p) { return p.type === 'advance' && !p.voided; });
+      var usedSum = advUsed.reduce(function (t, p) {
+        return t + (p.applied || (p.allocations || []).reduce(function (x, a) { return x + a.amount; }, 0));
+      }, 0);
+      if (bal.advance > 0 || usedSum > 0) {
+        view.appendChild(h('div', { style: 'margin-top:14px' }, UI.card('Avans', [
+          h('div', { class: 'rowflex', style: 'margin-bottom:10px' }, [
+            UI.pill('Hozirgi avans: ' + A.som(bal.advance) + ' so’m', bal.advance > 0 ? 'info' : 'mute'),
+            UI.pill('Qoplashga ishlatilgan: ' + A.som(usedSum) + ' so’m', 'mute')
+          ]),
+          advUsed.length ? UI.table([
+            { label: 'Sana', render: function (p) { return A.dateLabel(p.date); } },
+            {
+              label: 'Qaysi hisoblarga', render: function (p) {
+                return (p.allocations || []).map(function (a) {
+                  var inv = A.Fin.invoicesById()[a.invoiceId];
+                  return (inv ? A.monthLabel(inv.month) : '') + ' — ' + A.som(a.amount);
+                }).join('; ');
+              }
+            },
+            {
+              label: 'Summa', right: true, render: function (p) {
+                return h('span', { class: 'mono' }, A.som(p.applied ||
+                  (p.allocations || []).reduce(function (x, a) { return x + a.amount; }, 0)));
+              }
+            },
+            { label: 'Kim', render: function (p) { return h('span', { class: 'small muted' }, p.createdBy || '—'); } }
+          ], advUsed) : h('p', { class: 'small muted', style: 'margin:0' },
+            'Avans hali qoplashga ishlatilmagan.'),
+          (bal.advance > 0 && App.can('payment.create') && Q.openInvoices(s.id).length) ? h('div', { style: 'margin-top:12px' },
+            h('button', {
+              class: 'btn primary', onclick: function () { A.advanceModal(s.id, App); }
+            }, 'Avansdan qoplash')) : null,
+          h('p', { class: 'small muted', style: 'margin:10px 0 0' },
+            'Avansdan qoplash yangi tushum emas — pul allaqachon qabul qilingan, ' +
+            'shuning uchun hisobotlarda daromad sifatida ikki marta ko’rinmaydi.')
+        ])));
+      }
     }
   };
 

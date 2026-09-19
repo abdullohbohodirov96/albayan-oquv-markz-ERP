@@ -235,7 +235,8 @@ function startSchedule(store, onFail) {
     }
   }
   tick();
-  timer = setInterval(tick, 60 * 60 * 1000);
+  // Har 6 soatda tekshiramiz: bulutli bazalar (Neon) behuda uyg'onmasin
+  timer = setInterval(tick, Number(process.env.BACKUP_CHECK_MS || 6 * 60 * 60 * 1000));
   if (timer.unref) timer.unref();
   return { stop: () => clearInterval(timer), tick };
 }

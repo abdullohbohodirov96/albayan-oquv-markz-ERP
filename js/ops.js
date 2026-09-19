@@ -265,6 +265,64 @@
     return rec;
   }
 
+  /**
+   * Avansdan qoplash: yangi pul kirmaydi.
+   * Yozuvning summasi 0 bo'ladi — daromad hisobotiga qo'shilmaydi,
+   * faqat taqsimot yoziladi: qarz ham, avans ham shuncha kamayadi.
+   */
+  async function applyAdvance(input, actor) {
+    var id = input.id || A.uid('adv');
+    var ym = A.ymOf(input.date || A.today());
+
+    if (D.mode === 'server') {
+      var r = await D.api('POST', 'api/payment', {
+        id: id, type: 'advance',
+        studentId: input.studentId,
+        amount: (input.allocations || []).reduce(function (t, a) { return t + Math.round(a.amount); }, 0),
+        date: input.date || A.today(),
+        note: input.note || '',
+        allocations: input.allocations || []
+      });
+      if (r && r.payment) { D.col.payments[r.payment.id] = r.payment; return r.payment; }
+      throw new Error('Server qoplashni tasdiqlamadi.');
+    }
+
+    var existing = D.one('payments', id);
+    if (existing) return existing;
+
+    var bal = A.balanceOf(input.studentId, Fin.allInvoices(), Fin.allPayments());
+    var paid = A.paidByInvoice(Fin.allPayments());
+    var invById = {};
+    Fin.allInvoices().forEach(function (i) { invById[i.id] = i; });
+
+    var allocations = [], sum = 0;
+    (input.allocations || []).forEach(function (a) {
+      var inv = invById[a.invoiceId];
+      if (!inv || inv.studentId !== input.studentId) return;
+      var remaining = A.invoiceRemaining(inv, paid);
+      var amt = Math.min(Math.round(a.amount), remaining, bal.advance - sum);
+      if (amt <= 0) return;
+      allocations.push({ invoiceId: inv.id, amount: amt });
+      sum += amt;
+    });
+    if (!allocations.length) throw new Error('Qoplash uchun ochiq hisob yo’q yoki avans yetmaydi.');
+
+    var rec = {
+      id: id, type: 'advance', studentId: input.studentId,
+      amount: 0, applied: sum,
+      date: input.date || A.today(), month: ym, method: 'avans',
+      note: input.note || '',
+      allocations: allocations,
+      receiptNo: localReceiptNo(ym),
+      createdAt: A.nowStamp(),
+      createdBy: actor ? actor.name : '—',
+      fromAdvance: true
+    };
+    await D.save('payments', rec);
+    await audit(actor, 'Avansdan qoplandi', rec.receiptNo, A.somFull(sum));
+    return rec;
+  }
+
   /** Qaytarish mumkin bo'lgan qoldiq: asl to'lov − oldingi qaytarishlar */
   function refundCap(paymentId) {
     var p = D.one('payments', paymentId);
@@ -370,6 +428,7 @@
     createSingleInvoice: createSingleInvoice,
     deleteInvoice: deleteInvoice,
     createPayment: createPayment,
+    applyAdvance: applyAdvance,
     voidPayment: voidPayment,
     refundCap: refundCap,
     localReceiptNo: localReceiptNo,

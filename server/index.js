@@ -175,12 +175,12 @@ async function ensureSeed() {
   const settings = await store.get('meta/settings');
   if (!settings) {
     await store.set('meta/settings', {
-      centerName: process.env.APP_NAME || 'Albyana',
+      centerName: process.env.APP_NAME || 'AlBayan Cairo',
       address: '', phone: '', workStart: '08:00', workEnd: '20:00', dueDay: 5,
       expenseCategories: ['Ijara', 'Kommunal', 'Reklama', 'Jihozlar', 'Xo’jalik', 'Ish haqi', 'Boshqa'],
       bot: {
         username: process.env.TELEGRAM_BOT_USERNAME || '',
-        welcome: 'Assalomu alaykum! Albyana o’quv markazi botiga xush kelibsiz.',
+        welcome: 'Assalomu alaykum! AlBayan Cairo o’quv markazi botiga xush kelibsiz.',
         notifyAttendance: true, notifyPayment: true, notifyDebt: true, autoApprove: false
       },
       createdAt: stamp()
@@ -265,7 +265,14 @@ async function createPaymentServer(body, user) {
   const student = await store.get('students/' + String(body.studentId || ''));
   if (!student) throw new Error('O’quvchi topilmadi.');
 
-  const type = body.type === 'refund' ? 'refund' : 'payment';
+  const type = body.type === 'refund' ? 'refund'
+    : (body.type === 'advance' ? 'advance' : 'payment');
+
+  if (type === 'advance') {
+    // Avansdan qoplash: yangi pul kirmaydi, faqat oldin olingan pul hisobga yoziladi.
+    return await applyAdvanceServer(id, student, body, user);
+  }
+
   if (type === 'refund') {
     if (!A.can(user, 'payment.void')) throw new Error('Pul qaytarish uchun alohida ruxsat kerak.');
     const src = await store.get('payments/' + String(body.refOf || ''));
@@ -324,6 +331,71 @@ async function createPaymentServer(body, user) {
   return rec;
 }
 
+
+/** O'quvchining ishlatilmagan avansi: olingan pul − hisoblarga yozilgani */
+async function advanceOf(studentId) {
+  const rows = (await store.list('payments/')).map(x => x.data)
+    .filter(p => p && !p.voided && p.studentId === studentId);
+  let received = 0, allocated = 0;
+  rows.forEach(p => {
+    const sign = p.type === 'refund' ? -1 : 1;
+    if (p.type !== 'advance') received += sign * Math.round(p.amount || 0);
+    (p.allocations || []).forEach(a => { allocated += sign * Math.round(a.amount || 0); });
+  });
+  return { received, allocated, advance: Math.max(0, received - allocated) };
+}
+
+/**
+ * Avansdan qoplash. Yangi daromad EMAS: yozuvning summasi 0,
+ * faqat taqsimot yoziladi — qarz ham, avans ham shuncha kamayadi.
+ */
+async function applyAdvanceServer(id, student, body, user) {
+  const date = String(body.date || '').slice(0, 10);
+  const bal = await advanceOf(student.id);
+  if (bal.advance <= 0) throw new Error('Bu o’quvchida avans yo’q.');
+
+  // hisoblarning qoldig'ini hisoblaymiz
+  const rows = (await store.list('payments/')).map(x => x.data);
+  const paidMap = {};
+  rows.forEach(p => {
+    if (!p || p.voided) return;
+    const sign = p.type === 'refund' ? -1 : 1;
+    (p.allocations || []).forEach(a => {
+      paidMap[a.invoiceId] = (paidMap[a.invoiceId] || 0) + sign * Math.round(a.amount);
+    });
+  });
+
+  const allocations = [];
+  let sum = 0;
+  for (const a of (body.allocations || [])) {
+    const inv = await store.get('invoices/' + String(a.invoiceId || ''));
+    if (!inv) continue;
+    if (inv.studentId !== student.id) throw new Error('Hisob boshqa o’quvchiga tegishli.');
+    const remaining = Math.max(0, Math.round(inv.final) - Math.round(paidMap[inv.id] || 0));
+    let amt = Math.min(Math.round(Number(a.amount) || 0), remaining, bal.advance - sum);
+    if (amt <= 0) continue;
+    allocations.push({ invoiceId: inv.id, amount: amt });
+    sum += amt;
+  }
+  if (!allocations.length) throw new Error('Qoplash uchun ochiq hisob yo’q.');
+
+  const ym = date.slice(0, 7);
+  const rec = {
+    id, type: 'advance', studentId: student.id,
+    amount: 0,                       // yangi pul emas — hisobotlarda daromad sifatida ko'rinmaydi
+    applied: sum,                    // avansdan ishlatilgan summa
+    date, month: ym, method: 'avans',
+    note: String(body.note || '').slice(0, 300),
+    allocations,
+    receiptNo: await nextReceiptNo(ym),
+    createdAt: stamp(), createdBy: user.name, createdById: user.id,
+    fromAdvance: true
+  };
+  await store.set('payments/' + id, rec);
+  await writeAudit(user, 'Avansdan qoplandi', rec.receiptNo, sum + ' so’m');
+  return rec;
+}
+
 async function generateInvoicesServer(ym, user) {
   const settings = (await store.get('meta/settings')) || {};
   const groups = {}, students = {};
@@ -356,6 +428,71 @@ async function generateInvoicesServer(ym, user) {
   }
   if (created) await writeAudit(user, 'Oylik hisoblar yaratildi', ym, created + ' ta');
   return { created, skipped, errors };
+}
+
+
+/* ---------------- Oylik hisoblarni avtomatik yaratish ---------------- */
+/**
+ * Sozlamalarda yoqilgan bo'lsa, har oy boshida hisoblar o'zi yaratiladi.
+ * Natija meta/autoinvoice ichida saqlanadi — direktor sozlamalarda ko'radi.
+ */
+async function autoInvoiceTick() {
+  const settings = (await store.get('meta/settings')) || {};
+  const conf = settings.autoInvoice || {};
+  if (conf.enabled !== true) return { off: true };
+
+  const day = Math.min(28, Math.max(1, Number(conf.day || 1)));
+  const now = new Date(Date.now() + 5 * 3600 * 1000);       // Asia/Tashkent
+  const today = now.getUTCDate();
+  const ym = A.thisMonth();
+  const state = (await store.get('meta/autoinvoice')) || {};
+  if (today < day) return { waiting: true, day };
+  if (state.lastMonth === ym) return { done: true, month: ym };
+
+  try {
+    const r = await withLock('invoices', () => generateInvoicesServer(ym, null));
+    const next = {
+      lastMonth: ym, lastRunAt: stamp(),
+      created: r.created, skipped: r.skipped,
+      errors: (r.errors || []).slice(0, 10), lastError: ''
+    };
+    await store.set('meta/autoinvoice', next);
+    console.log('  Oylik hisoblar avtomatik yaratildi: ' + r.created + ' ta (' + ym + ')');
+    await notifyDirectors('Oylik hisoblar avtomatik yaratildi: ' + r.created + ' ta (' +
+      ym + '). ' + (r.errors && r.errors.length ? 'Xatolar: ' + r.errors.length + ' ta.' : ''));
+    return next;
+  } catch (e) {
+    const next = Object.assign({}, state, { lastError: String(e.message), lastErrorAt: stamp() });
+    await store.set('meta/autoinvoice', next);
+    await notifyDirectors('Oylik hisoblarni avtomatik yaratishda xato: ' + e.message);
+    return next;
+  }
+}
+
+/** Direktorga ichki suhbat orqali xabar */
+async function notifyDirectors(text) {
+  try {
+    const users = (await store.list('users/')).map(x => x.data);
+    for (const d of users.filter(u => u.role === 'direktor' && u.active !== false)) {
+      const id = 'sys__' + d.id;
+      const doc = (await store.get('chats/' + id)) ||
+        { id, type: 'direct', title: 'Tizim xabarlari', members: [d.id], messages: [], readAt: {} };
+      doc.messages = (doc.messages || []).concat([{
+        id: 'msg_' + Date.now().toString(36), from: 'system', text, at: stamp()
+      }]).slice(-50);
+      doc.updatedAt = stamp();
+      await store.set('chats/' + id, doc);
+    }
+  } catch (e) { /* xabar yetmasa ham ish to'xtamaydi */ }
+}
+
+function startAutoInvoice() {
+  const t = setInterval(() => {
+    autoInvoiceTick().catch(e => console.error('auto invoice:', e.message));
+  }, Number(process.env.AUTO_INVOICE_CHECK_MS || 6 * 60 * 60 * 1000));
+  if (t.unref) t.unref();
+  autoInvoiceTick().catch(() => { });
+  return t;
 }
 
 /* ---------------- Bitta hujjatni o'qish huquqi ---------------- */
@@ -535,6 +672,20 @@ async function handleApi(req, res, url) {
     return send(res, 200, { payment: p });
   }
 
+  if (route === 'invoices/auto' && req.method === 'GET') {
+    if (!A.can(user, 'invoice.create')) return send(res, 403, { error: 'Ruxsat yo’q.' });
+    const settings = (await store.get('meta/settings')) || {};
+    return send(res, 200, {
+      conf: settings.autoInvoice || { enabled: false, day: 1 },
+      state: (await store.get('meta/autoinvoice')) || {}
+    });
+  }
+  if (route === 'invoices/auto/run' && req.method === 'POST') {
+    if (!A.can(user, 'invoice.create')) return send(res, 403, { error: 'Ruxsat yo’q.' });
+    const r = await autoInvoiceTick();
+    return send(res, 200, r);
+  }
+
   if (route === 'invoices/generate' && req.method === 'POST') {
     if (!A.can(user, 'invoice.create')) return send(res, 403, { error: 'Ruxsat yo’q.' });
     const body = await readBody(req);
@@ -548,7 +699,17 @@ async function handleApi(req, res, url) {
   if (route.indexOf('backup') === 0) {
     if (!A.can(user, 'settings.edit')) return send(res, 403, { error: 'Zaxira bilan ishlash uchun ruxsat yo’q.' });
 
-    if (route === 'backup/state' && req.method === 'GET') {
+    if (route === 'backup/db' && req.method === 'GET') {
+    let stats = null;
+    try { stats = store.stats ? await store.stats() : null; } catch (e) { stats = null; }
+    if (!stats) {
+      const rows = await store.all();
+      stats = { rows: rows.length, bytes: Buffer.byteLength(JSON.stringify(rows)), size: null };
+    }
+    return send(res, 200, { kind: store.kind, stats });
+  }
+
+  if (route === 'backup/state' && req.method === 'GET') {
       return send(res, 200, { state: await backup.readState(store), files: backup.list().slice(0, 20) });
     }
     if (route === 'backup/run' && req.method === 'POST') {
@@ -734,29 +895,16 @@ const server = http.createServer(async (req, res) => {
 (async function start() {
   await ensureSeed();
   server.listen(PORT, () => {
-    console.log('\n  Albyana ERP ishga tushdi: http://localhost:' + PORT);
+    console.log('\n  AlBayan Cairo ERP ishga tushdi: http://localhost:' + PORT);
     console.log('  Ombor: ' + store.kind + (store.file ? ' (' + store.file + ')' : ''));
   });
   // Kunlik avtomatik zaxira; xato bo'lsa direktorga xabar qoldiriladi
   backup.startSchedule(store, async (err) => {
-    try {
-      const users = (await store.list('users/')).map(x => x.data);
-      const dirs = users.filter(u => u.role === 'direktor' && u.active !== false);
-      for (const d of dirs) {
-        const id = 'sys__' + d.id;
-        const doc = (await store.get('chats/' + id)) ||
-          { id, type: 'direct', title: 'Tizim xabarlari', members: [d.id], messages: [], readAt: {} };
-        doc.messages = (doc.messages || []).concat([{
-          id: 'msg_' + Date.now().toString(36),
-          from: 'system',
-          text: 'Diqqat: kunlik zaxira nusxa olinmadi. Sabab: ' + String(err.message || err),
-          at: stamp()
-        }]).slice(-50);
-        doc.updatedAt = stamp();
-        await store.set('chats/' + id, doc);
-      }
-    } catch (e) { /* xabar yuborilmasa ham server ishlayveradi */ }
+    await notifyDirectors('Diqqat: kunlik zaxira nusxa olinmadi. Sabab: ' + String(err.message || err));
   });
+
+  // Oylik hisoblarni avtomatik yaratish (sozlamalarda yoqilsa)
+  startAutoInvoice();
 
   if (process.env.TELEGRAM_BOT_TOKEN) {
     require('./bot').start({ store, stamp, A });

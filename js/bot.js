@@ -138,6 +138,22 @@
         'tolov');
     },
 
+    /** Avansdan qoplanganda xabar */
+    async notifyAdvance(rec) {
+      var conf = settings();
+      if (!conf.notify.tolov) return;
+      var st = D.one('students', rec.studentId);
+      if (!st || !st.telegram || !st.telegram.id) return;
+      var bal = A.balanceOf(rec.studentId, A.Fin.allInvoices(), A.Fin.allPayments());
+      var used = rec.applied || (rec.allocations || []).reduce(function (t, a) { return t + a.amount; }, 0);
+      await Bot.enqueue(rec.studentId,
+        'Avansingizdan ' + A.som(used) + ' so’m hisobga o’tkazildi.\n' +
+        (bal.debt > 0 ? 'Qolgan qarz: ' + A.som(bal.debt) + ' so’m' : 'Qarzingiz yo’q.') +
+        (bal.advance > 0 ? '\nQolgan avans: ' + A.som(bal.advance) + ' so’m' : ''),
+        'tolov', { dedupeKey: 'avans:' + rec.id });
+      return true;
+    },
+
     pending: function () {
       return A.sortBy(D.all('botreq').filter(function (r) { return r.status === 'kutilmoqda'; }), 'createdAt', 'desc');
     },

@@ -121,16 +121,86 @@
       }
       updateSummary();
     }
-    pick.input.addEventListener('change', refresh);
-    fAmount.input.addEventListener('input', refresh);
+    /* Qisqa izoh: qarz qancha va pul qayerga yoziladi */
+    var hint = h('div', { class: 'pay-hint' });
+    function refreshHint() {
+      UI.clear(hint);
+      var sid = pick.input.value;
+      if (!sid) return;
+      var bal = Q.balance(sid);
+      var amount = A.parseSom(fAmount.input.value);
+      var open = Q.openInvoices(sid);
+      var line = [];
+      if (bal.debt > 0) line.push(UI.pill('Qarz: ' + A.som(bal.debt) + ' so’m', 'warn'));
+      else line.push(UI.pill('Qarzi yo’q', 'ok'));
+      if (bal.advance > 0) line.push(UI.pill('Avans: ' + A.som(bal.advance) + ' so’m', 'info'));
+      line.forEach(function (x) { hint.appendChild(x); });
+
+      if (amount > 0) {
+        var auto = A.allocate(amount, open);
+        var used = auto.allocations.reduce(function (t, a) { return t + a.amount; }, 0);
+        var rest = amount - used;
+        var txt = used > 0
+          ? 'Avtomatik: ' + auto.allocations.map(function (a) {
+            var inv = open.filter(function (i) { return i.id === a.invoiceId; })[0];
+            return (inv ? A.monthLabel(inv.month) : '') + ' — ' + A.som(a.amount);
+          }).join('; ')
+          : 'Ochiq hisob yo’q';
+        if (rest > 0) txt += (used > 0 ? '; ' : '') + 'qolgan ' + A.som(rest) + ' so’m avansga';
+        hint.appendChild(h('div', { class: 'small muted', style: 'flex-basis:100%;margin-top:4px' }, txt));
+      }
+    }
+
+    pick.input.addEventListener('change', function () { refresh(); refreshHint(); });
+    fAmount.input.addEventListener('input', function () { refresh(); refreshHint(); });
     if (studentId) pick.input.value = studentId;
     refresh();
+    refreshHint();
 
     var warn = h('div');
+
+    /* Birinchi ekran soddalashtirildi: o'quvchi + summa.
+       Sana, usul, izoh va taqsimot "Qo'shimcha" ichida — kerak bo'lsa ochiladi. */
+    var chosen = studentId ? D.one('students', studentId) : null;
+    var picker = h('div', { class: 'form-grid' }, [search.wrap, pick.wrap]);
+    var chosenLine = null;
+    if (chosen) {
+      picker.hidden = true;
+      var chosenBal = Q.balance(chosen.id);
+      chosenLine = h('div', { class: 'pay-who' }, [
+        UI.avatar(chosen.lastName + ' ' + chosen.firstName),
+        h('div', { class: 'main-col' }, [
+          h('b', {}, chosen.lastName + ' ' + chosen.firstName),
+          h('div', { class: 'small muted' }, [
+            chosen.phone || chosen.parentPhone || '',
+            (chosen.phone || chosen.parentPhone) && chosenBal.debt > 0 ? ' · ' : '',
+            chosenBal.debt > 0 ? h('span', { style: 'color:var(--bad);font-weight:700' },
+              'Qarz: ' + A.som(chosenBal.debt) + ' so’m') : null
+          ])
+        ]),
+        h('button', {
+          class: 'btn sm ghost', type: 'button', onclick: function (e) {
+            picker.hidden = false;
+            e.currentTarget.parentNode.hidden = true;
+          }
+        }, 'Boshqa o’quvchi')
+      ]);
+    }
+
+    var extra = h('details', { class: 'more' }, [
+      h('summary', {}, 'Qo’shimcha: sana, to’lov usuli, izoh va taqsimot'),
+      h('div', { class: 'form-grid', style: 'margin-top:10px' }, [fDate.wrap, fMethod.wrap, fNote.wrap]),
+      allocBox
+    ]);
+
     UI.modal({
-      title: 'To’lov qabul qilish',
+      title: chosen ? ('To’lov: ' + chosen.lastName + ' ' + chosen.firstName) : 'To’lov qabul qilish',
       wide: true,
-      body: [h('div', { class: 'form-grid' }, [search.wrap, pick.wrap, fAmount.wrap, fDate.wrap, fMethod.wrap, fNote.wrap]), allocBox, warn],
+      body: [
+        chosenLine, picker,
+        h('div', { class: 'form-grid' }, [fAmount.wrap]),
+        hint, extra, warn
+      ],
       actions: [
         { label: 'Bekor qilish' },
         {
@@ -170,12 +240,190 @@
     function msg(t) { return h('div', { class: 'banner warn', style: 'margin:0' }, h('div', {}, t)); }
   };
 
+  /* ================= AVTOMATIK OYLIK HISOBLAR ================= */
+  function autoInvoiceCard(App) {
+    var box = h('div', {});
+    var s = D.settings || {};
+    var conf = s.autoInvoice || { enabled: false, day: 1 };
+
+    function refresh() {
+      UI.clear(box);
+      var cb = h('input', { type: 'checkbox', id: 'auto-inv-on' });
+      cb.checked = conf.enabled === true;
+      var dayF = UI.field({
+        label: 'Oyning qaysi kunida', type: 'number', value: conf.day || 1,
+        help: 'Masalan 1 — har oyning 1-kuni hisoblar o’zi yaratiladi.'
+      });
+      var state = h('div', { class: 'small muted', style: 'margin-top:10px' },
+        D.mode === 'server' ? 'Holat yuklanmoqda…'
+          : 'Avtomatik yaratish faqat server rejimida ishlaydi. Hozir hisoblarni "Moliya → Hisoblangan to’lovlar" bo’limidan qo’lda yarating.');
+
+      box.appendChild(UI.card('Oylik hisoblarni avtomatik yaratish', [
+        h('p', { style: 'margin:0 0 12px' },
+          'Yoqilsa, har oy boshida barcha faol o’quvchilarga hisob o’zi yaratiladi. ' +
+          'Ikki marta yaratilmaydi — allaqachon bor hisob o’tkazib yuboriladi.'),
+        h('label', { class: 'list-item', style: 'cursor:pointer;border:1px solid var(--line);border-radius:10px' }, [
+          cb,
+          h('div', { class: 'main-col' }, [
+            h('b', {}, 'Avtomatik yaratish'),
+            h('span', {}, conf.enabled ? 'Yoqilgan' : 'O’chirilgan')
+          ])
+        ]),
+        h('div', { class: 'form-grid', style: 'margin-top:12px' }, [dayF.wrap]),
+        state,
+        h('div', { class: 'rowflex', style: 'margin-top:14px' }, [
+          h('button', {
+            class: 'btn primary', onclick: function (e) {
+              UI.busy(e.currentTarget, async function () {
+                conf = { enabled: cb.checked, day: Math.min(28, Math.max(1, Number(dayF.input.value) || 1)) };
+                await D.saveSettings(Object.assign({}, D.settings, { autoInvoice: conf }));
+                await A.Ops.audit(App.user, 'Avtomatik hisoblar sozlandi',
+                  conf.enabled ? 'yoqildi' : 'o’chirildi', 'kun: ' + conf.day);
+                UI.toast('Saqlandi.', 'ok');
+                refresh();
+              });
+            }
+          }, 'Saqlash'),
+          D.mode === 'server' ? h('button', {
+            class: 'btn', onclick: function (e) {
+              UI.busy(e.currentTarget, async function () {
+                try {
+                  var r = await D.api('POST', 'api/invoices/auto/run');
+                  if (r.off) UI.toast('Avval avtomatik yaratishni yoqing.', 'bad');
+                  else if (r.waiting) UI.toast('Belgilangan kun hali kelmadi (' + r.day + '-kun).', 'info');
+                  else if (r.done) UI.toast('Bu oy uchun allaqachon yaratilgan.', 'info');
+                  else UI.toast((r.created || 0) + ' ta hisob yaratildi.', 'ok');
+                  await D.loadBootstrap();
+                  refresh();
+                } catch (err) { UI.toast(err.message, 'bad'); }
+              });
+            }
+          }, 'Hozir tekshirish') : null
+        ])
+      ]));
+
+      if (D.mode === 'server') {
+        D.api('GET', 'api/invoices/auto').then(function (r) {
+          var el = box.querySelector('.small.muted');
+          if (!el) return;
+          el.textContent = '';
+          var st = r.state || {};
+          if (st.lastError) {
+            el.appendChild(h('div', { class: 'banner bad' }, h('div', {}, [
+              h('b', {}, 'Oxirgi urinishda xato. '), st.lastError,
+              h('div', { class: 'small' }, 'Vaqti: ' + (st.lastErrorAt || '—'))
+            ])));
+          }
+          el.appendChild(h('div', {}, st.lastRunAt
+            ? 'Oxirgi yaratilgan: ' + A.monthLabel(st.lastMonth || A.thisMonth()) + ' · ' +
+              (st.created || 0) + ' ta yangi, ' + (st.skipped || 0) + ' ta allaqachon bor edi · ' + st.lastRunAt
+            : 'Hali avtomatik yaratilmagan.'));
+          if ((st.errors || []).length) {
+            el.appendChild(h('div', { class: 'small', style: 'color:var(--bad);margin-top:4px' },
+              'Xatolar: ' + st.errors.slice(0, 3).join('; ')));
+          }
+        }).catch(function () { });
+      }
+    }
+
+    refresh();
+    return box;
+  }
+
+  /* ================= AVANSDAN QOPLASH ================= */
+  A.advanceModal = function (studentId, App) {
+    App.guard('payment.create');
+    var s = D.one('students', studentId);
+    if (!s) return;
+    var bal = Q.balance(studentId);
+    if (bal.advance <= 0) { UI.toast('Bu o’quvchida avans yo’q.', 'info'); return; }
+
+    var open = Q.openInvoices(studentId);
+    if (!open.length) {
+      UI.toast('Ochiq hisob yo’q — qoplash shart emas.', 'info');
+      return;
+    }
+
+    // avtomatik taqsimot: eng eski hisobdan boshlab
+    var auto = A.allocate(bal.advance, open);
+    var autoMap = {};
+    auto.allocations.forEach(function (a) { autoMap[a.invoiceId] = a.amount; });
+
+    var inputs = {};
+    var rows = h('div', { class: 'list', style: 'border:1px solid var(--line);border-radius:10px' });
+    open.forEach(function (inv) {
+      var f = UI.field({ type: 'number', value: autoMap[inv.id] || 0 });
+      f.input.style.maxWidth = '150px';
+      f.input.addEventListener('input', summary);
+      inputs[inv.id] = { input: f.input, inv: inv };
+      rows.appendChild(h('div', { class: 'att-row' }, [
+        h('div', { class: 'nm' }, [
+          h('div', {}, A.monthLabel(inv.month) + ' · ' + Q.groupName(inv.groupId)),
+          h('div', { class: 'small muted' }, 'Qoldiq: ' + A.som(inv.remaining) + ' so’m · muddat ' + A.dateLabel(inv.dueDate))
+        ]),
+        f.wrap
+      ]));
+    });
+
+    var sumBox = h('div', { class: 'rowflex', style: 'margin-top:8px' });
+    function summary() {
+      UI.clear(sumBox);
+      var used = 0;
+      Object.keys(inputs).forEach(function (id) { used += A.parseSom(inputs[id].input.value); });
+      sumBox.appendChild(UI.pill('Qoplanadi: ' + A.som(used) + ' so’m', used > 0 ? 'ok' : 'mute'));
+      sumBox.appendChild(UI.pill('Avansdan qoladi: ' + A.som(Math.max(0, bal.advance - used)) + ' so’m', 'info'));
+      if (used > bal.advance) sumBox.appendChild(UI.pill('Avansdan ortiq!', 'bad'));
+    }
+    summary();
+
+    var warn = h('div');
+    UI.modal({
+      title: 'Avansdan qoplash',
+      wide: true,
+      body: [
+        h('div', { class: 'banner info' }, h('div', {}, [
+          h('b', {}, s.lastName + ' ' + s.firstName + ' avansi: ' + A.som(bal.advance) + ' so’m. '),
+          'Bu pul allaqachon qabul qilingan — qoplash yangi daromad sifatida hisoblanmaydi, ',
+          'faqat qarzga yoziladi.'
+        ])),
+        h('b', { style: 'display:block;margin:6px 0' }, 'Qaysi hisoblarga yozilsin'),
+        rows, sumBox, warn
+      ],
+      actions: [
+        { label: 'Bekor qilish' },
+        {
+          label: 'Qoplash', cls: 'primary', onClick: function (c, btn) {
+            UI.clear(warn);
+            var allocations = [], used = 0;
+            Object.keys(inputs).forEach(function (id) {
+              var v = A.parseSom(inputs[id].input.value);
+              if (v > 0) { allocations.push({ invoiceId: id, amount: v }); used += v; }
+            });
+            if (!allocations.length) { warn.appendChild(h('div', { class: 'banner warn', style: 'margin:0' }, h('div', {}, 'Qoplanadigan summani kiriting.'))); return; }
+            if (used > bal.advance) { warn.appendChild(h('div', { class: 'banner warn', style: 'margin:0' }, h('div', {}, 'Avansdan ortiq qoplab bo’lmaydi.'))); return; }
+            UI.busy(btn, async function () {
+              try {
+                var rec = await A.Ops.applyAdvance({ studentId: studentId, allocations: allocations }, App.user);
+                if (A.Bot) { try { await A.Bot.notifyAdvance(rec); } catch (e) { } }
+                c();
+                UI.toast('Avansdan ' + A.som(rec.applied || used) + ' so’m qoplandi.', 'ok');
+                App.render();
+              } catch (e) {
+                warn.appendChild(h('div', { class: 'banner warn', style: 'margin:0' }, h('div', {}, e.message)));
+              }
+            });
+          }
+        }
+      ]
+    });
+  };
+
   /* ================= CHEK ================= */
   A.receiptModal = function (pay, App) {
     var s = D.one('students', pay.studentId);
     var set = D.settings || {};
     var lines = [];
-    lines.push((set.centerName || 'Albyana') + ' o’quv markazi');
+    lines.push((set.centerName || 'AlBayan Cairo') + ' o’quv markazi');
     if (set.address) lines.push(set.address);
     if (set.phone) lines.push('Tel: ' + set.phone);
     lines.push('--------------------------------');
@@ -1059,6 +1307,10 @@
             });
           }
         }, 'Saqlash'))]));
+
+      if (App.can('invoice.create')) {
+        view.appendChild(h('div', { id: 'auto-inv', style: 'margin-top:14px' }, autoInvoiceCard(App)));
+      }
     }
 
     if (tab === 'users') {
@@ -1259,6 +1511,7 @@
       box.appendChild(UI.card('Zaxira nusxa', [
         h('p', { style: 'margin:0 0 12px' },
           'Barcha ma’lumot bitta faylga yig’iladi. Fayl serverda ham saqlanadi, kompyuteringizga ham yuklab olsangiz bo’ladi.'),
+        h('div', { id: 'db-state', class: 'small muted', style: 'margin-bottom:6px' }, ''),
         h('div', { id: 'backup-state', class: 'small muted', style: 'margin-bottom:12px' }, 'Holat yuklanmoqda…'),
         h('div', { class: 'rowflex' }, [
           h('button', {
@@ -1286,6 +1539,19 @@
       ]));
 
       if (D.mode === 'server') {
+        D.api('GET', 'api/backup/db').then(function (r) {
+          var el = box.querySelector('#db-state');
+          if (!el) return;
+          var st = r.stats || {};
+          var kind = { postgres: 'PostgreSQL (bulutli baza)', sqlite: 'SQLite fayli', json: 'JSON fayli' }[r.kind] || r.kind;
+          var mb = st.bytes ? (st.bytes / 1048576) : 0;
+          el.textContent = 'Baza: ' + kind + ' · ' + (st.rows || 0) + ' ta yozuv · ' +
+            (st.size || (mb.toFixed(1) + ' MB'));
+          if (r.kind === 'postgres' && mb > 400) {
+            el.appendChild(h('div', { class: 'small', style: 'color:var(--bad);margin-top:4px' },
+              'Diqqat: bepul tarif chegarasi (0.5 GB) yaqinlashdi.'));
+          }
+        }).catch(function () { });
         D.api('GET', 'api/backup/state').then(function (r) {
           var el = box.querySelector('#backup-state');
           if (!el) return;
@@ -1484,7 +1750,7 @@
     return UI.card('Telefonga o’rnatish', [
       h('p', { style: 'margin:0 0 12px' }, already
         ? 'Ilova shu qurilmaga o’rnatilgan — brauzersiz, alohida dastur kabi ochiladi.'
-        : 'Albyana’ni telefon yoki kompyuterga alohida ilova sifatida o’rnatish mumkin. ' +
+        : 'Ilovani telefon yoki kompyuterga alohida dastur sifatida o’rnatish mumkin. ' +
         'Bosh ekranda belgi paydo bo’ladi, ochilishi tezroq bo’ladi.'),
       already ? null : h('div', { class: 'rowflex' }, [
         h('button', {

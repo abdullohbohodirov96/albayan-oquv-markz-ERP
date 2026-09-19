@@ -288,6 +288,7 @@
           if (!c) return;
           if (!f.get('fee').input.value) f.get('fee').input.value = c.monthlyFee;
           if (isNew) f.get('code').input.value = A.nextGroupCode(c.name, D.all('groups'));
+          autoEnd(true);
         }
       },
       {
@@ -300,8 +301,15 @@
         options: [{ value: '', label: '— tanlanmagan —' }].concat(
           D.all('rooms').map(function (r) { return { value: r.id, label: r.name + ' (' + r.capacity + ' joy)' }; }))
       },
-      { name: 'startTime', label: 'Boshlanish vaqti', type: 'time', required: true, value: g.startTime },
-      { name: 'endTime', label: 'Tugash vaqti', type: 'time', required: true, value: g.endTime },
+      {
+        name: 'startTime', label: 'Boshlanish vaqti', type: 'time', required: true, value: g.startTime,
+        onchange: function () { autoEnd(true); }
+      },
+      {
+        name: 'endTime', label: 'Tugash vaqti', type: 'time', required: true, value: g.endTime,
+        help: 'Kurs davomiyligi bo’yicha o’zi to’ldiriladi',
+        onchange: function () { showDuration(); }
+      },
       { name: 'startDate', label: 'Boshlanish sanasi', type: 'date', required: true, value: g.startDate },
       { name: 'limit', label: 'O’quvchilar limiti', type: 'number', value: g.limit },
       { name: 'fee', label: 'Oylik narx (so’m)', type: 'number', required: true, value: g.fee },
@@ -310,6 +318,53 @@
         options: [{ value: 'rejalashtirilgan', label: 'Rejalashtirilgan' }, { value: 'faol', label: 'Faol' }, { value: 'yakunlangan', label: 'Yakunlangan' }]
       }
     ]);
+
+    /* Dars davomiyligi kursda yozilgan — boshlanish vaqti tanlansa,
+       tugash vaqti o'zi hisoblanadi. */
+    function lessonMinutes() {
+      var c = D.one('courses', f.get('courseId').input.value);
+      var n = Number(c && c.lessonMinutes);
+      return n > 0 ? n : 90;
+    }
+    function addMinutes(hhmm, mins) {
+      var p = String(hhmm || '').split(':');
+      if (p.length < 2) return '';
+      var total = (Number(p[0]) * 60 + Number(p[1]) + mins) % (24 * 60);
+      if (total < 0) total += 24 * 60;
+      return A.pad(Math.floor(total / 60)) + ':' + A.pad(total % 60);
+    }
+    function diffMinutes(a, b) {
+      var x = String(a || '').split(':'), y = String(b || '').split(':');
+      if (x.length < 2 || y.length < 2) return 0;
+      var d = (Number(y[0]) * 60 + Number(y[1])) - (Number(x[0]) * 60 + Number(x[1]));
+      if (d <= 0) d += 24 * 60;
+      return d;
+    }
+    function durText(mins) {
+      var hrs = Math.floor(mins / 60), m = mins % 60;
+      return (hrs ? hrs + ' soat' : '') + (hrs && m ? ' ' : '') + (m ? m + ' daqiqa' : '');
+    }
+    function showDuration() {
+      var help = f.get('endTime').wrap.querySelector('.help');
+      if (!help) return;
+      var st = f.get('startTime').input.value, en = f.get('endTime').input.value;
+      if (!st || !en) { help.textContent = 'Kurs davomiyligi bo’yicha o’zi to’ldiriladi'; return; }
+      var d = diffMinutes(st, en);
+      help.textContent = 'Davomiyligi: ' + durText(d) +
+        (d === lessonMinutes() ? ' (kursdagidek)' : ' — kursda ' + durText(lessonMinutes()));
+    }
+    function autoEnd(force) {
+      var st = f.get('startTime').input.value;
+      if (!st) return;
+      var end = addMinutes(st, lessonMinutes());
+      if (force || !f.get('endTime').input.value) {
+        var inp = f.get('endTime').input;
+        inp.value = end;
+        inp.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      showDuration();
+    }
+    showDuration();
 
     // Dars kunlari
     var dayWrap = h('div', { class: 'field full' }, [
@@ -937,6 +992,55 @@
   }
 
   /* ================= DAVOMAT ================= */
+  function date0(route) { return route.date || null; }
+
+  /** Bugungi darslar tasmasi: belgilangan / belgilanmagan holati bilan */
+  function todayStrip(App, currentGroupId, currentDate) {
+    var today = A.today();
+    var ym = A.thisMonth();
+    var box = h('div', { class: 'today-strip' });
+
+    var lessons = Q.lessonsOn(today, App.user).filter(function (l) { return l.status !== 'bekor'; });
+    var loaded = Q.activeGroups(App.user).every(function (g) { return !!D.lessonsCached(g.id, ym); });
+    if (!loaded && !todayStrip._loading) {
+      todayStrip._loading = true;
+      (async function () {
+        try { await Q.ensureLessonMonth(ym, App.user); } catch (e) { }
+        todayStrip._loading = false;
+        App.render();
+      })();
+    }
+
+    box.appendChild(h('div', { class: 'ts-head' }, [
+      h('b', {}, 'Bugungi darslar'),
+      h('span', { class: 'small muted' }, A.dateLabel(today))
+    ]));
+
+    if (!lessons.length) {
+      box.appendChild(h('div', { class: 'small muted', style: 'padding:6px 0' },
+        loaded ? 'Bugun dars yo’q. Pastdan guruh va sanani tanlang.' : 'Yuklanmoqda…'));
+      return box;
+    }
+
+    var row = h('div', { class: 'ts-row' });
+    A.sortBy(lessons, 'start').forEach(function (l) {
+      var g = D.one('groups', l.groupId);
+      var marked = l.attendance && Object.keys(l.attendance).length > 0;
+      var active = l.groupId === currentGroupId && currentDate === today;
+      row.appendChild(h('button', {
+        class: 'ts-card' + (marked ? ' done' : '') + (active ? ' active' : ''),
+        type: 'button',
+        onclick: function () { App.go('attendance', { groupId: l.groupId, date: today }); }
+      }, [
+        h('span', { class: 'ts-time' }, l.start),
+        h('span', { class: 'ts-name' }, g ? A.groupLabel(g) : ''),
+        marked ? UI.pill('Belgilangan', 'ok') : UI.pill('Belgilanmagan', 'warn')
+      ]));
+    });
+    box.appendChild(row);
+    return box;
+  }
+
   A.Pages.attendance = function (view, route, App) {
     App.guard('attendance.view');
     var groups = Q.activeGroups(App.user).filter(function (g) { return g.status === 'faol'; });
@@ -951,6 +1055,9 @@
     var ym = route.date ? A.ymOf(route.date) : A.thisMonth();
 
     view.appendChild(UI.pageHead('Davomat', 'Guruh va dars sanasini tanlang'));
+
+    // Eng tepada — bugungi darslar. Belgilanganini darrov ko'rish uchun.
+    view.appendChild(todayStrip(App, g.id, date0(route)));
 
     if (!D.lessonsCached(g.id, ym)) {
       (async function () { await D.loadLessons(g.id, ym); App.render(); })();

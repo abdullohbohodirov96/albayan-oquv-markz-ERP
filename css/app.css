@@ -6,6 +6,10 @@
   --warn:#9a6210; --warn-soft:#fbf0dd;
   --bad:#ad2f2a; --bad-soft:#fbe8e7;
   --info:#2a5d9e; --info-soft:#e7effa;
+  /* Yon panel uchun alohida ranglar — mavzu almashganda ham mos turadi */
+  --side-bg:#1e335e; --side-ink:#eef2fa; --side-ink-2:#c9d4ea;
+  --side-hover:rgba(255,255,255,.10); --side-line:rgba(255,255,255,.12);
+  --side-active-bg:#ffffff; --side-active-ink:#1e335e;
   --shadow:0 1px 2px rgba(18,24,38,.05), 0 8px 24px -12px rgba(18,24,38,.18);
   --shadow-lg:0 12px 40px -12px rgba(18,24,38,.30);
   --r:10px; --r-lg:16px;
@@ -15,9 +19,12 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --brand:#5b7ec4; --brand-deep:#8aa6dd; --brand-light:#7d9bd6; --brand-soft:#1d2740;
-    --bg:#0e1320; --surface:#161d2d; --surface-2:#1b2233; --line:#28324a; --line-strong:#3a4663;
-    --ink:#e9edf6; --ink-2:#c3cbdb; --muted:#94a0b8;
+    --brand:#7fa0e0; --brand-deep:#9db8ea; --brand-light:#95b2e6; --brand-soft:#223052;
+    --bg:#151b27; --surface:#1d2533; --surface-2:#232c3c; --line:#2f3a4c; --line-strong:#42506a;
+    --ink:#eef2f9; --ink-2:#cbd4e2; --muted:#9aa6bb;
+    --side-bg:#111823; --side-ink:#edf1f8; --side-ink-2:#aab7cc;
+    --side-hover:rgba(255,255,255,.07); --side-line:rgba(255,255,255,.08);
+    --side-active-bg:#2c3c63; --side-active-ink:#ffffff;
     --ok:#4cc38a; --ok-soft:#14301f;
     --warn:#dfa34a; --warn-soft:#332413;
     --bad:#f07a72; --bad-soft:#3a1a18;
@@ -27,9 +34,12 @@
   }
 }
 :root[data-theme="dark"]{
-  --brand:#5b7ec4; --brand-deep:#8aa6dd; --brand-light:#7d9bd6; --brand-soft:#1d2740;
-  --bg:#0e1320; --surface:#161d2d; --surface-2:#1b2233; --line:#28324a; --line-strong:#3a4663;
-  --ink:#e9edf6; --ink-2:#c3cbdb; --muted:#94a0b8;
+  --brand:#7fa0e0; --brand-deep:#9db8ea; --brand-light:#95b2e6; --brand-soft:#223052;
+  --bg:#151b27; --surface:#1d2533; --surface-2:#232c3c; --line:#2f3a4c; --line-strong:#42506a;
+  --ink:#eef2f9; --ink-2:#cbd4e2; --muted:#9aa6bb;
+  --side-bg:#111823; --side-ink:#edf1f8; --side-ink-2:#aab7cc;
+  --side-hover:rgba(255,255,255,.07); --side-line:rgba(255,255,255,.08);
+  --side-active-bg:#2c3c63; --side-active-ink:#ffffff;
   --ok:#4cc38a; --ok-soft:#14301f;
   --warn:#dfa34a; --warn-soft:#332413;
   --bad:#f07a72; --bad-soft:#3a1a18;
@@ -49,7 +59,7 @@ a{color:var(--brand);text-decoration:none}
 
 /* ---------- Kirish ekrani ---------- */
 .screen{min-height:100%;display:grid;place-items:center;padding:24px 16px;
-  background:linear-gradient(160deg,var(--brand-deep),#0d1628 70%)}
+  background:linear-gradient(160deg,var(--side-bg),#0d1424 75%)}
 .login{width:100%;max-width:400px;background:var(--surface);border-radius:var(--r-lg);
   box-shadow:var(--shadow-lg);padding:28px 24px;display:flex;flex-direction:column;gap:16px}
 .login .brandline{display:flex;align-items:center;gap:12px}
@@ -60,20 +70,20 @@ a{color:var(--brand);text-decoration:none}
 
 /* ---------- Karkas ---------- */
 .app{display:grid;grid-template-columns:236px 1fr;min-height:100%}
-.sidebar{background:var(--brand-deep);color:#e8edf8;display:flex;flex-direction:column;
+.sidebar{background:var(--side-bg);color:var(--side-ink);display:flex;flex-direction:column;
   position:sticky;top:env(safe-area-inset-top,0px);height:100vh;height:100dvh}
-.sidebar .head{padding:18px 16px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.12)}
+.sidebar .head{padding:18px 16px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--side-line)}
 .sidebar .head b{font-family:var(--display);font-size:16px;letter-spacing:.01em;display:block}
 .sidebar .head span{font-size:11px;opacity:.7;letter-spacing:.06em;text-transform:uppercase}
 .nav{padding:10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1}
 .nav button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;
-  color:#c9d4ea;padding:9px 11px;border-radius:9px;cursor:pointer;font-weight:500;font-size:13.5px}
-.nav button:hover{background:rgba(255,255,255,.09);color:#fff}
-.nav button[aria-current="page"]{background:#fff;color:var(--brand-deep);font-weight:700}
+  color:var(--side-ink-2);padding:9px 11px;border-radius:9px;cursor:pointer;font-weight:500;font-size:13.5px}
+.nav button:hover{background:var(--side-hover);color:var(--side-ink)}
+.nav button[aria-current="page"]{background:var(--side-active-bg);color:var(--side-active-ink);font-weight:700}
 .nav .ico{width:18px;height:18px;flex:none;opacity:.9}
 .nav button[aria-current="page"] .ico{opacity:1}
 .nav .group-label{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;opacity:.55;padding:12px 11px 4px}
-.sidebar .foot{padding:10px;border-top:1px solid rgba(255,255,255,.12);display:flex;gap:8px;align-items:center}
+.sidebar .foot{padding:10px;border-top:1px solid var(--side-line);display:flex;gap:8px;align-items:center}
 .sidebar .foot .who{flex:1;min-width:0}
 .sidebar .foot .who b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sidebar .foot .who span{font-size:11px;opacity:.7}
@@ -493,3 +503,141 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   .pwa-bar span{flex-basis:100%}
   .pwa-bar .btn{min-height:44px;flex:1}
 }
+
+/* ================= O'QUVCHI KARTASI — TEZKOR BO'LIM ================= */
+.quick-card{padding:16px;margin-bottom:14px}
+.quick-card .q-top{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.quick-card .q-money{display:flex;flex-direction:column;gap:2px;padding:10px 14px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--line);min-width:180px}
+.quick-card .q-money span{font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.quick-card .q-money b{font-size:22px;font-variant-numeric:tabular-nums}
+.quick-card .q-money.bad{background:var(--bad-soft);border-color:var(--bad)}
+.quick-card .q-money.bad b{color:var(--bad)}
+.quick-card .q-money.ok b{color:var(--ok)}
+.quick-card .q-lines{flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;line-height:1.5}
+.quick-card .q-lines a{color:var(--brand);text-decoration:none}
+.quick-card .q-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+.quick-card .q-actions .btn{min-height:44px;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+@media (max-width:760px){
+  .quick-card .q-top{gap:12px}
+  .quick-card .q-money{width:100%;min-width:0}
+  .quick-card .q-actions .btn{flex:1 1 calc(50% - 10px);justify-content:center}
+}
+
+/* ================= SODDALASHTIRILGAN TO'LOV OYNASI ================= */
+.pay-who{display:flex;gap:12px;align-items:center;
+  padding:12px 14px;border:1px solid var(--brand);border-radius:12px;background:var(--brand-soft);margin-bottom:12px}
+.pay-who .main-col{flex:1;min-width:0}
+.pay-who .main-col b{font-size:15px;display:block}
+.pay-hint{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:4px 0 12px}
+details.more{border:1px solid var(--line);border-radius:12px;padding:10px 14px;background:var(--surface-2)}
+details.more>summary{cursor:pointer;font-weight:600;font-size:13.5px;color:var(--brand);
+  list-style:none;min-height:34px;display:flex;align-items:center;gap:8px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:'+';font-size:16px;font-weight:800;line-height:1}
+details.more[open]>summary::before{content:'−'}
+@media (max-width:760px){
+  details.more>summary{min-height:44px}
+  .pay-who{flex-wrap:wrap}
+  .pay-who .btn{min-height:44px}
+}
+
+/* ================= DAVOMAT — BUGUNGI DARSLAR TASMASI ================= */
+.today-strip{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:12px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.today-strip .ts-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.today-strip .ts-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.ts-card{flex:0 0 auto;display:flex;flex-direction:column;gap:4px;align-items:flex-start;
+  min-width:190px;min-height:44px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:12px;
+  background:var(--surface-2);cursor:pointer;text-align:left;font:inherit;color:inherit}
+.ts-card:hover{border-color:var(--brand)}
+.ts-card.active{border-color:var(--brand);background:var(--brand-soft)}
+.ts-card.done{border-color:var(--ok)}
+.ts-card .ts-time{font-family:var(--mono);font-size:15px;font-weight:600}
+.ts-card .ts-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+@media (max-width:760px){
+  .ts-card{min-width:170px;min-height:64px}
+}
+
+/* ================= SANA TANLASH (o'z taqvimimiz) ================= */
+.dp-wrap{position:relative}
+.dp-native{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;padding:0;border:0;margin:0}
+.dp-btn{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  min-height:42px;padding:9px 12px;border:1px solid var(--line-strong);border-radius:var(--r);
+  background:var(--surface);color:var(--ink);font:inherit;cursor:pointer;text-align:left}
+.dp-btn:hover{border-color:var(--brand)}
+.dp-btn:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.dp-btn.empty .dp-text{color:var(--muted)}
+.dp-btn .ico{width:18px;height:18px;flex:none;color:var(--muted)}
+.dp-btn:disabled{opacity:.6;cursor:not-allowed}
+.field.err .dp-btn{border-color:var(--bad)}
+
+.dp-pop{position:fixed;z-index:400;width:312px;background:var(--surface);
+  border:1px solid var(--line-strong);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);
+  padding:12px;animation:dpIn .12s ease-out}
+@keyframes dpIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.dp-pop{animation:none}}
+.dp-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.dp-title{font-family:var(--display);font-size:15px}
+.dp-title span{color:var(--muted);font-family:var(--mono);font-size:13px}
+.dp-nav{width:36px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);
+  color:var(--ink);font-size:18px;line-height:1;cursor:pointer}
+.dp-nav:hover{border-color:var(--brand);color:var(--brand)}
+.dp-week{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px}
+.dp-week span{text-align:center;font-size:11px;font-weight:700;color:var(--muted);
+  letter-spacing:.03em;text-transform:uppercase;padding:4px 0}
+.dp-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.dp-empty{height:38px}
+.dp-day{height:38px;border:1px solid transparent;border-radius:9px;background:none;color:var(--ink);
+  font:inherit;font-variant-numeric:tabular-nums;cursor:pointer}
+.dp-day:hover:not(:disabled){background:var(--brand-soft);color:var(--brand)}
+.dp-day.rest{color:var(--bad)}
+.dp-day.today{border-color:var(--brand);font-weight:700}
+.dp-day.sel{background:var(--brand);color:#fff;font-weight:700;border-color:var(--brand)}
+.dp-day.sel:hover{background:var(--brand);color:#fff}
+.dp-day:disabled{opacity:.3;cursor:not-allowed}
+.dp-foot{display:flex;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.dp-foot .btn{flex:1;min-height:38px}
+[dir="rtl"] .dp-btn{text-align:right}
+@media (max-width:760px){
+  .dp-pop{width:calc(100vw - 24px);left:12px!important;padding:14px}
+  .dp-day,.dp-empty{height:46px}
+  .dp-nav{width:44px;height:44px}
+  .dp-foot .btn{min-height:44px}
+}
+
+/* ---------- Oy va vaqt tanlash ---------- */
+.dp-pop-month{width:300px}
+.dp-months{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.dp-month{min-height:42px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);
+  color:var(--ink);font:inherit;font-size:13px;cursor:pointer;padding:6px 4px}
+.dp-month:hover{border-color:var(--brand);color:var(--brand)}
+.dp-month.today{border-color:var(--brand)}
+.dp-month.sel{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:700}
+
+.dp-pop-time{width:250px}
+.dp-head.time{justify-content:center}
+.dp-head.time .dp-title b{font-family:var(--mono);font-size:24px;letter-spacing:.04em}
+.tp-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tp-colwrap{display:flex;flex-direction:column;gap:4px;min-width:0}
+.tp-lab{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:center}
+.tp-col{display:flex;flex-direction:column;gap:3px;max-height:210px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:10px;padding:4px;background:var(--surface-2)}
+.tp-item{min-height:38px;border:1px solid transparent;border-radius:8px;background:none;color:var(--ink);
+  font:inherit;font-family:var(--mono);font-size:15px;cursor:pointer}
+.tp-item:hover{background:var(--brand-soft);color:var(--brand)}
+.tp-item.sel{background:var(--brand);color:#fff;font-weight:700}
+@media (max-width:760px){
+  .dp-pop-month,.dp-pop-time{width:calc(100vw - 24px)}
+  .dp-month{min-height:48px}
+  .tp-item{min-height:44px}
+  .tp-col{max-height:240px}
+}
+
+/* Taqvim/soatda qo'lda yozish */
+.dp-input,.tp-input{width:100%;min-height:42px;padding:8px 12px;border:1px solid var(--line-strong);
+  border-radius:10px;background:var(--surface-2);color:var(--ink);font:inherit;
+  font-family:var(--mono);text-align:center;margin-bottom:10px}
+.tp-input{font-size:24px;letter-spacing:.06em;margin-bottom:0}
+.dp-input:focus,.tp-input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
+.dp-input.bad,.tp-input.bad{border-color:var(--bad);color:var(--bad)}

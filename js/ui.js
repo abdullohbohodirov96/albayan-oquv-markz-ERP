@@ -208,6 +208,17 @@
     } else if (o.type === 'textarea') {
       input = h('textarea', { id: id, rows: o.rows || 3 });
       input.value = o.value == null ? '' : o.value;
+    } else if (o.type === 'time' || o.type === 'month') {
+      input = h('input', { id: id, type: o.type, class: 'dp-native' });
+      input.value = o.value == null ? '' : o.value;
+      if (o.min != null) input.setAttribute('min', o.min);
+      if (o.max != null) input.setAttribute('max', o.max);
+    } else if (o.type === 'date') {
+      // O'z taqvimimiz: brauzernikidan farqli — mavzuga mos, o'zbekcha (yoki tanlangan tilda)
+      input = h('input', { id: id, type: 'date', class: 'dp-native' });
+      input.value = o.value == null ? '' : o.value;
+      if (o.min != null) input.setAttribute('min', o.min);
+      if (o.max != null) input.setAttribute('max', o.max);
     } else {
       input = h('input', { id: id, type: o.type || 'text' });
       if (o.type === 'number') { input.setAttribute('inputmode', 'numeric'); input.setAttribute('step', o.step || '1'); }
@@ -221,12 +232,332 @@
     if (o.required) input.setAttribute('aria-required', 'true');
     if (o.oninput) input.addEventListener('input', o.oninput);
     if (o.onchange) input.addEventListener('change', o.onchange);
+    var control = (o.type === 'date' || o.type === 'time' || o.type === 'month')
+      ? pickerControl(o.type, input, o) : input;
     var wrap = h('div', { class: 'field' + (o.full ? ' full' : '') }, [
       o.label ? h('label', { for: id }, [o.label, o.required ? h('span', { class: 'req' }, ' *') : null]) : null,
-      input,
+      control,
       o.help ? h('div', { class: 'help' }, o.help) : null
     ]);
     return { wrap: wrap, input: input, id: id, name: o.name || id };
+  }
+
+
+  /* ================= TAQVIM (sana tanlash) =================
+     Brauzerning o'z oynasi o'rniga — ilova mavzusiga mos, tanlangan tildagi taqvim.
+     Qiymat oddiy <input type="date"> ichida (YYYY-MM-DD) saqlanadi:
+     shuning uchun boshqa kod hech nima o'zgartirmasdan ishlayveradi.        */
+
+  var dpOpen = null;
+
+  function dpFormat(iso) {
+    if (!iso) return '';
+    return A.dateLabel(iso);
+  }
+
+  function fmtValue(kind, v, o) {
+    if (!v) return '';
+    if (kind === 'date') return A.dateLabel(v);
+    if (kind === 'month') return A.monthLabel(v);
+    return v;                                     // vaqt: 09:00
+  }
+  function emptyLabel(kind, o) {
+    if (o && o.placeholder) return o.placeholder;
+    if (kind === 'date') return 'Sanani tanlang';
+    if (kind === 'month') return 'Oyni tanlang';
+    return 'Vaqtni tanlang';
+  }
+  function pickIcon(kind) { return icon(kind === 'time' ? 'history' : 'calendar'); }
+
+  /** Sana / vaqt / oy tanlash tugmasi va ochiladigan oyna */
+  function pickerControl(kind, input, o) {
+    o = o || {};
+    var btn = h('button', {
+      type: 'button', class: 'dp-btn dp-' + kind,
+      'aria-haspopup': 'dialog',
+      onclick: function (e) { e.preventDefault(); open(); }
+    }, [
+      h('span', { class: 'dp-text' }, fmtValue(kind, input.value, o) || emptyLabel(kind, o)),
+      pickIcon(kind)
+    ]);
+    if (!input.value) btn.classList.add('empty');
+    if (o.disabled) btn.disabled = true;
+
+    var box = h('div', { class: 'dp-wrap' }, [input, btn]);
+
+    function sync() {
+      var t = btn.querySelector('.dp-text');
+      t.textContent = fmtValue(kind, input.value, o) || emptyLabel(kind, o);
+      btn.classList.toggle('empty', !input.value);
+    }
+    input.addEventListener('change', sync);
+    input.addEventListener('input', sync);
+    input.addEventListener('focus', function () { btn.focus(); });
+
+    function set(v) {
+      input.value = v || '';
+      sync();
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function open() {
+      if (dpOpen) dpOpen();
+      var pop = h('div', { class: 'dp-pop dp-pop-' + kind, role: 'dialog', 'aria-label': emptyLabel(kind, o) });
+      var body = h('div', { class: 'dp-body' });
+      pop.appendChild(body);
+
+      if (kind === 'date') buildDate(body, input, set, close);
+      else if (kind === 'month') buildMonth(body, input, set, close);
+      else buildTime(body, input, set, close, o);
+
+      document.body.appendChild(pop);
+      place();
+      function place() {
+        var r = btn.getBoundingClientRect();
+        var w = pop.offsetWidth || 300, hgt = pop.offsetHeight || 320;
+        var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+        var top = r.bottom + 6;
+        if (top + hgt > window.innerHeight - 8) top = Math.max(8, r.top - hgt - 6);
+        pop.style.left = left + 'px';
+        pop.style.top = top + 'px';
+      }
+      function onDoc(e) { if (!pop.contains(e.target) && e.target !== btn) close(); }
+      function onKey(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); } }
+      function close() {
+        document.removeEventListener('mousedown', onDoc, true);
+        document.removeEventListener('keydown', onKey, true);
+        window.removeEventListener('resize', place);
+        window.removeEventListener('scroll', place, true);
+        pop.remove();
+        dpOpen = null;
+        try { btn.focus(); } catch (e) { }
+      }
+      setTimeout(function () {
+        document.addEventListener('mousedown', onDoc, true);
+        document.addEventListener('keydown', onKey, true);
+        window.addEventListener('resize', place);
+        window.addEventListener('scroll', place, true);
+      }, 0);
+      dpOpen = close;
+      var f = pop.querySelector('.sel') || pop.querySelector('.today') || pop.querySelector('button:not(.dp-nav)');
+      if (f) try { f.focus(); } catch (e) { }
+    }
+
+    return box;
+  }
+
+  function isoToDots(iso) {
+    var p = String(iso || '').split('-');
+    return p.length === 3 ? p[2] + '.' + p[1] + '.' + p[0] : '';
+  }
+  /** "19.09.2026", "19/9/26", "1992026" — ISO sanaga aylantiradi */
+  function parseDots(text) {
+    var t = String(text || '').trim().replace(/[\/\s-]/g, '.');
+    var m = t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
+    if (!m) {
+      var digits = t.replace(/\D/g, '');
+      if (digits.length === 8) m = [null, digits.slice(0, 2), digits.slice(2, 4), digits.slice(4)];
+      else return null;
+    }
+    var d = Number(m[1]), mo = Number(m[2]), y = Number(m[3]);
+    if (y < 100) y += 2000;
+    if (!(mo >= 1 && mo <= 12) || !(d >= 1 && d <= 31) || y < 1900 || y > 2200) return null;
+    var iso = y + '-' + A.pad(mo) + '-' + A.pad(d);
+    if (d > A.daysInMonth(y + '-' + A.pad(mo))) return null;
+    return iso;
+  }
+
+  /* ---------- Taqvim ---------- */
+  function buildDate(root, input, set, close) {
+    var min = input.getAttribute('min') || '';
+    var max = input.getAttribute('max') || '';
+    var view = (input.value || A.today()).slice(0, 7);
+    var head = h('div', { class: 'dp-head' });
+    var grid = h('div', { class: 'dp-grid' });
+    // Qo'lda yozish: 19.09.2026 yoki 19/9/26
+    var typed = h('input', {
+      class: 'dp-input', type: 'text', inputmode: 'numeric', maxlength: '10',
+      'aria-label': 'Sanani yozing', placeholder: 'kk.oo.yyyy',
+      value: input.value ? isoToDots(input.value) : ''
+    });
+    typed.addEventListener('input', function () {
+      var iso = parseDots(typed.value);
+      typed.classList.toggle('bad', typed.value.length >= 8 && !iso);
+      if (!iso) return;
+      view = iso.slice(0, 7);
+      paint();
+    });
+    typed.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var iso = parseDots(typed.value);
+      if (iso && !(min && iso < min) && !(max && iso > max)) { set(iso); close(); }
+      else typed.classList.add('bad');
+    });
+    root.appendChild(typed);
+    root.appendChild(head); root.appendChild(grid);
+    root.appendChild(h('div', { class: 'dp-foot' }, [
+      h('button', { type: 'button', class: 'btn sm', onclick: function () { set(A.today()); close(); } }, 'Bugun'),
+      h('button', { type: 'button', class: 'btn sm ghost', onclick: function () { set(''); close(); } }, 'Tozalash')
+    ]));
+
+    function paint() {
+      clear(head); clear(grid);
+      var y = Number(view.slice(0, 4)), m = Number(view.slice(5, 7));
+      head.appendChild(h('button', {
+        type: 'button', class: 'dp-nav', 'aria-label': 'Oldingi oy',
+        onclick: function () { view = A.addMonths(view, -1); paint(); }
+      }, '‹'));
+      head.appendChild(h('div', { class: 'dp-title' }, [
+        h('b', {}, A.MONTHS[m - 1] || ''), h('span', {}, ' ' + y)
+      ]));
+      head.appendChild(h('button', {
+        type: 'button', class: 'dp-nav', 'aria-label': 'Keyingi oy',
+        onclick: function () { view = A.addMonths(view, 1); paint(); }
+      }, '›'));
+
+      var wk = h('div', { class: 'dp-week' });
+      A.WEEKDAYS_SHORT.forEach(function (d) { wk.appendChild(h('span', {}, d)); });
+      grid.appendChild(wk);
+
+      var days = h('div', { class: 'dp-days' });
+      var lead = A.weekdayOf(view + '-01') - 1;
+      for (var i = 0; i < lead; i++) days.appendChild(h('span', { class: 'dp-empty' }));
+      var n = A.daysInMonth(view);
+      for (var d = 1; d <= n; d++) {
+        (function (d) {
+          var iso = view + '-' + A.pad(d);
+          var off = (min && iso < min) || (max && iso > max);
+          var cls = 'dp-day';
+          if (iso === input.value) cls += ' sel';
+          if (iso === A.today()) cls += ' today';
+          if (A.weekdayOf(iso) === 7) cls += ' rest';
+          days.appendChild(h('button', {
+            type: 'button', class: cls, disabled: off ? 'disabled' : null,
+            onclick: function () { set(iso); close(); }
+          }, String(d)));
+        })(d);
+      }
+      grid.appendChild(days);
+    }
+    paint();
+  }
+
+  /* ---------- Oy tanlash ---------- */
+  function buildMonth(root, input, set, close) {
+    var year = Number((input.value || A.thisMonth()).slice(0, 4));
+    var head = h('div', { class: 'dp-head' });
+    var grid = h('div', { class: 'dp-months' });
+    root.appendChild(head); root.appendChild(grid);
+    root.appendChild(h('div', { class: 'dp-foot' }, [
+      h('button', { type: 'button', class: 'btn sm', onclick: function () { set(A.thisMonth()); close(); } }, 'Shu oy'),
+      h('button', { type: 'button', class: 'btn sm ghost', onclick: function () { set(''); close(); } }, 'Tozalash')
+    ]));
+    function paint() {
+      clear(head); clear(grid);
+      head.appendChild(h('button', { type: 'button', class: 'dp-nav', 'aria-label': 'Oldingi yil', onclick: function () { year--; paint(); } }, '‹'));
+      head.appendChild(h('div', { class: 'dp-title' }, h('b', {}, String(year))));
+      head.appendChild(h('button', { type: 'button', class: 'dp-nav', 'aria-label': 'Keyingi yil', onclick: function () { year++; paint(); } }, '›'));
+      A.MONTHS.forEach(function (name, i) {
+        var ym = year + '-' + A.pad(i + 1);
+        var cls = 'dp-month';
+        if (ym === input.value) cls += ' sel';
+        if (ym === A.thisMonth()) cls += ' today';
+        grid.appendChild(h('button', {
+          type: 'button', class: cls, onclick: function () { set(ym); close(); }
+        }, name));
+      });
+    }
+    paint();
+  }
+
+  /** "9:30", "0930", "9.30", "930" — hammasi 09:30 ga aylanadi */
+  function parseTime(text) {
+    var t = String(text || '').trim().replace(/[.,\s]/g, ':');
+    var m = t.match(/^(\d{1,2}):?(\d{0,2})$/);
+    if (!m) return null;
+    var hrs = Number(m[1]);
+    var min = m[2] === '' ? 0 : Number(m[2]);
+    if (m[2].length === 1) min = Number(m[2]) * 10;
+    if (!(hrs >= 0 && hrs <= 23) || !(min >= 0 && min <= 59)) return null;
+    return A.pad(hrs) + ':' + A.pad(min);
+  }
+
+  /* ---------- Vaqt tanlash ---------- */
+  function buildTime(root, input, set, close, o) {
+    var cur = /^\d{2}:\d{2}$/.test(input.value) ? input.value : '09:00';
+    var hh = cur.slice(0, 2), mm = cur.slice(3, 5);
+
+    // Qo'lda yozish ham mumkin: 9:30, 0930, 09:30 — hammasi tushuniladi
+    var typed = h('input', {
+      class: 'tp-input', type: 'text', inputmode: 'numeric', maxlength: '5',
+      'aria-label': 'Vaqtni yozing', value: hh + ':' + mm, placeholder: 'SS:DD'
+    });
+    typed.addEventListener('input', function () {
+      var v = parseTime(typed.value);
+      if (!v) return;
+      hh = v.slice(0, 2); mm = v.slice(3, 5);
+      paintHours(); paintMins();
+    });
+    typed.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var v = parseTime(typed.value);
+      if (v) { set(v); close(); }
+      else typed.classList.add('bad');
+    });
+    typed.addEventListener('blur', function () { typed.value = hh + ':' + mm; typed.classList.remove('bad'); });
+
+    var head = h('div', { class: 'dp-head time' }, [typed]);
+    var cols = h('div', { class: 'tp-cols' });
+    var hourCol = h('div', { class: 'tp-col' });
+    var minCol = h('div', { class: 'tp-col' });
+    cols.appendChild(h('div', { class: 'tp-colwrap' }, [h('span', { class: 'tp-lab' }, 'Soat'), hourCol]));
+    cols.appendChild(h('div', { class: 'tp-colwrap' }, [h('span', { class: 'tp-lab' }, 'Daqiqa'), minCol]));
+    root.appendChild(head); root.appendChild(cols);
+    root.appendChild(h('div', { class: 'dp-foot' }, [
+      h('button', {
+        type: 'button', class: 'btn sm primary', onclick: function () {
+          var v = parseTime(typed.value) || (hh + ':' + mm);
+          set(v); close();
+        }
+      }, 'Tanlash'),
+      h('button', { type: 'button', class: 'btn sm ghost', onclick: function () { set(''); close(); } }, 'Tozalash')
+    ]));
+
+    function show() { if (document.activeElement !== typed) typed.value = hh + ':' + mm; }
+    function paintHours() {
+      clear(hourCol);
+      for (var i = 0; i < 24; i++) {
+        (function (i) {
+          var v = A.pad(i);
+          hourCol.appendChild(h('button', {
+            type: 'button', class: 'tp-item' + (v === hh ? ' sel' : ''),
+            onclick: function () { hh = v; paintHours(); show(); }
+          }, v));
+        })(i);
+      }
+      var sel = hourCol.querySelector('.sel');
+      if (sel) hourCol.scrollTop = Math.max(0, sel.offsetTop - 60);
+    }
+    function paintMins() {
+      clear(minCol);
+      [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].forEach(function (i) {
+        var v = A.pad(i);
+        minCol.appendChild(h('button', {
+          type: 'button', class: 'tp-item' + (v === mm ? ' sel' : ''),
+          onclick: function () { mm = v; paintMins(); show(); }
+        }, v));
+      });
+      if (['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'].indexOf(mm) < 0) {
+        minCol.appendChild(h('button', { type: 'button', class: 'tp-item sel' }, mm));
+      }
+      var sel = minCol.querySelector('.sel');
+      if (sel) minCol.scrollTop = Math.max(0, sel.offsetTop - 60);
+    }
+    paintHours(); paintMins(); show();
+    void o;
   }
 
   /** Oddiy shakl: maydonlar ro'yxatidan tugun va qiymatlar */
@@ -514,7 +845,7 @@
    */
   function buildXlsx(clean) {
     // 1) O'zimizning kutubxonaga bog'liq bo'lmagan yozuvchimiz
-    if (global.XlsxLite) return global.XlsxLite.build(clean, 'Albyana');
+    if (global.XlsxLite) return global.XlsxLite.build(clean, 'AlBayan Cairo');
     // 2) SheetJS bo'lsa (ixtiyoriy)
     if (global.XLSX) {
       var ws = global.XLSX.utils.aoa_to_sheet(clean);
@@ -527,7 +858,7 @@
       });
       ws['!cols'] = widths.map(function (w) { return { wch: w }; });
       var wb = global.XLSX.utils.book_new();
-      global.XLSX.utils.book_append_sheet(wb, ws, 'Albyana');
+      global.XLSX.utils.book_append_sheet(wb, ws, 'AlBayan Cairo');
       return global.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     }
     return null;

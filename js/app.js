@@ -226,7 +226,7 @@
       h('div', { class: 'brandline' }, [
         h('img', { class: 'logo', src: LOGO, alt: '' }),
         h('div', {}, [
-          h('h1', {}, (D.settings && D.settings.centerName) || 'Albyana'),
+          h('h1', {}, (D.settings && D.settings.centerName) || 'AlBayan Cairo'),
           h('div', { class: 'sub' }, 'O’quv markazi boshqaruv tizimi')
         ])
       ]),
@@ -313,7 +313,7 @@
     document.getElementById('me-role').textContent = A.ROLES[user.role] || user.role;
     document.getElementById('me-avatar').textContent =
       (user.name || '?').trim().split(/\s+/).map(function (p) { return p[0]; }).slice(0, 2).join('').toUpperCase();
-    document.getElementById('center-name').textContent = (D.settings && D.settings.centerName) || 'Albyana';
+    document.getElementById('center-name').textContent = (D.settings && D.settings.centerName) || 'AlBayan Cairo';
     var mp = document.getElementById('mode-pill');
     if (D.mode === 'local') { mp.hidden = false; mp.textContent = 'Faqat shu brauzerda'; }
     // sahifa yangilanganda oxirgi ochilgan bo'limga qaytamiz

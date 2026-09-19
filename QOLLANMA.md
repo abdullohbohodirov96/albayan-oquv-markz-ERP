@@ -1,4 +1,4 @@
-# Albyana — foydalanish yo'riqnomasi
+# AlBayan Cairo — foydalanish yo'riqnomasi
 
 Bu yo'riqnoma administrator uchun yozilgan. Dasturlashni bilish shart emas.
 

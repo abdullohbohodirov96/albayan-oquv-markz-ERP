@@ -82,43 +82,79 @@ function makeSqlite() {
   };
 }
 
+/* PostgreSQL (Neon, Supabase, Render Postgres yoki o'z serveringiz).
+   Neon uchun muhim: ulanish bo'sh turganda yopiladi — shunda Neon "compute"ni
+   uxlatadi va bepul tarifdagi soatlar behuda sarflanmaydi.                   */
 function makePostgres(url) {
   let Pool;
   try { Pool = require('pg').Pool; }
   catch (e) { throw new Error('pg o’rnatilmagan. "npm install" ni ishga tushiring.'); }
+
+  const local = /localhost|127\.0\.0\.1/.test(url);
   const pool = new Pool({
     connectionString: url,
-    ssl: /localhost|127\.0\.0\.1/.test(url) ? false : { rejectUnauthorized: false }
+    ssl: local ? false : { rejectUnauthorized: false },
+    max: Number(process.env.PG_POOL_MAX || 4),
+    idleTimeoutMillis: Number(process.env.PG_IDLE_MS || 15000),   // bo'sh ulanish yopilsin
+    connectionTimeoutMillis: Number(process.env.PG_CONNECT_MS || 15000),
+    allowExitOnIdle: true
   });
-  let ready = pool.query(
-    'CREATE TABLE IF NOT EXISTS docs (path TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT now())');
+  pool.on('error', e => console.error('  Baza ulanishi uzildi: ' + e.message));
+
+  let ready = init();
+  async function init() {
+    await pool.query(
+      'CREATE TABLE IF NOT EXISTS docs (path TEXT PRIMARY KEY, data JSONB NOT NULL, ' +
+      'updated_at TIMESTAMPTZ NOT NULL DEFAULT now())');
+    // "students/" kabi boshlanishi bo'yicha qidirish tez bo'lsin
+    await pool.query(
+      'CREATE INDEX IF NOT EXISTS docs_path_prefix ON docs (path text_pattern_ops)');
+  }
+
+  /** Neon uyqudan uyg'onayotganda ulanish uzilishi mumkin — bir marta qayta urinamiz */
+  async function q(text, params) {
+    await ready;
+    try {
+      return await pool.query(text, params);
+    } catch (e) {
+      const msg = String(e.message || '');
+      const retryable = /terminat|ECONNRESET|Connection terminated|timeout|ENOTFOUND|EAI_AGAIN|not ready/i.test(msg);
+      if (!retryable) throw e;
+      await new Promise(r => setTimeout(r, 1200));
+      return await pool.query(text, params);
+    }
+  }
+
   return {
     kind: 'postgres',
     async get(p) {
-      await ready;
-      const r = await pool.query('SELECT data FROM docs WHERE path = $1', [p]);
+      const r = await q('SELECT data FROM docs WHERE path = $1', [p]);
       return r.rows[0] ? r.rows[0].data : null;
     },
     async set(p, data) {
-      await ready;
-      await pool.query(
+      await q(
         'INSERT INTO docs (path, data, updated_at) VALUES ($1, $2, now()) ' +
         'ON CONFLICT (path) DO UPDATE SET data = EXCLUDED.data, updated_at = now()',
         [p, JSON.stringify(data)]);
     },
     async del(p) {
-      await ready;
-      await pool.query('DELETE FROM docs WHERE path = $1', [p]);
+      await q('DELETE FROM docs WHERE path = $1', [p]);
     },
     async list(prefix) {
-      await ready;
-      const r = await pool.query('SELECT path, data FROM docs WHERE path LIKE $1', [prefix + '%']);
+      const r = await q('SELECT path, data FROM docs WHERE path LIKE $1', [prefix + '%']);
       return r.rows.map(x => ({ path: x.path, data: x.data }));
     },
     async all() {
-      await ready;
-      const r = await pool.query('SELECT path, data FROM docs');
+      const r = await q('SELECT path, data FROM docs');
       return r.rows.map(x => ({ path: x.path, data: x.data }));
+    },
+    /** Bazaning hajmi va yozuvlar soni — sozlamalarda ko'rsatiladi */
+    async stats() {
+      const r = await q(
+        "SELECT count(*)::int AS rows, " +
+        "pg_size_pretty(pg_total_relation_size('docs')) AS size, " +
+        "pg_total_relation_size('docs')::bigint AS bytes FROM docs");
+      return r.rows[0] || null;
     },
     async close() { await pool.end(); }
   };

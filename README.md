@@ -1,6 +1,6 @@
-# Albyana — o'quv markazi ERP tizimi
+# AlBayan Cairo — o'quv markazi ERP tizimi
 
-Albyana arab tili o'quv markazini to'liq yuritish uchun veb-tizim: murojaatlardan
+AlBayan Cairo arab tili o'quv markazini to'liq yuritish uchun veb-tizim: murojaatlardan
 tortib o'quvchi, guruh, dars jadvali, davomat, to'lov, qarzdorlik, xarajat,
 ish haqi va hisobotlargacha. Ustiga — xodimlar o'rtasidagi ichki suhbat,
 vazifalar va **Albayan Telegram boti**.
@@ -77,13 +77,48 @@ olish va zaxiradan tiklash tugmalari bor.
 xizmat uxlab qolganda ma'lumot yo'qolishi mumkin. Haqiqiy ish uchun disk bor
 tarifni (yoki `DATABASE_URL` orqali PostgreSQL ni) tanlang.
 
-PostgreSQL ishlatmoqchi bo'lsangiz: Render'da Postgres yarating va uning
-`Internal Database URL` ini `DATABASE_URL` ga qo'ying — boshqa hech narsa
-o'zgartirmaysiz, tizim o'zi jadvalni yaratadi.
+## 3. Ma'lumotlar bazasi
+
+Tizim uchta rejimda ishlaydi — kodni o'zgartirish shart emas, faqat `DATABASE_URL`:
+
+| Rejim | Qachon | Chegara |
+|---|---|---|
+| Fayl (standart) | `DATABASE_URL` bo'sh | Diskdagi joy (Render'da 1 GB) |
+| PostgreSQL | `DATABASE_URL` berilgan | Xizmat tarifiga qarab |
+
+### Neon (bepul PostgreSQL) ga ulash
+
+1. [neon.tech](https://neon.tech) da ro'yxatdan o'ting → **New project** → nomi `albyana`,
+   region sifatida **Europe (Frankfurt)** ni tanlang (O'zbekistonga eng yaqini).
+2. **Connection string** bo'limida **Pooled connection** ni tanlang va nusxalang.
+   U `...-pooler...` so'zi va oxirida `?sslmode=require` bilan bo'ladi.
+3. Render → xizmat → **Environment** → `DATABASE_URL` ga shu manzilni qo'ying → **Save**.
+4. Xizmat qayta ishga tushadi. Jadval o'zi yaratiladi, birinchi direktor hisobi ham.
+
+Mavjud ma'lumotni ko'chirish: eski (fayl) rejimda **Sozlamalar → Ma'lumotlar →
+Hozir zaxira olish** ni bosing, keyin `DATABASE_URL` ni qo'ying va yangi bazada
+**Zaxiradan tiklash** orqali o'sha faylni yuklang.
+
+### Hajm haqida
+
+Bitta yozuv o'rtacha **~340 bayt** (o'lchangan). Ya'ni Neon'ning bepul **0.5 GB**
+chegarasiga qariyb **1,5 million yozuv** sig'adi. 300 o'quvchili markaz yiliga
+taxminan 15–20 ming yozuv to'playdi (hisoblar, to'lovlar, davomat, tarix) —
+bu 0.5 GB da o'nlab yillarga yetadi. Sozlamalar → Ma'lumotlar bo'limida
+bazaning joriy hajmi ko'rinib turadi.
+
+Neon'ning bepul tarifida **hisoblash soati** ham cheklangan (oyiga 100 CU-soat).
+Tizim ulanishni bo'sh turganda yopadi (`PG_IDLE_MS`), shunda Neon uyquga ketadi va
+soat sarflanmaydi. Kun bo'yi ishlatilsa ham oylik chegara odatda yetadi, lekin
+tugab qolsa — oy oxirigacha ulanish to'xtaydi. Shu xavf bo'lmasin desangiz:
+Render'ning doimiy diski (tarifda bor, 1 GB) yoki Neon'ning pullik tarifi.
+
+Render'ning o'z Postgres'ini ishlatsangiz ham xuddi shunday: `Internal Database URL`
+ni `DATABASE_URL` ga qo'ying, boshqa hech narsa o'zgartirmaysiz.
 
 ---
 
-## 3. Albayan Telegram bot
+## 4. Albayan Telegram bot
 
 ### Ishga tushirish
 
@@ -103,14 +138,16 @@ o'zgartirmaysiz, tizim o'zi jadvalni yaratadi.
 
 ### O'quvchi qanday ulanadi
 
-1. O'quvchi botni ochadi va `/start` bosadi.
-2. Bot ism-familiyasini so'raydi.
-3. Keyin **guruh kodini** so'raydi — masalan `A001`. Har bir guruhning kodi
-   tizimda ko'rsatilgan.
-4. Kod to'g'ri bo'lsa, bot shu guruhdagi o'quvchilar ichidan ismni qidiradi.
-   - Topilsa va sozlamada "avtomatik ulash" yoqilgan bo'lsa — darhol ulanadi.
-   - Aks holda **Telegram bot → Holat** bo'limiga so'rov tushadi,
-     administrator kimligini tanlab tasdiqlaydi.
+1. **Telegram bot → Sozlamalar → Ulash kodlari** da o'quvchiga bir martalik
+   6 belgili kod berasiz (masalan `7KQ3M2`).
+2. O'quvchi botni ochadi va `/start` bosadi.
+3. Bot kodni so'raydi. O'quvchi kodni yozadi — hisob darhol ulanadi.
+   Kod bir marta ishlaydi va muddati o'tgach yaroqsiz bo'ladi.
+4. Kodi bo'lmasa, `ismim` deb yozadi: bot ism va guruh kodini so'raydi,
+   so'rov **Telegram bot → Holat** bo'limiga tushadi — siz tasdiqlaysiz.
+
+**Ism bo'yicha avtomatik ulash yo'q** — bir xil ismli ikki o'quvchi
+chalkashmasligi uchun.
 
 ### O'quvchi botda nima qila oladi
 
@@ -127,6 +164,11 @@ o'zgartirmaysiz, tizim o'zi jadvalni yaratadi.
 - **To'lov qabul qilinganda** — summa, chek raqami va qolgan qarz.
 - **Administrator yuborgan e'lonlar** — barcha ulanganlarga, bitta guruhga yoki
   faqat qarzdorlarga.
+- **To'lov muddati o'tganda eslatma** — necha kundan keyin va qancha vaqtda
+  bir marta yuborilishi sozlamalarda.
+
+Bir xil xabar ikki marta ketmaydi. Yuborilmasa, tizim uch marta qayta urinadi,
+keyin "Yuborilmadi" deb belgilaydi — ro'yxatdan qo'lda qayta yuborish mumkin.
 
 Har bir turdagi xabarni **Telegram bot → Sozlamalar** da o'chirib qo'yish mumkin.
 
@@ -135,7 +177,7 @@ ishga tushgach yuboriladi — hech biri yo'qolmaydi.
 
 ---
 
-## 4. Rollar va ruxsatlar
+## 5. Rollar va ruxsatlar
 
 Tayyor rollar: **Direktor, Administrator, O'qituvchi, Buxgalter.**
 
@@ -164,7 +206,7 @@ Serverli versiyada har bir yozuv serverda ham tekshiriladi.
 
 ---
 
-## 5. Sotuv voronkalari va Instagram lidlari
+## 6. Sotuv voronkalari va Instagram lidlari
 
 Murojaatlar bir nechta **voronkaga** bo'linadi — har birining o'z bosqichlari bor.
 Tayyor holda uchtasi keladi: **Asosiy**, **Target reklama**, **Instagram**.
@@ -196,7 +238,7 @@ Bu nuqta faqat serverli versiyada ishlaydi va daqiqasiga 60 ta so'rov bilan chek
 
 ---
 
-## 6. Tezkor qidiruv
+## 7. Tezkor qidiruv
 
 Yuqoridagi qidiruv maydoniga yozishni boshlashingiz bilan takliflar chiqadi:
 o'quvchi ismi, familiyasi, telefoni, ota-onasining ismi yoki raqami, guruh nomi
@@ -205,7 +247,7 @@ davom ettirsangiz ro'yxat torayadi. Strelkalar va Enter bilan tanlash mumkin.
 
 ---
 
-## 7. Excel'dan import
+## 8. Excel'dan import
 
 **O'quvchilar** va **Murojaatlar** bo'limlarida "Excel'dan import" tugmasi bor.
 
@@ -221,7 +263,7 @@ davom ettirsangiz ro'yxat torayadi. Strelkalar va Enter bilan tanlash mumkin.
 
 ---
 
-## 8. Asosiy qoidalar (moliyaviy mantiq)
+## 9. Asosiy qoidalar (moliyaviy mantiq)
 
 - **Oylik hisob** har bir faol a'zolik uchun oyiga **bitta** yaratiladi
   (`inv_<a'zolik>_<oy>`). Tugmani necha marta bossangiz ham takrorlanmaydi.
@@ -245,7 +287,7 @@ davom ettirsangiz ro'yxat torayadi. Strelkalar va Enter bilan tanlash mumkin.
 
 ---
 
-## 9. Testlar
+## 10. Testlar
 
 ```bash
 npm test                 # 122 ta tekshiruv: moliya, huquqlar, jadval, import, bot
@@ -262,7 +304,7 @@ bot ismni moslashtirishi.
 
 ---
 
-## 10. Loyiha tuzilishi
+## 11. Loyiha tuzilishi
 
 ```
 index.html          # to'liq hujjat (build.js hosil qiladi)
@@ -293,7 +335,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 ---
 
-## 11. Zaxira va tiklash
+## 12. Zaxira va tiklash
 
 - **Sozlamalar → Ma'lumotlar → Zaxira nusxa olish** — hamma narsa bitta JSON faylda.
 - Serverli versiyada baza fayli `DATA_DIR` ichida (`albyana.json` yoki
@@ -305,7 +347,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 ---
 
-## 12. Xavfsizlik
+## 13. Xavfsizlik
 
 - `.env`, `data/` va zaxira fayllari `.gitignore` orqali chiqarib tashlangan.
 - Parollar tasodifiy "tuz" bilan SHA-256 hash ko'rinishida saqlanadi va
@@ -316,7 +358,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 ---
 
-## 13. Nimalar hali yo'q
+## 14. Nimalar hali yo'q
 
 - SMS xabarnomalar, onlayn to'lov, fiskal chek
 - O'quvchi va ota-ona uchun alohida veb-kabinet (bot buning o'rnini bosadi)
@@ -324,7 +366,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 Tizimda bular bor deb ko'rsatuvchi ishlamaydigan tugmalar yo'q.
 
-## 14. Brauzer mosligi
+## 15. Brauzer mosligi
 
 Chromium asosidagi brauzerlarda 360, 390 va 1320 px o'lchamlarda avtomatik
 sinovdan o'tkazilgan. iPhone Safari va Android Chrome **haqiqiy qurilmada

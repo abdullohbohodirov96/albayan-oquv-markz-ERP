@@ -20,7 +20,7 @@ function section(t) { out.push('\n' + t); }
   const man = await fetch(BASE + '/manifest.webmanifest');
   ok('manifest.webmanifest ochildi', man.status === 200);
   const manJson = await man.json();
-  ok('Nomi to’g’ri', manJson.short_name === 'Albyana', manJson.short_name);
+  ok('Nomi to’g’ri', manJson.short_name === 'AlBayan Cairo', manJson.short_name);
   ok('start_url bor', !!manJson.start_url);
   ok('display: standalone', manJson.display === 'standalone');
   ok('192 va 512 belgilar bor',

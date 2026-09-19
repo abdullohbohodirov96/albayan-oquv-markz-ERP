@@ -1,4 +1,4 @@
-/* Albyana ERP — dastlabki sozlash va namuna (demo) ma'lumotlari */
+/* AlBayan Cairo ERP — dastlabki sozlash va namuna (demo) ma'lumotlari */
 (function (global) {
   'use strict';
   var A = global.A, D = A.Data;
@@ -9,7 +9,7 @@
   function salt() { return Math.random().toString(36).slice(2, 10); }
 
   var DEFAULT_SETTINGS = {
-    centerName: 'Albyana',
+    centerName: 'AlBayan Cairo',
     address: '',
     phone: '',
     workStart: '08:00',
@@ -18,7 +18,7 @@
     expenseCategories: ['Ijara', 'Kommunal', 'Reklama', 'Jihozlar', 'Xo’jalik', 'Ish haqi', 'Boshqa'],
     bot: {
       username: '',
-      welcome: 'Assalomu alaykum! Albyana o’quv markazi botiga xush kelibsiz.',
+      welcome: 'Assalomu alaykum! AlBayan Cairo o’quv markazi botiga xush kelibsiz.',
       notifyAttendance: true,
       notifyPayment: true,
       notifyDebt: true,
