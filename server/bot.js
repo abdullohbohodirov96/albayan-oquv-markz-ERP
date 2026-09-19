@@ -1,7 +1,11 @@
 /* Albayan Telegram bot.
-   O'quvchi /start bosadi → ism-familiya va guruh kodini yozadi →
-   tizimdagi o'quvchi bilan bog'lanadi. Keyin davomat, to'lov va e'lonlarni oladi,
-   markazga xabar yozishi mumkin. */
+   Ulash: o'quvchiga administrator bir martalik kod beradi (masalan 7KQ3M2).
+   O'quvchi /start bosib shu kodni yozadi — faqat shunda hisob bog'lanadi.
+   Kodi bo'lmasa, ism va guruh kodini yozadi; ulashni ADMINISTRATOR tasdiqlaydi.
+   Ism bo'yicha avtomatik ulash yo'q — chunki ismlar bir xil bo'lishi mumkin.
+
+   Xabarlar: har bir turini alohida yoqish/o'chirish mumkin, takrorlanmaydi,
+   yuborilgan/xato holati saqlanadi va xato bo'lsa qayta urinadi.            */
 'use strict';
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -10,6 +14,15 @@ const API = 'https://api.telegram.org/bot' + TOKEN + '/';
 let store, stamp, A;
 let offset = 0;
 let running = false;
+let timers = [];
+
+/* Xabar yuborish yo'li. Sinovlarda soxta yo'l qo'yiladi — haqiqiy odamlarga yozilmaydi. */
+let transport = null;
+function setTransport(fn) { transport = fn; }
+
+const MAX_TRIES = 3;
+const RETRY_MS = [0, 60 * 1000, 10 * 60 * 1000];   // 1-urinish darhol, keyin 1 daq, 10 daq
+const KINDS = ['davomat', 'tolov', 'qarz', 'elon', 'ulash'];
 
 /* ---------------- Telegram API ---------------- */
 async function tg(method, params) {
@@ -23,6 +36,7 @@ async function tg(method, params) {
   return data.result;
 }
 async function sendMessage(chatId, text, keyboard) {
+  if (transport) return transport(chatId, text, keyboard);
   return tg('sendMessage', {
     chat_id: chatId,
     text: text,
@@ -40,6 +54,24 @@ const MENU = [
 async function settings() {
   return (await store.get('meta/settings')) || {};
 }
+async function botConf() {
+  const s = await settings();
+  const b = s.bot || {};
+  const n = b.notify || {};
+  return {
+    welcome: b.welcome || 'Assalomu alaykum!',
+    username: b.username || '',
+    notify: {
+      davomat: n.davomat !== false && b.notifyAttendance !== false,
+      tolov: n.tolov !== false && b.notifyPayment !== false,
+      qarz: n.qarz !== false && b.notifyDebt !== false,
+      elon: n.elon !== false,
+      ulash: n.ulash !== false
+    },
+    remindDays: Number(b.remindDays || 3),      // muddatdan necha kun o'tsa eslatiladi
+    remindEvery: Number(b.remindEvery || 7)     // necha kunda bir marta
+  };
+}
 async function listCol(name) {
   const rows = await store.list(name + '/');
   return rows.filter(r => r.path.split('/').length === 2).map(r => r.data);
@@ -47,20 +79,6 @@ async function listCol(name) {
 async function findStudentByChat(chatId) {
   const students = await listCol('students');
   return students.filter(s => s.telegram && String(s.telegram.id) === String(chatId))[0] || null;
-}
-function normName(s) {
-  return String(s || '').toLowerCase()
-    .replace(/[‘’'`]/g, '')
-    .replace(/[^a-zЀ-ӿ ]/g, '')
-    .split(/\s+/).filter(Boolean).sort().join(' ');
-}
-function nameMatches(a, b) {
-  const x = normName(a), y = normName(b);
-  if (!x || !y) return false;
-  if (x === y) return true;
-  const xp = x.split(' '), yp = y.split(' ');
-  const common = xp.filter(p => yp.indexOf(p) >= 0).length;
-  return common >= Math.min(2, Math.min(xp.length, yp.length));
 }
 
 async function getState(chatId) {
@@ -72,14 +90,46 @@ async function setState(chatId, st) {
   await store.set('botstate/' + chatId, st);
 }
 
-/* ---------------- Matnlar ---------------- */
-async function balanceText(student) {
-  const invoices = [], payments = [];
+/* ---------------- Bir martalik kod ---------------- */
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // chalkashadigan harflar yo'q (O/0, I/1)
+function makeCode() {
+  let s = '';
+  for (let i = 0; i < 6; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return s;
+}
+function normCode(t) {
+  return String(t || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+/** Kod bo'yicha o'quvchini topish. Muddati o'tgan yoki ishlatilgan kod yaramaydi. */
+async function studentByCode(code) {
+  const c = normCode(code);
+  if (c.length !== 6) return null;
+  const students = await listCol('students');
+  const now = Date.now();
+  return students.filter(s => {
+    const lk = s.botLink;
+    if (!lk || normCode(lk.code) !== c) return false;
+    if (lk.usedAt) return false;
+    if (lk.expiresAt && Date.parse(lk.expiresAt) < now) return false;
+    return true;
+  })[0] || null;
+}
+
+/* ---------------- Moliya: har bir yozuv alohida hujjatda ---------------- */
+async function finData() {
   const all = await store.all();
+  const invoices = [], payments = [];
   all.forEach(({ path: p, data }) => {
-    if (p.indexOf('invoices/') === 0) Object.values(data.items || {}).forEach(i => invoices.push(i));
-    if (p.indexOf('payments/') === 0) Object.values(data.items || {}).forEach(i => payments.push(i));
+    const parts = p.split('/');
+    if (parts.length !== 2 || !data) return;
+    if (parts[0] === 'invoices') invoices.push(data);
+    else if (parts[0] === 'payments') payments.push(data);
   });
+  return { invoices, payments };
+}
+
+async function balanceText(student) {
+  const { invoices, payments } = await finData();
   const bal = A.balanceOf(student.id, invoices, payments);
   const overdue = A.overdueOf(student.id, invoices, payments, A.today());
   const lines = [];
@@ -118,7 +168,7 @@ async function attendanceText(student) {
     const g = await store.get('groups/' + m.groupId);
     all.forEach(({ path: p, data }) => {
       if (p.indexOf('lessons/' + m.groupId + '__') !== 0) return;
-      Object.keys(data.items || {}).forEach(date => {
+      Object.keys((data && data.items) || {}).forEach(date => {
         const att = (data.items[date].attendance || {})[m.id];
         if (att && att.status) rows.push({ date, status: att.status, group: g ? g.name : '' });
       });
@@ -154,8 +204,180 @@ async function scheduleText(student) {
   return out.join('\n');
 }
 
-/* ---------------- Ulanish jarayoni ---------------- */
-async function handleLinkFlow(chatId, text, from, st, conf) {
+/* ---------------- Navbat: takrorlanmaslik va qayta urinish ---------------- */
+
+/** Bir xil xabar ikki marta ketmasin */
+function dedupeKey(msg) {
+  return msg.dedupeKey || (msg.kind + ':' + msg.chatId + ':' + hash(String(msg.text)));
+}
+function hash(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+/**
+ * Xabarni navbatga qo'yish. Bir xil kalit bilan yaqinda yuborilgan bo'lsa — qo'yilmaydi.
+ * windowMs: shu vaqt ichida takroriy hisoblanadi (standart 24 soat).
+ */
+async function enqueue(msg, windowMs) {
+  const key = dedupeKey(msg);
+  const rows = (await store.list('botout/')).map(r => r.data).filter(Boolean);
+  const limit = Date.now() - (windowMs == null ? 24 * 3600 * 1000 : windowMs);
+  const dup = rows.filter(m => dedupeKey(m) === key &&
+    m.status !== 'failed' &&
+    Date.parse(m.createdAt || 0) >= limit)[0];
+  if (dup) return { skipped: true, id: dup.id };
+  const id = msg.id || ('out_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  const rec = Object.assign({
+    id, status: 'pending', tries: 0, createdAt: stamp()
+  }, msg, { id, dedupeKey: key });
+  await store.set('botout/' + id, rec);
+  return { skipped: false, id };
+}
+
+/** Navbatni yuborish: xato bo'lsa belgilaydi va keyin qayta urinadi */
+async function flushQueue(now) {
+  const conf = await botConf();
+  const t = now || Date.now();
+  const rows = (await store.list('botout/')).map(r => r.data).filter(Boolean);
+  let sent = 0, failed = 0, skipped = 0;
+
+  for (const m of rows) {
+    if (m.status !== 'pending' && m.status !== 'error') continue;
+    if (m.nextTryAt && Date.parse(m.nextTryAt) > t) continue;
+    // xabar turi o'chirilgan bo'lsa — yubormaymiz va shunday deb belgilaymiz
+    if (m.kind && conf.notify[m.kind] === false) {
+      m.status = 'skipped';
+      m.error = 'Bu turdagi xabarlar o’chirilgan.';
+      await store.set('botout/' + m.id, m);
+      skipped++;
+      continue;
+    }
+    m.tries = (m.tries || 0) + 1;
+    try {
+      await sendMessage(m.chatId, m.text);
+      m.status = 'sent';
+      m.sentAt = stamp();
+      m.error = '';
+      sent++;
+    } catch (e) {
+      m.error = String(e.message).slice(0, 140);
+      if (m.tries >= MAX_TRIES) {
+        m.status = 'failed';
+        failed++;
+      } else {
+        m.status = 'error';
+        m.nextTryAt = new Date(t + RETRY_MS[Math.min(m.tries, RETRY_MS.length - 1)]).toISOString();
+      }
+    }
+    await store.set('botout/' + m.id, m);
+  }
+
+  // eski yozuvlarni tozalash (oxirgi 200 tasi qoladi)
+  const done = rows.filter(m => m.status === 'sent' || m.status === 'skipped');
+  if (done.length > 200) {
+    done.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    for (const old of done.slice(0, done.length - 200)) await store.del('botout/' + old.id);
+  }
+  return { sent, failed, skipped };
+}
+
+/* ---------------- To'lov muddati eslatmasi ---------------- */
+
+/**
+ * Muddati o'tgan qarzi bor, botga ulangan o'quvchilarga eslatma.
+ * Bir o'quvchiga remindEvery kunda bir martadan ko'p yozilmaydi.
+ */
+async function remindDebtors(todayIso) {
+  const conf = await botConf();
+  if (!conf.notify.qarz) return { queued: 0, skipped: 0, off: true };
+  const today = todayIso || A.today();
+  const { invoices, payments } = await finData();
+  const students = (await listCol('students')).filter(s => s.telegram && s.telegram.id);
+  const paid = A.paidByInvoice(payments);
+  let queued = 0, skipped = 0;
+
+  for (const s of students) {
+    const open = invoices.filter(i => i.studentId === s.id && A.invoiceRemaining(i, paid) > 0 && i.dueDate);
+    if (!open.length) continue;
+    // eng eski muddati o'tgan hisob
+    const late = open.filter(i => daysBetween(i.dueDate, today) >= conf.remindDays)
+      .sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)))[0];
+    if (!late) continue;
+
+    const total = open.reduce((x, i) => x + A.invoiceRemaining(i, paid), 0);
+    const text = 'Eslatma: to’lov muddati o’tdi.\n' +
+      A.monthLabel(late.month) + ' uchun to’lov muddati: ' + A.dateLabel(late.dueDate) + '\n' +
+      'To’lanmagan summa: ' + A.som(total) + ' so’m\n' +
+      'Savol bo’lsa, markazga yozing.';
+
+    // kalit: bir o'quvchiga remindEvery kunda bir marta
+    const r = await enqueue({
+      studentId: s.id, chatId: String(s.telegram.id), text, kind: 'qarz',
+      dedupeKey: 'qarz:' + s.id
+    }, conf.remindEvery * 24 * 3600 * 1000);
+    if (r.skipped) skipped++; else queued++;
+  }
+  return { queued, skipped };
+}
+
+function daysBetween(fromIso, toIso) {
+  const a = Date.parse(fromIso + 'T00:00:00Z'), b = Date.parse(toIso + 'T00:00:00Z');
+  if (isNaN(a) || isNaN(b)) return -1;
+  return Math.round((b - a) / 86400000);
+}
+
+/* ---------------- Ulash jarayoni ---------------- */
+async function linkWithCode(chatId, student, from, st) {
+  const rec = student;
+  rec.telegram = {
+    id: String(chatId), username: (from && from.username) || '',
+    name: (from && from.first_name) || '', linkedAt: stamp(), via: 'kod'
+  };
+  rec.botLink = Object.assign({}, rec.botLink, { usedAt: stamp(), usedBy: String(chatId) });
+  await store.set('students/' + rec.id, rec);
+  st.step = 'linked';
+  st.studentId = rec.id;
+  await setState(chatId, st);
+  await sendMessage(chatId,
+    'Tayyor! Siz <b>' + rec.lastName + ' ' + rec.firstName + '</b> sifatida ulandingiz.\n' +
+    'Endi davomat va to’lovlar haqida xabar olasiz.', MENU);
+}
+
+async function handleLinkFlow(chatId, text, from, st) {
+  /* 1) Kod kutilmoqda */
+  if (st.step === 'code') {
+    const code = normCode(text);
+    if (code.length === 6) {
+      const s = await studentByCode(code);
+      if (s) return linkWithCode(chatId, s, from, st);
+      st.codeTries = (st.codeTries || 0) + 1;
+      await setState(chatId, st);
+      if (st.codeTries >= 3) {
+        st.step = 'name';
+        await setState(chatId, st);
+        await sendMessage(chatId,
+          'Kod to’g’ri kelmadi. Administrator tasdiqlashi uchun ' +
+          '<b>ism va familiyangizni</b> yozing.');
+        return;
+      }
+      await sendMessage(chatId, 'Bunday kod topilmadi yoki muddati o’tgan. ' +
+        'Administratordan yangi kod so’rang va qayta yozing.\n' +
+        'Kodingiz bo’lmasa, <b>ismim</b> deb yozing.');
+      return;
+    }
+    if (/^ismim/i.test(text.trim())) {
+      st.step = 'name';
+      await setState(chatId, st);
+      await sendMessage(chatId, 'Ism va familiyangizni to’liq yozing.');
+      return;
+    }
+    await sendMessage(chatId, 'Kod 6 ta belgidan iborat, masalan: <code>7KQ3M2</code>');
+    return;
+  }
+
+  /* 2) Ism */
   if (st.step === 'name') {
     const name = text.trim();
     if (name.length < 3) {
@@ -166,50 +388,22 @@ async function handleLinkFlow(chatId, text, from, st, conf) {
     st.step = 'group';
     await setState(chatId, st);
     await sendMessage(chatId,
-      'Rahmat, ' + name + '.\n\nEndi <b>guruh kodingizni</b> yozing.\n' +
-      'Kod guruh ro’yxatida yozilgan bo’ladi, masalan: <code>A001</code>\n' +
-      'Bilmasangiz, administratordan so’rang.');
+      'Rahmat, ' + name + '.\n\nEndi <b>guruh kodingizni</b> yozing, masalan: <code>B020</code>');
     return;
   }
 
+  /* 3) Guruh kodi → administratorga so'rov */
   if (st.step === 'group') {
     const code = text.trim().toUpperCase();
     const groups = await listCol('groups');
     const group = groups.filter(g => String(g.code || '').toUpperCase() === code)[0];
     if (!group) {
-      await sendMessage(chatId, 'Bunday guruh kodi topilmadi: <b>' + code + '</b>\n' +
-        'Kodni tekshirib, qayta yozing.');
+      await sendMessage(chatId, 'Bunday guruh kodi topilmadi: <b>' + code + '</b>\nKodni tekshirib, qayta yozing.');
       return;
     }
-    const mems = (await listCol('memberships')).filter(m => m.groupId === group.id && m.status === 'faol');
-    const students = await listCol('students');
-    const candidates = [];
-    for (const m of mems) {
-      const s = students.filter(x => x.id === m.studentId)[0];
-      if (!s || (s.telegram && s.telegram.id)) continue;
-      if (nameMatches(st.name, s.lastName + ' ' + s.firstName)) candidates.push(s);
-    }
-
-    if (candidates.length === 1 && conf.autoApprove) {
-      const s = candidates[0];
-      s.telegram = {
-        id: String(chatId), username: from.username || '',
-        name: st.name, linkedAt: stamp()
-      };
-      await store.set('students/' + s.id, s);
-      st.step = 'linked';
-      st.studentId = s.id;
-      await setState(chatId, st);
-      await sendMessage(chatId,
-        'Tayyor! Siz <b>' + s.lastName + ' ' + s.firstName + '</b> sifatida ulandingiz.\n' +
-        'Endi davomat va to’lovlar haqida xabar olasiz.', MENU);
-      return;
-    }
-
     await store.set('botreq/req_' + chatId, {
-      id: 'req_' + chatId, chatId: String(chatId), username: from.username || '',
+      id: 'req_' + chatId, chatId: String(chatId), username: (from && from.username) || '',
       name: st.name, groupCode: code, groupId: group.id,
-      matchStudentId: candidates[0] ? candidates[0].id : null,
       status: 'kutilmoqda', createdAt: stamp()
     });
     st.step = 'waiting';
@@ -230,7 +424,7 @@ async function handleLinkFlow(chatId, text, from, st, conf) {
 async function onMessage(msg) {
   const chatId = msg.chat.id;
   const text = String(msg.text || '').trim();
-  const conf = (await settings()).bot || {};
+  const conf = await botConf();
   let st = await getState(chatId);
   const student = await findStudentByChat(chatId);
 
@@ -239,32 +433,34 @@ async function onMessage(msg) {
       st.step = 'linked'; st.studentId = student.id;
       await setState(chatId, st);
       await sendMessage(chatId,
-        (conf.welcome || 'Assalomu alaykum!') + '\n\nSiz <b>' + student.lastName + ' ' + student.firstName +
+        conf.welcome + '\n\nSiz <b>' + student.lastName + ' ' + student.firstName +
         '</b> sifatida ulangansiz.', MENU);
       return;
     }
-    st = { chatId: String(chatId), step: 'name' };
+    st = { chatId: String(chatId), step: 'code', codeTries: 0 };
     await setState(chatId, st);
     await sendMessage(chatId,
-      (conf.welcome || 'Assalomu alaykum!') + '\n\nIltimos, <b>ism va familiyangizni</b> yozing.');
+      conf.welcome + '\n\nUlanish uchun administrator bergan <b>6 belgili kodni</b> yozing.\n' +
+      'Masalan: <code>7KQ3M2</code>\n\nKodingiz bo’lmasa, <b>ismim</b> deb yozing.');
     return;
   }
 
   if (!student) {
     if (st.step === 'start') {
-      st.step = 'name';
+      st.step = 'code'; st.codeTries = 0;
       await setState(chatId, st);
-      await sendMessage(chatId, 'Boshlash uchun ism va familiyangizni yozing.');
+      await sendMessage(chatId, 'Boshlash uchun administrator bergan 6 belgili kodni yozing. ' +
+        'Kodingiz bo’lmasa, "ismim" deb yozing.');
       return;
     }
-    return handleLinkFlow(chatId, text, msg.from || {}, st, conf);
+    return handleLinkFlow(chatId, text, msg.from || {}, st);
   }
 
   /* --- Ulangan o'quvchi --- */
   if (st.step === 'writing') {
-    await store.set('botin/in_' + Date.now() + '_' + chatId, {
-      id: 'in_' + Date.now() + '_' + chatId,
-      studentId: student.id, chatId: String(chatId),
+    const id = 'in_' + Date.now() + '_' + chatId;
+    await store.set('botin/' + id, {
+      id, studentId: student.id, chatId: String(chatId),
       text: text, at: stamp(), status: 'yangi'
     });
     st.step = 'linked';
@@ -273,56 +469,21 @@ async function onMessage(msg) {
     return;
   }
 
-  if (text === 'To’lovim' || text === '/tolov') {
-    await sendMessage(chatId, await balanceText(student), MENU);
-    return;
-  }
-  if (text === 'Davomatim' || text === '/davomat') {
-    await sendMessage(chatId, await attendanceText(student), MENU);
-    return;
-  }
-  if (text === 'Jadvalim' || text === '/jadval') {
-    await sendMessage(chatId, await scheduleText(student), MENU);
-    return;
-  }
+  if (text === 'To’lovim' || text === '/tolov') return sendMessage(chatId, await balanceText(student), MENU);
+  if (text === 'Davomatim' || text === '/davomat') return sendMessage(chatId, await attendanceText(student), MENU);
+  if (text === 'Jadvalim' || text === '/jadval') return sendMessage(chatId, await scheduleText(student), MENU);
   if (text === 'Markazga yozish' || text === '/yozish') {
     st.step = 'writing';
     await setState(chatId, st);
-    await sendMessage(chatId, 'Xabaringizni yozing — u markaz administratoriga yetkaziladi.');
-    return;
+    return sendMessage(chatId, 'Xabaringizni yozing — u markaz administratoriga yetkaziladi.');
   }
 
-  await sendMessage(chatId, 'Quyidagi tugmalardan birini tanlang.', MENU);
+  return sendMessage(chatId, 'Quyidagi tugmalardan birini tanlang.', MENU);
 }
 
-/* ---------------- Navbatdagi xabarlarni yuborish ---------------- */
-async function flushQueue() {
-  const rows = await store.list('botout/');
-  const pending = rows.map(r => r.data).filter(m => m && m.status === 'pending');
-  for (const m of pending) {
-    try {
-      await sendMessage(m.chatId, m.text);
-      m.status = 'sent';
-      m.sentAt = stamp();
-    } catch (e) {
-      m.status = 'error';
-      m.error = String(e.message).slice(0, 140);
-    }
-    await store.set('botout/' + m.id, m);
-  }
-  // eski yuborilganlarni tozalash (100 tadan ortig'i)
-  const sent = rows.map(r => r.data).filter(m => m && m.status !== 'pending');
-  if (sent.length > 100) {
-    sent.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
-    for (const old of sent.slice(0, sent.length - 100)) {
-      await store.del('botout/' + old.id);
-    }
-  }
-}
-
-/** Administrator so'rovni tasdiqlaganda — botga xabar berish shu yerda ham ishlaydi */
+/* ---------------- Administrator tasdig'i ---------------- */
 async function notifyApproved() {
-  const reqs = (await store.list('botreq/')).map(r => r.data);
+  const reqs = (await store.list('botreq/')).map(r => r.data).filter(Boolean);
   for (const r of reqs) {
     if (r.status === 'tasdiqlangan' && !r.notified) {
       try {
@@ -330,7 +491,7 @@ async function notifyApproved() {
         const st = await getState(r.chatId);
         st.step = 'linked';
         await setState(r.chatId, st);
-      } catch (e) { /* jim */ }
+      } catch (e) { /* keyingi aylanishda qayta urinadi */ }
       r.notified = true;
       await store.set('botreq/' + r.id, r);
     }
@@ -371,10 +532,29 @@ async function tick() {
   }
 }
 
+/** Kuniga bir marta qarz eslatmasi */
+function startReminders() {
+  let lastDay = '';
+  const t = setInterval(async () => {
+    try {
+      const today = A.today();
+      if (today === lastDay) return;
+      lastDay = today;
+      const r = await remindDebtors(today);
+      if (r.queued) console.log('  Bot: ' + r.queued + ' ta qarz eslatmasi navbatga qo’yildi.');
+    } catch (e) { console.error('bot remind:', e.message); }
+  }, 30 * 60 * 1000);
+  if (t.unref) t.unref();
+  timers.push(t);
+}
+
 function start(ctx) {
   store = ctx.store; stamp = ctx.stamp; A = ctx.A;
-  if (!TOKEN) { console.log('  Bot: token yo’q, ishga tushmadi.'); return; }
+  if (ctx.send) setTransport(ctx.send);
+  if (!TOKEN && !ctx.send) { console.log('  Bot: token yo’q, ishga tushmadi.'); return; }
   running = true;
+  startReminders();
+  if (ctx.send) return;                       // sinov rejimi: tashqi yuborish
   tg('getMe').then(me => {
     console.log('  Telegram bot ishga tushdi: @' + me.username);
     poll();
@@ -385,6 +565,21 @@ function start(ctx) {
   });
 }
 
-function stop() { running = false; }
+function stop() {
+  running = false;
+  timers.forEach(t => clearInterval(t));
+  timers = [];
+}
 
-module.exports = { start, stop, nameMatches, normName };
+/** Sinov uchun: ichki funksiyalarni ochamiz (haqiqiy Telegram ishlatilmaydi) */
+function _test(ctx) {
+  store = ctx.store; stamp = ctx.stamp; A = ctx.A;
+  if (ctx.send) setTransport(ctx.send);
+  return {
+    onMessage, flushQueue, enqueue, remindDebtors, notifyApproved,
+    makeCode, normCode, studentByCode, botConf, getState, setState,
+    balanceText, attendanceText, scheduleText, daysBetween, KINDS, MAX_TRIES
+  };
+}
+
+module.exports = { start, stop, setTransport, makeCode, normCode, _test };

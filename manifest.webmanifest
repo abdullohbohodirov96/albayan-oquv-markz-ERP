@@ -1,0 +1,24 @@
+{
+  "name": "Albyana o'quv markazi",
+  "short_name": "Albyana",
+  "description": "Albyana arab tili o'quv markazi boshqaruv tizimi",
+  "lang": "uz",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f3f5fa",
+  "theme_color": "#1e335e",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Davomat", "url": "./index.html#attendance" },
+    { "name": "To'lovlar", "url": "./index.html#finance" },
+    { "name": "O'quvchilar", "url": "./index.html#students" }
+  ]
+}

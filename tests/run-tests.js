@@ -228,25 +228,26 @@ function section(t) { results.push('\n' + t); }
   /* ---------------- 12. Ish haqi ---------------- */
   section('12. Ish haqi');
   await A.Ops.payrollRecalc(YM, actor);
-  const pr = D.monthCached('payroll', YM).items;
+  const pr = {};
+  A.Fin.monthItems('payroll', YM).forEach(it => { pr[it.staffId] = it; });
   // t1 guruhi: s1 to'lovi 200 000 (p2 bekor qilingan) + s2: 450 000 − 150 000 qaytarish = 300 000
   eq('Foiz asosi — faqat amaldagi pul', pr['t1'].base, 500000);
   eq('40% ish haqi', pr['t1'].accrued, 200000);
   eq('Belgilangan oylik o’zgarmaydi', pr['t2'].accrued, 4000000);
 
   await A.Ops.payrollApprove(YM, 't1', actor);
-  eq('Tasdiqlangan holat', D.monthCached('payroll', YM).items['t1'].status, 'tasdiqlangan');
+  eq('Tasdiqlangan holat', A.Fin.payrollItem(YM, 't1').status, 'tasdiqlangan');
   // tasdiqlangandan keyin qayta hisoblash summani o'zgartirmasligi kerak
   await A.Ops.createPayment({
     id: 'p4', studentId: 's1', amount: 300000, date: '2026-09-25', method: 'naqd',
     allocations: [{ invoiceId: inv1.id, amount: 300000 }]
   }, actor);
   await A.Ops.payrollRecalc(YM, actor);
-  eq('Yopilgan davr qayta hisoblanmadi', D.monthCached('payroll', YM).items['t1'].accrued, 200000);
+  eq('Yopilgan davr qayta hisoblanmadi', A.Fin.payrollItem(YM, 't1').accrued, 200000);
 
   await A.Ops.payrollPay(YM, 't1', 200000, 'naqd', actor);
   await A.Ops.payrollPay(YM, 't1', 200000, 'naqd', actor); // takroriy bosish
-  const salaryExpenses = A.Fin.monthItems('expenses', A.thisMonth()).filter(e => e.payrollRef);
+  const salaryExpenses = D.all('expenses').filter(e => e.payrollRef);
   eq('Ish haqi xarajatda faqat bir marta', salaryExpenses.length, 1);
   eq('Xarajat summasi to’g’ri', salaryExpenses[0].amount, 200000);
 
@@ -350,18 +351,19 @@ function section(t) { results.push('\n' + t); }
   eq('"Guruh kodi" tanildi', IH.guessField('Guruh kodi'), 'group');
   eq('Noma’lum ustun bo’sh qaytadi', IH.guessField('Qandaydir ustun'), '');
 
-  /* ---------------- 19. Bot: ism moslashtirish ---------------- */
-  section('19. Bot — ism bo’yicha o’quvchini topish');
+  /* ---------------- 19. Bot: bir martalik ulash kodi ---------------- */
+  section('19. Bot — bir martalik ulash kodi');
   const bot = require('../server/bot.js');
-  ok('To’liq mos ism', bot.nameMatches('Ali Valiyev', 'Valiyev Ali'));
-  ok('Tartib muhim emas', bot.nameMatches('Valiyev Ali', 'Ali Valiyev'));
-  ok('Katta-kichik harf muhim emas', bot.nameMatches('ALI valiyev', 'Valiyev Ali'));
-  ok('Apostrof farq qilmaydi', bot.nameMatches('Yo’ldoshev Maqsud', 'Yoldoshev Maqsud'));
-  ok('Otasining ismi qo’shilsa ham topadi', bot.nameMatches('Valiyev Ali Akramovich', 'Valiyev Ali'));
-  ok('Boshqa odam topilmaydi', !bot.nameMatches('Karimova Zuhra', 'Valiyev Ali'));
-  ok('Faqat ism yozilsa ham nomzod sifatida taklif qilinadi', bot.nameMatches('Ali', 'Valiyev Ali'));
-  ok('Bo’sh matn hech kimga mos kelmaydi', !bot.nameMatches('', 'Valiyev Ali'));
-  eq('Ism normallashtirish', bot.normName('  Valiyev   ALI '), 'ali valiyev');
+  const codes = [];
+  for (let i = 0; i < 200; i++) codes.push(bot.makeCode());
+  ok('Kod 6 belgidan iborat', codes.every(c => c.length === 6));
+  ok('Faqat katta harf va raqam', codes.every(c => /^[A-Z0-9]{6}$/.test(c)));
+  ok('Chalkashadigan belgilar yo’q (O, 0, I, 1)', codes.every(c => !/[O0I1]/.test(c)));
+  ok('Kodlar takrorlanmaydi', new Set(codes).size > 190, new Set(codes).size + ' ta har xil');
+  eq('Kichik harf katta harfga aylanadi', bot.normCode('7kq3m2'), '7KQ3M2');
+  eq('Ortiqcha belgilar olib tashlanadi', bot.normCode(' 7kq-3m2 '), '7KQ3M2');
+  eq('Bo’sh matn bo’sh qoladi', bot.normCode(''), '');
+  ok('Ism bo’yicha avtomatik ulash olib tashlandi', typeof bot.nameMatches === 'undefined');
 
   /* ---------------- 20. Voronkalar va Instagram lidlari ---------------- */
   section('20. Sotuv voronkalari');

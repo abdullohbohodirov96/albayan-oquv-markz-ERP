@@ -19,30 +19,28 @@
       return true;
     },
 
-    history: [],
+    _hashLock: false,
 
     go: function (name, params) {
-      var prev = App.route;
-      if (prev && prev.name && prev.name !== name) {
-        App.history.push(prev);
-        if (App.history.length > 20) App.history.shift();
-      }
       App.route = Object.assign({ name: name }, params || {});
+      App.pushHash(App.route);
       App.render();
-      try { document.getElementById('view').scrollIntoView({ block: 'start' }); } catch (e) { }
       window.scrollTo(0, 0);
+    },
+
+    /** Joriy sahifani manzil satriga yozish — Orqaga tugmasi va yangilash ishlaydi */
+    pushHash: function (r) {
+      var h = routeToHash(r);
+      if (('#' + location.hash.replace(/^#/, '')) === h) return;
+      App._hashLock = true;
+      try { location.hash = h; } catch (e) { }
+      setTimeout(function () { App._hashLock = false; }, 0);
     },
 
     /** Oldingi sahifaga qaytish (saqlagandan keyin shu yerda qolib ketmasin) */
     back: function (fallback) {
-      var prev = App.history.pop();
-      if (!prev) {
-        App.route = { name: fallback || 'dashboard' };
-      } else {
-        App.route = prev;
-      }
-      App.render();
-      window.scrollTo(0, 0);
+      if (history.length > 1) { history.back(); return; }
+      App.go(fallback || 'dashboard');
     },
 
     render: function () {
@@ -66,6 +64,42 @@
       App._renderTimer = setTimeout(function () { App.render(); }, 120);
     }
   };
+
+  /* ---------- Manzil satri (hash) bilan ishlash ---------- */
+  function routeToHash(r) {
+    if (!r || !r.name) return '#dashboard';
+    var parts = Object.keys(r).filter(function (k) {
+      return k !== 'name' && r[k] != null && r[k] !== '' && r[k] !== false;
+    });
+    return '#' + r.name + (parts.length
+      ? '?' + parts.map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(r[k]); }).join('&')
+      : '');
+  }
+  function hashToRoute() {
+    var h = String(location.hash || '').replace(/^#/, '');
+    if (!h) return null;
+    var i = h.indexOf('?');
+    var name = i < 0 ? h : h.slice(0, i);
+    if (!name || !A.Pages[name]) return null;
+    var r = { name: name };
+    if (i >= 0) {
+      h.slice(i + 1).split('&').filter(Boolean).forEach(function (kv) {
+        var j = kv.indexOf('=');
+        var k = decodeURIComponent(j < 0 ? kv : kv.slice(0, j));
+        var v = j < 0 ? '' : decodeURIComponent(kv.slice(j + 1));
+        r[k] = (v === 'true') ? true : v;
+      });
+    }
+    return r;
+  }
+  function onHashChange() {
+    if (App._hashLock || !App.user) return;
+    var r = hashToRoute();
+    if (!r) return;
+    App.route = r;
+    App.render();
+    window.scrollTo(0, 0);
+  }
 
   /* ---------- Menyu ---------- */
   var NAV = [
@@ -102,16 +136,54 @@
     });
 
     var tabbar = UI.clear(document.getElementById('tabbar'));
-    var quick = allowedNav().slice(0, 4);
-    quick.forEach(function (n) {
+    quickItems().forEach(function (n) {
       tabbar.appendChild(h('button', {
-        type: 'button', 'aria-current': App.route.name === n.id ? 'page' : null,
-        onclick: function () { App.go(n.id); }
+        type: 'button',
+        'aria-current': (!n.action && App.route.name === n.id) ? 'page' : null,
+        onclick: n.action || function () { App.go(n.id); }
       }, [UI.icon(n.icon), h('span', {}, n.label)]));
     });
     tabbar.appendChild(h('button', {
       type: 'button', onclick: openMenuSheet
     }, [UI.icon('layers'), h('span', {}, 'Menyu')]));
+  }
+
+  /**
+   * Telefon pastki menyusi — rolga mos, ko'pi bilan 5 ta element
+   * (beshinchisi doim "Menyu").
+   */
+  function quickItems() {
+    var role = App.user.role;
+    var want = {
+      admin: ['dashboard', 'students', 'PAY', 'attendance'],
+      oqituvchi: ['schedule', 'groups', 'attendance'],
+      direktor: ['dashboard', 'students', 'finance', 'reports'],
+      buxgalter: ['dashboard', 'finance', 'PAY', 'reports']
+    }[role] || ['dashboard', 'students', 'attendance', 'finance'];
+
+    var out = [];
+    want.forEach(function (id) {
+      if (id === 'PAY') {
+        if (App.can('payment.create')) {
+          out.push({
+            id: 'PAY', label: 'To’lov', icon: 'money',
+            action: function () { A.paymentForm(null, App); }
+          });
+        }
+        return;
+      }
+      var n = NAV.filter(function (x) { return x.id === id; })[0];
+      if (n && App.can(n.perm)) {
+        out.push({ id: n.id, label: n.id === 'schedule' && role === 'oqituvchi' ? 'Darslarim' : n.label, icon: n.icon });
+      }
+    });
+    // bo'sh joy qolsa — ruxsat bor boshqa bo'limlar bilan to'ldiramiz
+    allowedNav().forEach(function (n) {
+      if (out.length >= 4) return;
+      if (out.some(function (x) { return x.id === n.id; })) return;
+      out.push({ id: n.id, label: n.label, icon: n.icon });
+    });
+    return out.slice(0, 4);
   }
 
   function openMenuSheet() {
@@ -244,8 +316,15 @@
     document.getElementById('center-name').textContent = (D.settings && D.settings.centerName) || 'Albyana';
     var mp = document.getElementById('mode-pill');
     if (D.mode === 'local') { mp.hidden = false; mp.textContent = 'Faqat shu brauzerda'; }
-    var first = allowedNav()[0];
-    App.go(first ? first.id : 'dashboard');
+    // sahifa yangilanganda oxirgi ochilgan bo'limga qaytamiz
+    var saved = hashToRoute();
+    if (saved && App.can((NAV.filter(function (n) { return n.id === saved.name; })[0] || { perm: 'nav.dashboard' }).perm)) {
+      App.route = saved;
+      App.render();
+    } else {
+      var first = allowedNav()[0];
+      App.go(first ? first.id : 'dashboard');
+    }
   }
 
   function logout() {
@@ -380,6 +459,11 @@
     A.I18N.observe();
     renderLangPick();
     A.I18N.apply(document.body);
+    window.addEventListener('hashchange', onHashChange);
+    if (A.PWA) { try { A.PWA.start(); } catch (e) { console.warn(e); } }
+    window.addEventListener('beforeunload', function (e) {
+      if (UI.hasUnsaved && UI.hasUnsaved()) { e.preventDefault(); e.returnValue = ''; }
+    });
     try {
       await D.initAuth();
 
@@ -401,15 +485,13 @@
       if (!D.settings || D.all('users').length === 0) {
         // birinchi ishga tushirish — hammasi kerak
         await D.initRest();
-        await A.Fin.loadIndex();
-        await A.Fin.loadAll();
+        await A.Fin.migrate();
         await A.Seed.bootstrap();
       } else {
         // kirish darhol ko'rsatiladi, qolgani fonda yuklanadi
         restPromise = (async function () {
           await D.initRest();
-          await A.Fin.loadIndex();
-          await A.Fin.loadAll();
+          await A.Fin.migrate();
         })();
       }
       wireSearch();

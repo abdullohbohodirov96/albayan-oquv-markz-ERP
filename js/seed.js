@@ -265,18 +265,12 @@
     // moliyaviy demo yozuvlari
     var kinds = ['invoices', 'payments', 'expenses', 'payroll'];
     for (i = 0; i < kinds.length; i++) {
-      var months = A.Fin.index[kinds[i]] || [];
-      for (var k = 0; k < months.length; k++) {
-        await D.mutateMonth(kinds[i], months[k], function (doc) {
-          Object.keys(doc.items || {}).forEach(function (id) {
-            var it = doc.items[id];
-            if (it.demo || /demo/.test(id) || (it.studentId && String(it.studentId).indexOf('stu_') === 0) ||
-              (it.staffId && String(it.staffId).indexOf('stf_') === 0)) {
-              delete doc.items[id];
-            }
-          });
-        });
-      }
+      var list = D.all(kinds[i]).filter(function (it) {
+        return it.demo || /demo/.test(String(it.id)) ||
+          (it.studentId && String(it.studentId).indexOf('stu_') === 0) ||
+          (it.staffId && String(it.staffId).indexOf('stf_') === 0);
+      });
+      for (var k = 0; k < list.length; k++) { await D.remove(kinds[i], list[k].id); }
     }
     // darslar
     var paths = Object.keys(D.docs).filter(function (p) { return p.indexOf('lessons/grp_') === 0; });

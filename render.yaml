@@ -13,10 +13,12 @@ services:
         value: production
       - key: DATA_DIR
         value: /var/data
+      - key: BACKUP_DIR
+        value: /var/data/backups
       - key: SEED_DIRECTOR_LOGIN
         value: admin
       - key: SEED_DIRECTOR_PASSWORD
-        sync: false        # qiymatni Render panelida qo'lda kiriting
+        sync: false        # bo'sh qoldirilsa birinchi parol: 1234 (kirgandan keyin almashtiring)
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_BOT_USERNAME

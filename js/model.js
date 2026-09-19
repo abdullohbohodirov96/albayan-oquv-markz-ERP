@@ -446,6 +446,45 @@
    * payments: shu oydagi to'lovlar, invoices: barcha hisoblar (oy bilan cheklanmagan),
    * groupsById: {groupId: group}
    */
+  /**
+   * Guruhda berilgan sanada kim dars bergan.
+   * O'qituvchi almashtirilganda eski davr tushumi yangi ustozga o'tib ketmaydi.
+   */
+  function teacherAt(group, dateIso) {
+    if (!group) return null;
+    var hist = (group.teacherHistory || []).slice().sort(function (a, b) {
+      return String(a.from).localeCompare(String(b.from));
+    });
+    var found = null;
+    hist.forEach(function (hrec) {
+      if (String(hrec.from) <= dateIso && (!hrec.to || String(hrec.to) >= dateIso)) found = hrec.teacherId;
+    });
+    if (found !== null) return found;
+    // tarix yo'q bo'lsa — joriy o'qituvchi
+    return group.teacherId || null;
+  }
+
+  /** O'qituvchi almashganda tarixni yangilash */
+  function setTeacher(group, newTeacherId, fromDate) {
+    var g = group;
+    var hist = (g.teacherHistory || []).slice();
+    var cur = hist.filter(function (x) { return !x.to; })[0];
+    if (cur && cur.teacherId === newTeacherId) return hist;
+    if (cur) cur.to = addDaysIso(fromDate, -1);
+    else if (g.teacherId) {
+      hist.push({ teacherId: g.teacherId, from: g.startDate || fromDate, to: addDaysIso(fromDate, -1) });
+    }
+    if (newTeacherId) hist.push({ teacherId: newTeacherId, from: fromDate, to: null });
+    return hist;
+  }
+  function addDaysIso(iso, n) {
+    var p = String(iso).split('-');
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    d.setDate(d.getDate() + n);
+    var pad2 = function (x) { return x < 10 ? '0' + x : '' + x; };
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
   function payrollFor(staff, ym, payments, invoicesById, groupsById) {
     if (!staff) return { amount: 0, lines: [] };
     if (staff.payType === 'fixed') {
@@ -460,12 +499,16 @@
         var inv = invoicesById[a.invoiceId];
         if (!inv) return;
         var g = groupsById[inv.groupId];
-        if (!g || g.teacherId !== staff.id) return;
+        if (!g) return;
+        // dars o'tilgan davr bo'yicha o'qituvchi aniqlanadi (hisob oyining o'rtasi)
+        var refDate = inv.month + '-15';
+        if (teacherAt(g, refDate) !== staff.id) return;
         var amt = sign * Math.round(a.amount || 0);
         base += amt;
         lines.push({
           paymentId: p.id, date: p.date, studentId: p.studentId,
           groupId: inv.groupId, invoiceId: a.invoiceId, amount: amt,
+          period: inv.month,
           kind: p.type === 'refund' ? 'qaytarish' : 'to’lov'
         });
       });
@@ -552,6 +595,7 @@
     timeToMin: timeToMin, overlaps: overlaps, scheduleConflicts: scheduleConflicts,
     lessonConflicts: lessonConflicts, monthLessons: monthLessons,
     ATT: ATT, attendanceStats: attendanceStats, payrollFor: payrollFor,
+    teacherAt: teacherAt, setTeacher: setTeacher,
     LEAD_STAGES: LEAD_STAGES, DEFAULT_FUNNELS: DEFAULT_FUNNELS,
     funnelStages: funnelStages, stageOf: stageOf, extractPhone: extractPhone,
     cashFlow: cashFlow

@@ -779,7 +779,6 @@
       Q.membershipsOf(s.id).forEach(function (m) {
         var g = D.one('groups', m.groupId);
         if (!g) return;
-        (A.Fin.index.invoices || []).concat([A.thisMonth()]).forEach(function () { });
         var months = {};
         Object.keys(D.docs).forEach(function (p) {
           if (p.indexOf('lessons/' + g.id + '__') === 0) months[p.split('__')[1]] = 1;

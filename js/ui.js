@@ -86,12 +86,26 @@
     (Array.isArray(opts.body) ? opts.body : [opts.body]).forEach(function (n) { if (n) body.appendChild(n); });
     var foot = h('div', { class: 'm-foot' });
     var back = h('div', { class: 'modal-back' });
-    function close() {
+    var dirty = false, closing = false;
+    function markClean() { dirty = false; }
+    function reallyClose() {
       back.remove();
       modalStack = modalStack.filter(function (m) { return m !== back; });
       document.removeEventListener('keydown', onKey);
       if (opts.onClose) opts.onClose();
     }
+    /** Saqlanmagan ma'lumot bo'lsa ogohlantiramiz */
+    function close(force) {
+      if (!dirty || force === true || closing) return reallyClose();
+      closing = true;
+      confirm('Saqlanmagan ma’lumot bor',
+        'Kiritganlaringiz saqlanmaydi. Baribir yopilsinmi?', 'Ha, yopilsin', true)
+        .then(function (yes) {
+          closing = false;
+          if (yes) reallyClose();
+        });
+    }
+    close.clean = markClean;
     function onKey(e) {
       if (e.key === 'Escape' && modalStack[modalStack.length - 1] === back) { e.preventDefault(); close(); }
     }
@@ -99,7 +113,9 @@
       if (!a) return;
       var b = h('button', { class: 'btn ' + (a.cls || ''), type: 'button' }, a.label);
       b.addEventListener('click', function () {
-        if (a.onClick) a.onClick(close, b);
+        // "Saqlash" bosilganda ogohlantirish kerak emas
+        var closeFn = function (force) { markClean(); close(force === undefined ? true : force); };
+        if (a.onClick) a.onClick(closeFn, b);
         else close();
       });
       foot.appendChild(b);
@@ -122,6 +138,9 @@
     ]);
     back.appendChild(box);
     back.addEventListener('mousedown', function (e) { if (e.target === back && opts.dismissable !== false) close(); });
+    // kiritilgan ma'lumotni kuzatamiz
+    body.addEventListener('input', function () { dirty = true; });
+    body.addEventListener('change', function () { dirty = true; });
     document.getElementById('modal-root').appendChild(back);
     modalStack.push(back);
     document.addEventListener('keydown', onKey);
@@ -129,7 +148,8 @@
       var f = box.querySelector('input,select,textarea,button.primary');
       if (f) try { f.focus(); } catch (e) { }
     }, 30);
-    return { close: close, body: body, box: box };
+    back.__isDirty = function () { return dirty; };
+    return { close: close, body: body, box: box, markClean: markClean };
   }
 
   function confirm(title, text, okLabel, danger) {
@@ -452,23 +472,125 @@
   }
 
   /* ---------- Eksport ---------- */
-  async function exportCsv(filename, rows) {
-    var csv = rows.map(function (r) {
+  /** Formula sifatida bajarilib ketmasin: =, +, -, @ bilan boshlangan matn */
+  function safeCell(v) {
+    if (v == null) return '';
+    if (typeof v === 'number') return v;
+    var s = String(v);
+    if (/^[=+\-@\t\r]/.test(s)) return '’' + s;   // oldiga apostrof
+    return s;
+  }
+  function inArtifactSandbox() {
+    return !!(global.claude && typeof global.claude.use === 'function');
+  }
+  /** Faylni brauzerda saqlash (oddiy kompyuter va telefon uchun) */
+  function saveBlob(blob, filename) {
+    try {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { a.remove(); URL.revokeObjectURL(url); }, 3000);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function rowsToCsv(rows) {
+    return '﻿' + rows.map(function (r) {
       return r.map(function (c) {
-        var s = c == null ? '' : String(c);
+        var s = safeCell(c);
+        s = (s == null ? '' : String(s));
         return /[";\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
       }).join(';');
     }).join('\r\n');
-    var data = '﻿' + csv;
-    var dl = null;
-    try { if (global.claude && global.claude.use) dl = await global.claude.use('downloads'); } catch (e) { dl = null; }
-    if (dl) {
-      try {
-        await dl.save({ filename: filename, data: data });
-        toast('Fayl yuklab olindi.', 'ok');
-        return;
-      } catch (e) { /* rad etildi yoki xato — pastdagi zaxira */ }
+  }
+
+  /**
+   * Jadvalni faylga chiqarish.
+   * format: 'xlsx' (standart, SheetJS bo'lsa) yoki 'csv'.
+   */
+  function buildXlsx(clean) {
+    // 1) O'zimizning kutubxonaga bog'liq bo'lmagan yozuvchimiz
+    if (global.XlsxLite) return global.XlsxLite.build(clean, 'Albyana');
+    // 2) SheetJS bo'lsa (ixtiyoriy)
+    if (global.XLSX) {
+      var ws = global.XLSX.utils.aoa_to_sheet(clean);
+      var widths = [];
+      clean.forEach(function (r) {
+        r.forEach(function (c, i) {
+          var len = String(c == null ? '' : c).length;
+          widths[i] = Math.min(42, Math.max(widths[i] || 10, len + 2));
+        });
+      });
+      ws['!cols'] = widths.map(function (w) { return { wch: w }; });
+      var wb = global.XLSX.utils.book_new();
+      global.XLSX.utils.book_append_sheet(wb, ws, 'Albyana');
+      return global.XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     }
+    return null;
+  }
+
+  async function exportRows(baseName, rows, format) {
+    var name = String(baseName || 'albyana').replace(/\.(csv|xlsx|xls)$/i, '');
+    var wantXlsx = format !== 'csv' && !!(global.XlsxLite || global.XLSX);
+    var clean = rows.map(function (r) { return r.map(safeCell); });
+
+    if (wantXlsx) {
+      try {
+        var buf = buildXlsx(clean);
+        if (!buf) throw new Error('xlsx yozuvchi topilmadi');
+        var blob = new Blob([buf], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        if (!inArtifactSandbox() && saveBlob(blob, name + '.xlsx')) {
+          toast('Fayl yuklab olindi: ' + name + '.xlsx', 'ok');
+          return;
+        }
+        // Claude muhitida yuklab olish xizmati orqali
+        var dl = null;
+        try { dl = await global.claude.use('downloads'); } catch (e) { dl = null; }
+        if (dl) {
+          var b64 = await blobToBase64(blob);
+          try {
+            await dl.save({ filename: name + '.xlsx', data: b64, encoding: 'base64' });
+            toast('Fayl yuklab olindi: ' + name + '.xlsx', 'ok');
+            return;
+          } catch (e) { /* pastdagi CSV yo'li */ }
+        }
+      } catch (e) { console.error('xlsx', e); }
+    }
+
+    // CSV yo'li
+    var data = rowsToCsv(clean);
+    if (!inArtifactSandbox() && saveBlob(new Blob([data], { type: 'text/csv;charset=utf-8' }), name + '.csv')) {
+      toast('Fayl yuklab olindi: ' + name + '.csv', 'ok');
+      return;
+    }
+    var dl2 = null;
+    try { if (global.claude && global.claude.use) dl2 = await global.claude.use('downloads'); } catch (e) { dl2 = null; }
+    if (dl2) {
+      try {
+        await dl2.save({ filename: name + '.csv', data: data });
+        toast('Fayl yuklab olindi: ' + name + '.csv', 'ok');
+        return;
+      } catch (e) { /* oxirgi chora */ }
+    }
+    showCopyFallback(data);
+  }
+
+  function blobToBase64(blob) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function () { resolve(String(fr.result).split(',')[1]); };
+      fr.onerror = reject;
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  function showCopyFallback(data) {
     var ta = h('textarea', { style: 'width:100%;min-height:220px;font-family:var(--mono);font-size:12px' });
     ta.value = data;
     modal({
@@ -489,10 +611,32 @@
     });
   }
 
+  var exportCsv = exportRows;   // eski nom bilan moslik
+
+  /** Matnli faylni saqlash (zaxira nusxa uchun) */
+  async function saveText(filename, text, mime) {
+    var blob = new Blob([text], { type: mime || 'application/json;charset=utf-8' });
+    if (!inArtifactSandbox() && saveBlob(blob, filename)) {
+      toast('Fayl yuklab olindi: ' + filename, 'ok');
+      return true;
+    }
+    var dl = null;
+    try { if (global.claude && global.claude.use) dl = await global.claude.use('downloads'); } catch (e) { }
+    if (dl) {
+      try { await dl.save({ filename: filename, data: text }); toast('Fayl yuklab olindi.', 'ok'); return true; }
+      catch (e) { }
+    }
+    showCopyFallback(text);
+    return false;
+  }
+
   global.A.UI = {
     h: h, clear: clear, icon: icon, ICONS: ICONS, toast: toast, modal: modal, confirm: confirm,
     askReason: askReason, field: field, form: form, busy: busy, table: table, empty: empty,
     pill: pill, tile: tile, pageHead: pageHead, card: card, tabs: tabs, avatar: avatar,
-    suggest: suggest, exportCsv: exportCsv
+    suggest: suggest, exportCsv: exportCsv, exportRows: exportRows, safeCell: safeCell, saveText: saveText,
+    hasUnsaved: function () {
+      return modalStack.some(function (m) { return m.__isDirty && m.__isDirty(); });
+    }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

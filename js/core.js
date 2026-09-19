@@ -80,6 +80,12 @@
   function uid(prefix) {
     return (prefix || 'id') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
+  /** Matnni qisqa belgiga aylantirish — takroriy xabarni aniqlash uchun */
+  function textHash(t) {
+    var s = String(t == null ? '' : t), n = 5381;
+    for (var i = 0; i < s.length; i++) n = ((n * 33) ^ s.charCodeAt(i)) >>> 0;
+    return n.toString(36);
+  }
   function normPhone(p) {
     var d = String(p || '').replace(/\D/g, '');
     if (d.length === 9) d = '998' + d;
@@ -120,7 +126,8 @@
 
   /* ---------------- Ma'lumotlar qatlami ---------------- */
   var COLLECTIONS = ['users', 'staff', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads',
-    'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin'];
+    'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin',
+    'invoices', 'payments', 'expenses', 'payroll', 'audit'];
   var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 
@@ -142,6 +149,12 @@
 
     /* ---------- Server rejimi ---------- */
     async api(method, path, body) {
+      // Internet yo'q bo'lsa — yozuvni "saqlandi" deb ko'rsatmaymiz
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        var off = new Error('Internet yo’q. Ma’lumot saqlanmadi — ulanish tiklangach qayta urinib ko’ring.');
+        off.offline = true;
+        throw off;
+      }
       var res = await fetch(path, {
         method: method,
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
@@ -284,13 +297,17 @@
       return next;
     },
 
-    async _setDoc(path, data) {
+    async _setDoc(path, data, meta) {
       var self = this;
       return this._enqueue(path, async function () {
         if (self.mode === 'cloud') {
           await self.db.doc(path).set(data);
         } else if (self.mode === 'server') {
-          await self.api('PUT', 'api/doc?path=' + encodeURIComponent(path), { data: data });
+          var body = { data: data };
+          if (meta) {
+            body.action = meta.action; body.entity = meta.entity; body.details = meta.details;
+          }
+          await self.api('PUT', 'api/doc?path=' + encodeURIComponent(path), body);
         } else {
           self._saveLocal();
         }
@@ -311,12 +328,25 @@
       return Object.keys(m).map(function (k) { return m[k]; });
     },
     one: function (name, id) { return (this.col[name] || {})[id] || null; },
-    async save(name, obj) {
+    async save(name, obj, meta) {
       if (!obj.id) obj.id = uid(name.slice(0, 3));
       this.col[name][obj.id] = obj;
-      await this._setDoc(name + '/' + obj.id, obj);
+      await this._setDoc(name + '/' + obj.id, obj, meta);
       this._emit();
       return obj;
+    },
+    /** Foydalanuvchini saqlash. Serverda parolni server hisoblaydi. */
+    async saveUser(rec, password) {
+      if (this.mode === 'server') {
+        await this.api('PUT', 'api/doc?path=' + encodeURIComponent('users/' + rec.id), {
+          data: rec, password: password || '',
+          action: 'Foydalanuvchi saqlandi', entity: rec.login
+        });
+        this.col.users[rec.id] = rec;
+        this._emit();
+        return rec;
+      }
+      return this.save('users', rec);
     },
     async remove(name, id) {
       delete this.col[name][id];
@@ -428,7 +458,7 @@
     monthStart: monthStart, monthEnd: monthEnd, monthLabel: monthLabel, dateLabel: dateLabel,
     WEEKDAYS: WEEKDAYS, WEEKDAYS_SHORT: WEEKDAYS_SHORT, MONTHS: MONTHS,
     som: som, somFull: somFull, parseSom: parseSom,
-    uid: uid, normPhone: normPhone, phoneDigits: phoneDigits, esc: esc, clone: clone,
+    uid: uid, textHash: textHash, normPhone: normPhone, phoneDigits: phoneDigits, esc: esc, clone: clone,
     byId: byId, sortBy: sortBy, sha256: sha256, pad: pad,
     COLLECTIONS: COLLECTIONS, MONTHLY: MONTHLY,
     Data: Data

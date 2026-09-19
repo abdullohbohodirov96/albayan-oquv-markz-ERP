@@ -377,6 +377,12 @@
             }
             UI.busy(btn, async function () {
               var rec = Object.assign({}, isNew ? {} : g, v, { days: days, limit: v.limit || 0, fee: v.fee });
+              // o'qituvchi almashsa — tarixga yozamiz (eski davr ish haqi o'zgarmaydi)
+              if (!isNew && g.teacherId !== v.teacherId) {
+                rec.teacherHistory = A.setTeacher(g, v.teacherId, A.today());
+              } else if (isNew && v.teacherId) {
+                rec.teacherHistory = [{ teacherId: v.teacherId, from: v.startDate, to: null }];
+              }
               if (isNew) {
                 rec.id = A.uid('grp');
                 rec.feeHistory = [{ fee: v.fee, from: A.ymOf(v.startDate) }];

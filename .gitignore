@@ -9,7 +9,9 @@
 data/
 albyana-zaxira-*.json
 backup/
+backups/
 zaxira/
+oldingi-*.json
 *.sqlite
 *.db
 *.dump

@@ -19,7 +19,7 @@
   }
   function chatTitle(chat, meId) {
     if (chat.type === 'group') return chat.title || 'Umumiy suhbat';
-    return userName(otherMember(chat, meId));
+    return chat.title || userName(otherMember(chat, meId));
   }
   function unreadCount(chat, meId) {
     var readAt = (chat.readAt || {})[meId] || '';

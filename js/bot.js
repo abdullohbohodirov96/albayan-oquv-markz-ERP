@@ -6,15 +6,35 @@
   var Q;
   A.Pages = A.Pages || {};
 
+  var KINDS = [
+    { id: 'davomat', label: 'Davomat belgilanganda' },
+    { id: 'tolov', label: 'To’lov qabul qilinganda' },
+    { id: 'qarz', label: 'To’lov muddati o’tganda (eslatma)' },
+    { id: 'elon', label: 'E’lon va umumiy xabarlar' },
+    { id: 'ulash', label: 'Hisob ulanganda' }
+  ];
+
   function settings() {
     var s = (D.settings && D.settings.bot) || {};
+    var n = s.notify || {};
+    function on(id, legacy) {
+      if (n[id] != null) return n[id] !== false;
+      if (legacy != null) return legacy !== false;
+      return true;
+    }
     return {
       username: s.username || '',
-      notifyAttendance: s.notifyAttendance !== false,
-      notifyPayment: s.notifyPayment !== false,
-      notifyDebt: s.notifyDebt !== false,
       welcome: s.welcome || 'Assalomu alaykum! Albyana o’quv markazi botiga xush kelibsiz.',
-      autoApprove: s.autoApprove === true
+      notify: {
+        davomat: on('davomat', s.notifyAttendance),
+        tolov: on('tolov', s.notifyPayment),
+        qarz: on('qarz', s.notifyDebt),
+        elon: on('elon'),
+        ulash: on('ulash')
+      },
+      remindDays: Number(s.remindDays || 3),
+      remindEvery: Number(s.remindEvery || 7),
+      codeHours: Number(s.codeHours || 48)
     };
   }
 
@@ -22,26 +42,70 @@
     settings: settings,
     serverConnected: function () { return D.mode === 'server'; },
 
-    /** Xabarni navbatga qo'yish — bot serveri uni yuboradi */
-    async enqueue(studentId, text, kind) {
+    /** Xabarni navbatga qo'yish — bot serveri uni yuboradi.
+     *  Turi o'chirilgan bo'lsa yoki xuddi shu xabar yaqinda ketgan bo'lsa — qo'yilmaydi. */
+    async enqueue(studentId, text, kind, opts) {
+      var o = opts || {};
+      var k = kind || 'elon';
+      var conf = settings();
+      if (conf.notify[k] === false) return false;
       var st = D.one('students', studentId);
       if (!st || !st.telegram || !st.telegram.id) return false;
+      var key = o.dedupeKey || (k + ':' + st.telegram.id + ':' + A.textHash(text));
+      var windowMs = o.windowMs == null ? 24 * 3600 * 1000 : o.windowMs;
+      var limit = Date.now() - windowMs;
+      var dup = D.all('botout').filter(function (m) {
+        return m.dedupeKey === key && m.status !== 'failed' &&
+          Date.parse(m.createdAt || 0) >= limit;
+      })[0];
+      if (dup) return false;
       await D.save('botout', {
         id: A.uid('out'),
         studentId: studentId,
         chatId: st.telegram.id,
         text: text,
-        kind: kind || 'xabar',
+        kind: k,
+        dedupeKey: key,
+        tries: 0,
         status: 'pending',
         createdAt: A.nowStamp()
       });
       return true;
     },
 
+    /** Xato bilan tugagan xabarni qayta navbatga qo'yish */
+    async retry(msg) {
+      var rec = A.clone(msg);
+      rec.status = 'pending';
+      rec.tries = 0;
+      rec.error = '';
+      rec.nextTryAt = '';
+      await D.save('botout', rec);
+      return true;
+    },
+
+    /** O'quvchiga bir martalik ulash kodi berish */
+    async makeCode(studentId) {
+      var s = D.one('students', studentId);
+      if (!s) throw new Error('O’quvchi topilmadi.');
+      var conf = settings();
+      var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      var code = '';
+      for (var i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+      var rec = A.clone(s);
+      rec.botLink = {
+        code: code,
+        createdAt: A.nowStamp(),
+        expiresAt: new Date(Date.now() + conf.codeHours * 3600 * 1000).toISOString()
+      };
+      await D.save('students', rec);
+      return code;
+    },
+
     /** Davomat belgilanganda xabar */
     async notifyAttendance(groupId, date, records, actorName) {
       var conf = settings();
-      if (!conf.notifyAttendance) return;
+      if (!conf.notify.davomat) return;
       var g = D.one('groups', groupId);
       var labels = { keldi: 'darsda qatnashdi', kelmadi: 'darsga kelmadi', kechikdi: 'darsga kechikdi', sababli: 'sababli kelmadi' };
       for (var i = 0; i < records.length; i++) {
@@ -61,7 +125,7 @@
     /** To'lov qabul qilinganda xabar */
     async notifyPayment(payment) {
       var conf = settings();
-      if (!conf.notifyPayment) return;
+      if (!conf.notify.tolov) return;
       var st = D.one('students', payment.studentId);
       if (!st || !st.telegram || !st.telegram.id) return;
       var bal = A.balanceOf(payment.studentId, A.Fin.allInvoices(), A.Fin.allPayments());
@@ -177,11 +241,11 @@
 
       view.appendChild(h('div', { style: 'margin-top:14px' }, UI.card('O’quvchi botga qanday ulanadi', [
         h('ol', { style: 'margin:0;padding-left:18px;line-height:1.9' }, [
-          h('li', {}, 'O’quvchi botni ochadi va ' + h('b', {}, '').textContent + '/start bosadi.'),
-          h('li', {}, 'Bot ism-familiyasini so’raydi.'),
-          h('li', {}, 'Keyin guruh kodini so’raydi — masalan ' + (D.all('groups')[0] ? (D.all('groups')[0].code || 'A001') : 'A001') + '.'),
-          h('li', {}, 'Kod to’g’ri bo’lsa, bot shu guruhdagi o’quvchilar ichidan ismni qidiradi.'),
-          h('li', {}, 'Topilsa — darhol ulanadi. Topilmasa — shu yerga so’rov tushadi, siz qo’lda ulaysiz.')
+          h('li', {}, 'Siz "Sozlamalar" bo’limida o’quvchiga bir martalik kod berasiz (masalan 7KQ3M2).'),
+          h('li', {}, 'O’quvchi botni ochadi va /start bosadi.'),
+          h('li', {}, 'Bot kodni so’raydi. O’quvchi kodni yozadi — hisob darhol ulanadi.'),
+          h('li', {}, 'Kodi bo’lmasa, "ismim" deb yozadi: ism va guruh kodini so’raydi, so’rov shu yerga tushadi.'),
+          h('li', {}, 'Ism bo’yicha avtomatik ulash yo’q — har bir so’rovni siz tasdiqlaysiz.')
         ])
       ])));
     }
@@ -248,9 +312,19 @@
           { label: 'O’quvchi', render: function (m) { return A.Q.studentName(m.studentId); } },
           { label: 'Turi', render: function (m) { return UI.pill(m.kind, 'mute'); } },
           { label: 'Matn', render: function (m) { return h('span', { class: 'small' }, String(m.text).slice(0, 60)); } },
+          { label: 'Holat', render: function (m) { return statusPill(m); } },
           {
-            label: 'Holat', render: function (m) {
-              return m.status === 'sent' ? UI.pill('Yuborildi', 'ok') : UI.pill('Navbatda', 'warn');
+            label: '', right: true, render: function (m) {
+              if (m.status !== 'failed' && m.status !== 'error') return '';
+              return h('button', {
+                class: 'btn sm', onclick: function (e) {
+                  UI.busy(e.currentTarget, async function () {
+                    await Bot.retry(m);
+                    UI.toast('Qayta yuborishga qo’yildi.', 'ok');
+                    App.render();
+                  });
+                }
+              }, 'Qayta yuborish');
             }
           }
         ], sent) : h('p', { class: 'muted' }, 'Hali xabar yo’q.'), null, null, true)));
@@ -286,46 +360,65 @@
 
     if (tab === 'sozlama') {
       App.guard('bot.manage');
-      var f = UI.form([
+      var fields = [
         {
           name: 'username', label: 'Bot manzili (@siz)', value: conf.username,
           placeholder: 'albyana_bot', help: 'BotFather bergan bot nomi'
         },
         { name: 'welcome', label: 'Salomlashuv matni', type: 'textarea', value: conf.welcome, full: true },
         {
-          name: 'notifyAttendance', label: 'Davomat belgilanganda xabar', type: 'select',
-          value: conf.notifyAttendance ? 'yes' : 'no',
-          options: [{ value: 'yes', label: 'Yuborilsin' }, { value: 'no', label: 'Yuborilmasin' }]
+          name: 'remindDays', label: 'Muddatdan necha kun o’tsa eslatilsin', type: 'number',
+          value: conf.remindDays, help: 'Masalan 3 — muddat o’tgandan 3 kun keyin'
         },
         {
-          name: 'notifyPayment', label: 'To’lov qabul qilinganda xabar', type: 'select',
-          value: conf.notifyPayment ? 'yes' : 'no',
-          options: [{ value: 'yes', label: 'Yuborilsin' }, { value: 'no', label: 'Yuborilmasin' }]
+          name: 'remindEvery', label: 'Eslatma necha kunda bir marta', type: 'number',
+          value: conf.remindEvery, help: 'Bir o’quvchiga shu kunlar ichida bir martadan ko’p yozilmaydi'
         },
         {
-          name: 'autoApprove', label: 'Ism va guruh mos kelsa avtomatik ulash', type: 'select',
-          value: conf.autoApprove ? 'yes' : 'no',
-          options: [{ value: 'yes', label: 'Ha' }, { value: 'no', label: 'Yo’q — men tasdiqlayman' }]
+          name: 'codeHours', label: 'Ulash kodi necha soat amal qiladi', type: 'number',
+          value: conf.codeHours
         }
-      ]);
+      ];
+      var f = UI.form(fields);
+
+      var toggles = h('div', { class: 'list', style: 'border:1px solid var(--line);border-radius:10px' },
+        KINDS.map(function (k) {
+          var cb = h('input', { type: 'checkbox', id: 'kind-' + k.id });
+          cb.checked = conf.notify[k.id] !== false;
+          return h('label', { class: 'list-item', style: 'cursor:pointer' }, [
+            cb,
+            h('div', { class: 'main-col' }, [
+              h('b', {}, k.label),
+              h('span', {}, conf.notify[k.id] !== false ? 'Yuborilsin' : 'Yuborilmasin')
+            ])
+          ]);
+        }));
+
       view.appendChild(UI.card('Bot sozlamalari', [
         h('div', { class: 'banner info' }, h('div', {}, [
           h('b', {}, 'Bot kaliti (token) bu yerda saqlanmaydi. '),
           'U faqat serverdagi .env faylida turadi — shunda hech kim uni ilova orqali ko’ra olmaydi.'
         ])),
         f.node,
+        h('h3', { style: 'margin:18px 0 8px;font-size:14px' }, 'Qaysi xabarlar yuborilsin'),
+        toggles,
         h('div', { style: 'margin-top:14px' }, h('button', {
           class: 'btn primary', onclick: function (e) {
             UI.busy(e.currentTarget, async function () {
               var v = f.values();
+              var notify = {};
+              KINDS.forEach(function (k) {
+                var cb = document.getElementById('kind-' + k.id);
+                notify[k.id] = !!(cb && cb.checked);
+              });
               await D.saveSettings(Object.assign({}, D.settings, {
                 bot: {
-                  username: v.username.replace('@', ''),
+                  username: String(v.username || '').replace('@', ''),
                   welcome: v.welcome,
-                  notifyAttendance: v.notifyAttendance === 'yes',
-                  notifyPayment: v.notifyPayment === 'yes',
-                  notifyDebt: conf.notifyDebt,
-                  autoApprove: v.autoApprove === 'yes'
+                  notify: notify,
+                  remindDays: Math.max(0, Number(v.remindDays) || 3),
+                  remindEvery: Math.max(1, Number(v.remindEvery) || 7),
+                  codeHours: Math.max(1, Number(v.codeHours) || 48)
                 }
               }));
               await A.Ops.audit(App.user, 'Bot sozlamalari o’zgartirildi', v.username, '');
@@ -334,8 +427,71 @@
           }
         }, 'Saqlash'))
       ]));
+
+      view.appendChild(h('div', { style: 'margin-top:14px' }, UI.card('Ulash kodlari', [
+        h('p', { style: 'margin:0 0 10px' },
+          'O’quvchini botga ulash uchun unga bir martalik kod bering. Kod ishlatilgach yoki muddati ' +
+          'o’tgach yaroqsiz bo’ladi. Ism bo’yicha avtomatik ulash yo’q — bir xil ismlar chalkashmasligi uchun.'),
+        h('button', {
+          class: 'btn primary', onclick: function () { codeModal(App); }
+        }, 'O’quvchiga kod berish')
+      ])));
     }
   };
+
+  function statusPill(m) {
+    if (m.status === 'sent') return UI.pill('Yuborildi', 'ok');
+    if (m.status === 'failed') return UI.pill('Yuborilmadi', 'bad');
+    if (m.status === 'error') return UI.pill('Qayta urinilmoqda', 'warn');
+    if (m.status === 'skipped') return UI.pill('O’chirilgan turi', 'mute');
+    return UI.pill('Navbatda', 'warn');
+  }
+
+  /** Bir martalik ulash kodi berish oynasi */
+  function codeModal(App) {
+    var students = A.sortBy(D.all('students').filter(function (s) {
+      return s.status !== 'arxiv' && !(s.telegram && s.telegram.id);
+    }), function (s) { return s.lastName + ' ' + s.firstName; });
+
+    if (!students.length) {
+      UI.toast('Ulanmagan o’quvchi yo’q.', 'info');
+      return;
+    }
+    var pick = UI.field({
+      label: 'O’quvchi', type: 'select', required: true,
+      options: students.map(function (s) {
+        return { value: s.id, label: s.lastName + ' ' + s.firstName + ' · ' + (s.phone || '') };
+      })
+    });
+    var out = h('div', { style: 'margin-top:12px' });
+    UI.modal({
+      title: 'Ulash kodi',
+      body: [
+        h('p', { class: 'small muted', style: 'margin:0 0 10px' },
+          'Kodni o’quvchiga bering. U botda /start bosib shu kodni yozadi.'),
+        pick.wrap, out
+      ],
+      actions: [
+        { label: 'Yopish' },
+        {
+          label: 'Kod yaratish', cls: 'primary', onClick: function (c, btn) {
+            if (!pick.input.value) { UI.toast('O’quvchini tanlang.', 'bad'); return; }
+            UI.busy(btn, async function () {
+              var code = await Bot.makeCode(pick.input.value);
+              var s = D.one('students', pick.input.value);
+              UI.clear(out);
+              out.appendChild(h('div', { class: 'banner ok' }, h('div', {}, [
+                h('b', {}, s.lastName + ' ' + s.firstName + ' uchun kod: '),
+                h('span', { class: 'mono', style: 'font-size:20px;letter-spacing:3px' }, code),
+                h('div', { class: 'small' }, 'Kod ' + settings().codeHours + ' soat amal qiladi va bir marta ishlatiladi.')
+              ])));
+              await A.Ops.audit(App.user, 'Botga ulash kodi berildi', s.lastName + ' ' + s.firstName, '');
+            });
+          }
+        }
+      ]
+    });
+  }
 
   function approveModal(req, App) {
     var candidates = [];

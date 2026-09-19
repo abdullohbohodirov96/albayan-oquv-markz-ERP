@@ -1,311 +1,366 @@
-/* Albyana ERP — amallar qatlami: hisob yaratish, to'lov, xarajat, ish haqi, tarix */
+/* Albyana ERP — amallar qatlami.
+   Muhim: har bir hisob, to'lov, xarajat va ish haqi ALOHIDA yozuv sifatida
+   saqlanadi. Shu tufayli ikki xodim bir vaqtda ishlaganda biri ikkinchisining
+   yozuvini bosib ketmaydi. */
 (function (global) {
   'use strict';
   var A = global.A;
   var D = A.Data;
 
+  var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll'];
+
   var Fin = {
-    index: { invoices: [], payments: [], expenses: [], payroll: [], audit: [] },
-
-    async loadIndex() {
-      if (D.mode === 'cloud') {
-        try {
-          var s = await D.db.doc('meta/finindex').get();
-          if (s.exists) {
-            var v = s.data();
-            ['invoices', 'payments', 'expenses', 'payroll', 'audit'].forEach(function (k) {
-              Fin.index[k] = Array.isArray(v[k]) ? v[k] : [];
-            });
-          }
-        } catch (e) { console.error('finindex', e); }
-      } else {
-        var raw = null;
-        try { raw = global.localStorage.getItem('albyana_finindex'); } catch (e) { }
-        if (raw) { try { Fin.index = JSON.parse(raw); } catch (e) { } }
-      }
-    },
-    async addToIndex(kind, ym) {
-      if (Fin.index[kind].indexOf(ym) >= 0) return;
-      Fin.index[kind].push(ym);
-      Fin.index[kind].sort();
-      if (D.mode === 'cloud') {
-        try { await D.db.doc('meta/finindex').set(A.clone(Fin.index)); } catch (e) { console.error(e); }
-      } else {
-        try { global.localStorage.setItem('albyana_finindex', JSON.stringify(Fin.index)); } catch (e) { }
-      }
-    },
-    async loadAll() {
-      var kinds = ['invoices', 'payments', 'expenses', 'payroll'];
-      var jobs = [];
-      var cur = A.thisMonth();
-      kinds.forEach(function (k) {
-        var months = (Fin.index[k] || []).slice();
-        if (months.indexOf(cur) < 0) months.push(cur);
-        months.forEach(function (m) { jobs.push(D.loadMonth(k, m)); });
-      });
-      await Promise.all(jobs);   // barchasi bir vaqtda — kirish tezroq
-    },
-
-    /* --- to'plangan ro'yxatlar --- */
-    allInvoices: function () {
-      var out = [];
-      Object.keys(D.docs).forEach(function (p) {
-        if (p.indexOf('invoices/') !== 0) return;
-        var items = D.docs[p].items || {};
-        Object.keys(items).forEach(function (k) { out.push(items[k]); });
-      });
-      return out;
-    },
-    allPayments: function () {
-      var out = [];
-      Object.keys(D.docs).forEach(function (p) {
-        if (p.indexOf('payments/') !== 0) return;
-        var items = D.docs[p].items || {};
-        Object.keys(items).forEach(function (k) { out.push(items[k]); });
-      });
-      return out;
-    },
+    /* --- To'plangan ro'yxatlar --- */
+    allInvoices: function () { return D.all('invoices'); },
+    allPayments: function () { return D.all('payments'); },
+    allExpenses: function () { return D.all('expenses'); },
     monthItems: function (kind, ym) {
-      var doc = D.monthCached(kind, ym);
-      if (!doc) return [];
-      var items = doc.items || {};
-      return Object.keys(items).map(function (k) { return items[k]; });
+      return D.all(kind).filter(function (x) { return x.month === ym; });
     },
     invoicesById: function () {
       var m = {};
-      Fin.allInvoices().forEach(function (i) { m[i.id] = i; });
+      D.all('invoices').forEach(function (i) { m[i.id] = i; });
       return m;
+    },
+    payrollItem: function (ym, staffId) {
+      return D.one('payroll', ym + '__' + staffId);
+    },
+
+    /* Eski versiyalar bilan moslik (endi indeks kerak emas) */
+    index: { invoices: [], payments: [], expenses: [], payroll: [], audit: [] },
+    async loadIndex() { },
+    async addToIndex() { },
+    async loadAll() { },
+
+    /**
+     * Eski (oylik hujjatli) ma'lumotni yangi ko'rinishga o'tkazish.
+     * Bir marta ishlaydi, mavjud ma'lumotlarni yo'qotmaydi.
+     */
+    async migrate() {
+      if (D.mode === 'server') return { moved: 0 };   // serverda migratsiya serverda bajariladi
+
+      // eski indeksni o'qib, oylik hujjatlarni yuklaymiz
+      var idx = null;
+      if (D.mode === 'cloud') {
+        try {
+          var s = await D.db.doc('meta/finindex').get();
+          idx = s.exists ? s.data() : null;
+        } catch (e) { idx = null; }
+      } else {
+        try { idx = JSON.parse(global.localStorage.getItem('albyana_finindex') || 'null'); } catch (e) { idx = null; }
+      }
+      if (idx) {
+        var kinds = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
+        for (var q = 0; q < kinds.length; q++) {
+          var months = idx[kinds[q]] || [];
+          for (var z = 0; z < months.length; z++) {
+            await D.loadMonth(kinds[q], months[z]);
+          }
+        }
+      }
+
+      var moved = 0;
+      var paths = Object.keys(D.docs).filter(function (p) {
+        var seg = p.split('/');
+        return (MONTHLY.indexOf(seg[0]) >= 0 || seg[0] === 'audit') &&
+          seg.length === 2 && D.docs[p] && (D.docs[p].items || D.docs[p].list);
+      });
+      for (var i = 0; i < paths.length; i++) {
+        var p = paths[i];
+        var kind = p.split('/')[0];
+        var ym = p.split('/')[1];
+        if (kind === 'audit') {
+          var list = D.docs[p].list || [];
+          for (var q2 = 0; q2 < Math.min(list.length, 300); q2++) {
+            var le = list[q2];
+            le.id = le.id || A.uid('log');
+            le.month = ym;
+            if (!D.one('audit', le.id)) { await D.save('audit', le); moved++; }
+          }
+          delete D.docs[p];
+          try { await D._delDoc(p); } catch (e) { }
+          continue;
+        }
+        var items = D.docs[p].items || {};
+        var keys = Object.keys(items);
+        for (var k = 0; k < keys.length; k++) {
+          var rec = items[keys[k]];
+          if (!rec || typeof rec !== 'object') continue;
+          rec.id = rec.id || (kind === 'payroll' ? ym + '__' + keys[k] : keys[k]);
+          rec.month = rec.month || ym;
+          if (kind === 'payroll') rec.id = ym + '__' + (rec.staffId || keys[k]);
+          if (!D.one(kind, rec.id)) { await D.save(kind, rec); moved++; }
+        }
+        delete D.docs[p];
+        try { await D._delDoc(p); } catch (e) { }
+      }
+      return { moved: moved };
     }
   };
 
   /* =============== TARIX (audit) =============== */
+  /**
+   * Serverli rejimda tarixni FAQAT server yozadi (muallif va vaqtni
+   * brauzer belgilay olmaydi). Boshqa rejimlarda mijoz yozadi.
+   */
   async function audit(actor, action, entity, details) {
-    var ym = A.thisMonth();
-    await Fin.addToIndex('audit', ym);
-    await D.mutateMonth('audit', ym, function (doc) {
-      if (!Array.isArray(doc.list)) doc.list = [];
-      doc.list.unshift({
-        id: A.uid('log'),
-        at: A.nowStamp(),
-        by: actor ? actor.name : '—',
-        byLogin: actor ? actor.login : '',
-        role: actor ? actor.role : '',
-        action: action,
-        entity: entity || '',
-        details: details || ''
-      });
-      if (doc.list.length > 400) doc.list = doc.list.slice(0, 400);
-    });
+    if (D.mode === 'server') return;
+    var rec = {
+      id: A.uid('log'),
+      at: A.nowStamp(),
+      month: A.thisMonth(),
+      by: actor ? actor.name : '—',
+      byLogin: actor ? actor.login : '',
+      role: actor ? actor.role : '',
+      action: action,
+      entity: entity || '',
+      details: details || ''
+    };
+    await D.save('audit', rec);
+    // tarix cheksiz o'smasin
+    var all = D.all('audit');
+    if (all.length > 500) {
+      var old = A.sortBy(all, 'at').slice(0, all.length - 500);
+      for (var i = 0; i < old.length; i++) { await D.remove('audit', old[i].id); }
+    }
   }
 
   /* =============== OYLIK HISOBLAR =============== */
-  /**
-   * Shu oy uchun faol a'zoliklarga hisob yaratadi.
-   * Bitta a'zolik + bitta oy uchun hisob ID si qat'iy: takroriy ishga tushirish yangi hisob yaratmaydi.
-   */
+  function invoiceDraft(membership, group, ym, settings, actor, opts) {
+    var dueDay = (settings && settings.dueDay) || 5;
+    var amt = A.invoiceAmountFor(group, membership, ym);
+    var finalAmt = opts && opts.amount != null ? Math.max(0, Math.round(opts.amount)) : amt.final;
+    var due = (opts && opts.dueDate) || A.dueDateFor(ym, dueDay);
+    // oy o'rtasida qo'shilgan o'quvchi o'tmishdagi sanadan qarzdor bo'lib qolmasin
+    if (membership.joinedAt && membership.joinedAt > due) {
+      due = A.addDays(membership.joinedAt, 7);
+    }
+    return {
+      id: A.invoiceId(membership.id, ym),
+      membershipId: membership.id, studentId: membership.studentId,
+      groupId: membership.groupId, month: ym,
+      base: amt.base, discount: Math.max(0, amt.base - finalAmt), final: finalAmt,
+      dueDate: due, createdAt: A.nowStamp(),
+      createdBy: actor ? actor.name : 'tizim',
+      note: (opts && opts.note) || (membership.firstMonth && membership.firstMonth.month === ym && membership.firstMonth.note) || ''
+    };
+  }
+
+  /** Shu oy uchun faol a'zoliklarga hisob yaratadi (takrorlanmaydi). */
   async function generateInvoices(ym, actor) {
+    if (D.mode === 'server') {
+      var r = await D.api('POST', 'api/invoices/generate', { month: ym });
+      await D.loadBootstrap();
+      return r;
+    }
     var groups = A.byId(D.all('groups'));
     var students = A.byId(D.all('students'));
-    var dueDay = (D.settings && D.settings.dueDay) || 5;
     var created = 0, skipped = 0;
-    await Fin.addToIndex('invoices', ym);
-    await D.mutateMonth('invoices', ym, function (doc) {
-      D.all('memberships').forEach(function (m) {
-        if (m.status !== 'faol') return;
-        if (!A.membershipActiveIn(m, ym)) return;
-        var g = groups[m.groupId];
-        var st = students[m.studentId];
-        if (!g || !st) return;
-        if (st.status === 'arxiv') return;
-        if (g.status === 'rejalashtirilgan') return;
-        if (g.startDate && g.startDate > A.monthEnd(ym)) return;
-        var id = A.invoiceId(m.id, ym);
-        if (doc.items[id]) { skipped++; return; }
-        var amt = A.invoiceAmountFor(g, m, ym);
-        doc.items[id] = {
-          id: id, membershipId: m.id, studentId: m.studentId, groupId: m.groupId,
-          month: ym, base: amt.base, discount: amt.discount, final: amt.final,
-          dueDate: A.dueDateFor(ym, dueDay),
-          createdAt: A.nowStamp(), createdBy: actor ? actor.name : 'tizim',
-          note: (m.firstMonth && m.firstMonth.month === ym && m.firstMonth.note) || ''
-        };
-        created++;
-      });
-    });
+    var mems = D.all('memberships');
+    for (var i = 0; i < mems.length; i++) {
+      var m = mems[i];
+      if (m.status !== 'faol') continue;
+      if (!A.membershipActiveIn(m, ym)) continue;
+      var g = groups[m.groupId];
+      var st = students[m.studentId];
+      if (!g || !st || st.status === 'arxiv') continue;
+      if (g.status === 'rejalashtirilgan') continue;
+      if (g.startDate && g.startDate > A.monthEnd(ym)) continue;
+      var id = A.invoiceId(m.id, ym);
+      if (D.one('invoices', id)) { skipped++; continue; }
+      await D.save('invoices', invoiceDraft(m, g, ym, D.settings, actor, null));
+      created++;
+    }
     if (created) await audit(actor, 'Oylik hisoblar yaratildi', A.monthLabel(ym), created + ' ta yangi hisob');
     return { created: created, skipped: skipped };
   }
 
-  /** Bitta a'zolik uchun hisob (o'rtada qo'shilgan o'quvchi) */
+  /** Bitta a'zolik uchun hisob (oy o'rtasida qo'shilgan o'quvchi) */
   async function createSingleInvoice(membership, ym, opts, actor) {
     var g = D.one('groups', membership.groupId);
-    var dueDay = (D.settings && D.settings.dueDay) || 5;
     var id = A.invoiceId(membership.id, ym);
-    var res = null;
-    await Fin.addToIndex('invoices', ym);
-    await D.mutateMonth('invoices', ym, function (doc) {
-      if (doc.items[id]) { res = doc.items[id]; return; }
-      var amt = A.invoiceAmountFor(g, membership, ym);
-      var finalAmt = opts && opts.amount != null ? Math.max(0, Math.round(opts.amount)) : amt.final;
-      doc.items[id] = {
-        id: id, membershipId: membership.id, studentId: membership.studentId,
-        groupId: membership.groupId, month: ym,
-        base: amt.base, discount: Math.max(0, amt.base - finalAmt), final: finalAmt,
-        dueDate: A.dueDateFor(ym, dueDay), createdAt: A.nowStamp(),
-        createdBy: actor ? actor.name : 'tizim', note: (opts && opts.note) || ''
-      };
-      res = doc.items[id];
-    });
-    return res;
+    var exists = D.one('invoices', id);
+    if (exists) return exists;
+    var rec = invoiceDraft(membership, g, ym, D.settings, actor, opts);
+    if (D.mode === 'server') {
+      await D.api('PUT', 'api/doc?path=' + encodeURIComponent('invoices/' + rec.id), {
+        data: rec, action: 'Hisob yaratildi', entity: A.monthLabel(ym)
+      });
+      D.col.invoices[rec.id] = rec;
+      return rec;
+    }
+    await D.save('invoices', rec);
+    return rec;
   }
 
-  /** Hisobni o'chirish (faqat to'lanmagan bo'lsa) */
   async function deleteInvoice(inv, actor, reason) {
     var paid = A.paidByInvoice(Fin.allPayments())[inv.id] || 0;
     if (paid > 0) throw new Error('Bu hisobga to’lov qilingan, o’chirib bo’lmaydi.');
-    await D.mutateMonth('invoices', inv.month, function (doc) { delete doc.items[inv.id]; });
+    await D.remove('invoices', inv.id);
     await audit(actor, 'Hisob o’chirildi', inv.id, reason || '');
   }
 
   /* =============== TO'LOVLAR =============== */
-  function nextReceiptNo(ym) {
-    var items = Fin.monthItems('payments', ym).filter(function (p) { return p.type !== 'refund'; });
-    var n = items.length + 1;
+  function localReceiptNo(ym) {
+    var n = Fin.monthItems('payments', ym).filter(function (p) { return p.type !== 'refund'; }).length + 1;
     return 'ALB-' + ym.replace('-', '') + '-' + String(n).padStart(4, '0');
   }
 
   /**
-   * To'lov qabul qilish. id oldindan beriladi (takroriy bosishda bir xil id —
-   * shuning uchun ikkinchi marta yozilmaydi).
+   * To'lov qabul qilish.
+   * Serverli rejimda chek raqamini SERVER yaratadi va bir xil id bilan
+   * kelgan takroriy so'rov yangi to'lov yaratmaydi.
    */
   async function createPayment(input, actor) {
-    var ym = A.ymOf(input.date);
     var id = input.id || A.uid('pay');
-    var existing = null;
-    await D.loadMonth('payments', ym);
-    var doc = D.monthCached('payments', ym);
-    if (doc && doc.items[id]) return doc.items[id]; // takroriy so'rov — yangi to'lov yaratilmaydi
+    var ym = A.ymOf(input.date);
 
+    if (D.mode === 'server') {
+      var r = await D.api('POST', 'api/payment', {
+        id: id,
+        type: input.type || 'payment',
+        studentId: input.studentId,
+        amount: Math.round(Number(input.amount) || 0),
+        date: input.date,
+        method: input.method || 'naqd',
+        note: input.note || '',
+        allocations: input.allocations || [],
+        refOf: input.refOf || null,
+        fromAdvance: input.fromAdvance === true
+      });
+      if (r && r.payment) {
+        D.col.payments[r.payment.id] = r.payment;
+        return r.payment;
+      }
+      throw new Error('Server to’lovni tasdiqlamadi.');
+    }
+
+    var existing = D.one('payments', id);
+    if (existing) return existing;               // takroriy bosish
     var rec = {
       id: id,
       type: input.type || 'payment',
       studentId: input.studentId,
       amount: Math.round(Number(input.amount) || 0),
       date: input.date,
+      month: ym,
       method: input.method || 'naqd',
       note: input.note || '',
       allocations: (input.allocations || []).map(function (a) {
         return { invoiceId: a.invoiceId, amount: Math.round(a.amount) };
       }),
-      receiptNo: input.receiptNo || nextReceiptNo(ym),
+      receiptNo: input.receiptNo || localReceiptNo(ym),
       createdAt: A.nowStamp(),
       createdBy: actor ? actor.name : '—',
-      refOf: input.refOf || null
+      refOf: input.refOf || null,
+      fromAdvance: input.fromAdvance === true
     };
-    await Fin.addToIndex('payments', ym);
-    await D.mutateMonth('payments', ym, function (d) {
-      if (d.items[id]) { existing = d.items[id]; return; }
-      d.items[id] = rec;
-    });
-    await audit(actor,
-      rec.type === 'refund' ? 'Pul qaytarildi' : 'To’lov qabul qilindi',
-      rec.receiptNo,
-      A.somFull(rec.amount));
-    return existing || rec;
+    if (rec.type === 'refund') {
+      var cap = refundCap(rec.refOf);
+      if (rec.amount > cap) throw new Error('Qaytarish summasi ruxsat etilgandan ko’p: ' + A.som(cap));
+    }
+    await D.save('payments', rec);
+    await audit(actor, rec.type === 'refund' ? 'Pul qaytarildi' : 'To’lov qabul qilindi',
+      rec.receiptNo, A.somFull(rec.amount));
+    return rec;
+  }
+
+  /** Qaytarish mumkin bo'lgan qoldiq: asl to'lov − oldingi qaytarishlar */
+  function refundCap(paymentId) {
+    var p = D.one('payments', paymentId);
+    if (!p || p.voided) return 0;
+    var done = D.all('payments')
+      .filter(function (r) { return r.type === 'refund' && r.refOf === paymentId && !r.voided; })
+      .reduce(function (s, r) { return s + Math.round(r.amount); }, 0);
+    return Math.max(0, Math.round(p.amount) - done);
   }
 
   async function voidPayment(pay, reason, actor) {
-    await D.mutateMonth('payments', A.ymOf(pay.date), function (d) {
-      var p = d.items[pay.id];
-      if (!p) return;
-      p.voided = { reason: reason, by: actor ? actor.name : '—', at: A.nowStamp() };
-    });
-    await audit(actor, 'To’lov bekor qilindi', pay.receiptNo, reason || '');
+    if (D.mode === 'server') {
+      var r = await D.api('POST', 'api/payment/void', { id: pay.id, reason: reason });
+      if (r && r.payment) D.col.payments[r.payment.id] = r.payment;
+      return;
+    }
+    var rec = A.clone(D.one('payments', pay.id) || pay);
+    rec.voided = { reason: reason, by: actor ? actor.name : '—', at: A.nowStamp() };
+    await D.save('payments', rec);
+    await audit(actor, 'To’lov bekor qilindi', rec.receiptNo, reason || '');
   }
 
   /* =============== XARAJATLAR =============== */
   async function saveExpense(exp, actor) {
-    var ym = A.ymOf(exp.date);
     var isNew = !exp.id;
     if (!exp.id) exp.id = A.uid('exp');
+    exp.month = A.ymOf(exp.date);
     exp.createdAt = exp.createdAt || A.nowStamp();
     exp.createdBy = exp.createdBy || (actor ? actor.name : '—');
-    await Fin.addToIndex('expenses', ym);
-    await D.mutateMonth('expenses', ym, function (d) {
-      if (!isNew && d.items[exp.id]) {
-        exp.history = (d.items[exp.id].history || []).concat([{
-          at: A.nowStamp(), by: actor ? actor.name : '—',
-          eski: d.items[exp.id].amount, yangi: exp.amount
-        }]);
-      }
-      d.items[exp.id] = exp;
-    });
-    await audit(actor, isNew ? 'Xarajat qo’shildi' : 'Xarajat tuzatildi',
-      exp.category, A.somFull(exp.amount));
+    var old = D.one('expenses', exp.id);
+    if (!isNew && old) {
+      exp.history = (old.history || []).concat([{
+        at: A.nowStamp(), by: actor ? actor.name : '—', eski: old.amount, yangi: exp.amount
+      }]);
+    }
+    await D.save('expenses', exp);
+    await audit(actor, isNew ? 'Xarajat qo’shildi' : 'Xarajat tuzatildi', exp.category, A.somFull(exp.amount));
     return exp;
   }
   async function voidExpense(exp, reason, actor) {
-    await D.mutateMonth('expenses', A.ymOf(exp.date), function (d) {
-      var e = d.items[exp.id];
-      if (e) e.voided = { reason: reason, by: actor ? actor.name : '—', at: A.nowStamp() };
-    });
-    await audit(actor, 'Xarajat bekor qilindi', exp.category, reason || '');
+    var rec = A.clone(D.one('expenses', exp.id) || exp);
+    rec.voided = { reason: reason, by: actor ? actor.name : '—', at: A.nowStamp() };
+    await D.save('expenses', rec);
+    await audit(actor, 'Xarajat bekor qilindi', rec.category, reason || '');
   }
 
   /* =============== ISH HAQI =============== */
   async function payrollRecalc(ym, actor) {
-    await D.loadMonth('payments', ym);
     var payments = Fin.monthItems('payments', ym);
     var invById = Fin.invoicesById();
     var groupsById = A.byId(D.all('groups'));
     var staffList = D.all('staff').filter(function (s) { return s.status === 'faol'; });
-    await Fin.addToIndex('payroll', ym);
-    await D.mutateMonth('payroll', ym, function (doc) {
-      staffList.forEach(function (s) {
-        var cur = doc.items[s.id];
-        if (cur && cur.status !== 'qoralama') return; // yopilgan davr qayta hisoblanmaydi
-        var r = A.payrollFor(s, ym, payments, invById, groupsById);
-        doc.items[s.id] = {
-          staffId: s.id, month: ym, type: r.type, rate: r.rate || 0, base: r.base || 0,
-          accrued: r.amount, lines: r.lines || [],
-          paid: (cur && cur.paid) || 0, status: (cur && cur.status) || 'qoralama',
-          updatedAt: A.nowStamp()
-        };
+    for (var i = 0; i < staffList.length; i++) {
+      var s = staffList[i];
+      var cur = Fin.payrollItem(ym, s.id);
+      if (cur && cur.status !== 'qoralama') continue;     // yopilgan davr qayta hisoblanmaydi
+      var r = A.payrollFor(s, ym, payments, invById, groupsById, D.all('groups'));
+      await D.save('payroll', {
+        id: ym + '__' + s.id,
+        staffId: s.id, month: ym, type: r.type, rate: r.rate || 0, base: r.base || 0,
+        accrued: r.amount, lines: r.lines || [],
+        paid: (cur && cur.paid) || 0, status: (cur && cur.status) || 'qoralama',
+        updatedAt: A.nowStamp()
       });
-    });
+    }
     await audit(actor, 'Ish haqi hisoblandi', A.monthLabel(ym), staffList.length + ' xodim');
   }
   async function payrollApprove(ym, staffId, actor) {
-    await D.mutateMonth('payroll', ym, function (doc) {
-      var it = doc.items[staffId];
-      if (it) { it.status = 'tasdiqlangan'; it.approvedBy = actor ? actor.name : '—'; it.approvedAt = A.nowStamp(); }
-    });
+    var it = A.clone(Fin.payrollItem(ym, staffId));
+    if (!it) return;
+    it.status = 'tasdiqlangan';
+    it.approvedBy = actor ? actor.name : '—';
+    it.approvedAt = A.nowStamp();
+    await D.save('payroll', it);
     await audit(actor, 'Ish haqi tasdiqlandi', (D.one('staff', staffId) || {}).name || staffId, A.monthLabel(ym));
   }
-  /** Ish haqi to'lovi — moliyaviy hisobotda bir marta xarajat bo'lib aks etadi */
   async function payrollPay(ym, staffId, amount, method, actor) {
     var st = D.one('staff', staffId);
-    var exp = {
-      id: 'sal_' + staffId + '_' + ym,
-      date: A.today(), category: 'Ish haqi', amount: Math.round(amount),
-      method: method || 'naqd',
-      note: (st ? st.name : staffId) + ' — ' + A.monthLabel(ym) + ' ish haqi',
-      payrollRef: ym + '/' + staffId,
-      createdAt: A.nowStamp(), createdBy: actor ? actor.name : '—'
-    };
-    var eym = A.ymOf(exp.date);
-    await Fin.addToIndex('expenses', eym);
-    var already = false;
-    await D.mutateMonth('expenses', eym, function (d) {
-      if (d.items[exp.id]) { already = true; return; }
-      d.items[exp.id] = exp;
-    });
-    await D.mutateMonth('payroll', ym, function (doc) {
-      var it = doc.items[staffId];
-      if (it) { it.paid = Math.round(amount); it.status = 'to’langan'; it.paidAt = A.nowStamp(); }
-    });
-    if (!already) await audit(actor, 'Ish haqi to’landi', st ? st.name : staffId, A.somFull(amount));
-    return exp;
+    var expId = 'sal_' + staffId + '_' + ym;
+    if (!D.one('expenses', expId)) {
+      await D.save('expenses', {
+        id: expId, date: A.today(), month: A.thisMonth(),
+        category: 'Ish haqi', amount: Math.round(amount), method: method || 'naqd',
+        note: (st ? st.name : staffId) + ' — ' + A.monthLabel(ym) + ' ish haqi',
+        payrollRef: ym + '/' + staffId,
+        createdAt: A.nowStamp(), createdBy: actor ? actor.name : '—'
+      });
+      await audit(actor, 'Ish haqi to’landi', st ? st.name : staffId, A.somFull(amount));
+    }
+    var it = A.clone(Fin.payrollItem(ym, staffId));
+    if (it) {
+      it.paid = Math.round(amount);
+      it.status = 'to’langan';
+      it.paidAt = A.nowStamp();
+      await D.save('payroll', it);
+    }
   }
 
   global.A.Fin = Fin;
@@ -316,7 +371,8 @@
     deleteInvoice: deleteInvoice,
     createPayment: createPayment,
     voidPayment: voidPayment,
-    nextReceiptNo: nextReceiptNo,
+    refundCap: refundCap,
+    localReceiptNo: localReceiptNo,
     saveExpense: saveExpense,
     voidExpense: voidExpense,
     payrollRecalc: payrollRecalc,

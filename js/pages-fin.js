@@ -246,14 +246,6 @@
       ])
     ]);
     function goMonth(next) {
-      if (!D.monthCached('payments', next)) {
-        (async function () {
-          await D.loadMonth('payments', next); await D.loadMonth('invoices', next);
-          await D.loadMonth('expenses', next); await D.loadMonth('payroll', next);
-          App.go('finance', { tab: tab, ym: next });
-        })();
-        return;
-      }
       App.go('finance', { tab: tab, ym: next });
     }
     if (tab !== 'debts') view.appendChild(monthNav);
@@ -628,8 +620,7 @@
 
   function renderPayroll(view, ym, App) {
     App.guard('finance.payroll');
-    var doc = D.monthCached('payroll', ym) || { items: {} };
-    var items = Object.keys(doc.items || {}).map(function (k) { return doc.items[k]; });
+    var items = A.Fin.monthItems('payroll', ym);
     var staffList = D.all('staff').filter(function (s) { return s.status === 'faol'; });
     var accrued = items.reduce(function (s, i) { return s + (i.accrued || 0); }, 0);
     var paid = items.reduce(function (s, i) { return s + (i.paid || 0); }, 0);
@@ -656,7 +647,7 @@
     ]));
 
     var rows = staffList.map(function (s) {
-      return { staff: s, item: doc.items[s.id] || null };
+      return { staff: s, item: A.Fin.payrollItem(ym, s.id) };
     });
     view.appendChild(UI.card(null, rows.length ? UI.table([
       { label: 'Xodim', render: function (r) { return h('div', {}, [h('b', {}, r.staff.name), h('div', { class: 'small muted' }, r.staff.position)]); } },
@@ -864,12 +855,7 @@
 
     var inRange = function (d) { return d >= from && d <= to; };
     var pays = A.Fin.allPayments().filter(function (p) { return inRange(p.date); });
-    var exps = [];
-    Object.keys(D.docs).forEach(function (p) {
-      if (p.indexOf('expenses/') !== 0) return;
-      var items = D.docs[p].items || {};
-      Object.keys(items).forEach(function (k) { if (inRange(items[k].date)) exps.push(items[k]); });
-    });
+    var exps = D.all('expenses').filter(function (e) { return inRange(e.date); });
     var cf = A.cashFlow(pays, exps.filter(function (e) { return !e.voided; }));
 
     var invs = A.Fin.allInvoices().filter(function (i) {
@@ -968,16 +954,11 @@
       ], catRows) : h('p', { class: 'muted' }, 'Xarajat yo’q.'), null, null, true));
 
       // O'qituvchi ish haqi
-      var payrollRows = [];
-      Object.keys(D.docs).forEach(function (p) {
-        if (p.indexOf('payroll/') !== 0) return;
-        var ymk = p.split('/')[1];
-        if (ymk < A.ymOf(from) || ymk > A.ymOf(to)) return;
-        var items = D.docs[p].items || {};
-        Object.keys(items).forEach(function (sid) {
-          payrollRows.push({ name: Q.staffName(sid), ym: ymk, accrued: items[sid].accrued, paid: items[sid].paid });
+      var payrollRows = D.all('payroll')
+        .filter(function (it) { return it.month >= A.ymOf(from) && it.month <= A.ymOf(to); })
+        .map(function (it) {
+          return { name: Q.staffName(it.staffId), ym: it.month, accrued: it.accrued, paid: it.paid };
         });
-      });
       cols.appendChild(UI.card('Ish haqi', payrollRows.length ? UI.table([
         { label: 'Xodim', render: function (r) { return r.name; } },
         { label: 'Oy', render: function (r) { return A.monthLabel(r.ym); } },
@@ -1177,45 +1158,12 @@
         ])
       ]));
 
-      view.appendChild(h('div', { style: 'margin-top:14px' }, UI.card('Zaxira nusxa', [
-        h('p', { style: 'margin:0 0 12px' }, 'Barcha ma’lumotni bitta faylga yuklab oling. Faylni xavfsiz joyda saqlang.'),
-        h('div', { class: 'rowflex' }, [
-          h('button', {
-            class: 'btn', onclick: async function () {
-              var dump = {
-                exportedAt: A.nowStamp(), settings: D.settings,
-                collections: {}, docs: {}
-              };
-              A.COLLECTIONS.forEach(function (c) { dump.collections[c] = D.col[c]; });
-              Object.keys(D.docs).forEach(function (p) { dump.docs[p] = D.docs[p]; });
-              var text = JSON.stringify(dump, null, 1);
-              var dl = null;
-              try { if (global.claude && global.claude.use) dl = await global.claude.use('downloads'); } catch (e) { }
-              if (dl) {
-                try {
-                  await dl.save({ filename: 'albyana-zaxira-' + A.today() + '.json', data: text });
-                  UI.toast('Zaxira yuklab olindi.', 'ok'); return;
-                } catch (e) { }
-              }
-              var ta = h('textarea', { style: 'width:100%;min-height:240px;font-family:var(--mono);font-size:11px' });
-              ta.value = text;
-              UI.modal({ title: 'Zaxira nusxa', wide: true, body: ta, actions: [{ label: 'Yopish', cls: 'primary' }] });
-            }
-          }, [UI.icon('down'), 'Zaxira nusxa olish'])
-        ]),
-        h('p', { class: 'small muted', style: 'margin:12px 0 0' },
-          'Tiklash: zaxira faylini saqlab qo’ying va kerak bo’lganda tizim yaratuvchisiga bering — ma’lumotlar qayta yuklanadi. ' +
-          'Har oy boshida bir marta zaxira olish tavsiya etiladi.')
-      ])));
+      view.appendChild(h('div', { id: 'backup-card', style: 'margin-top:14px' }, backupCard(App)));
+      view.appendChild(h('div', { id: 'install-card', style: 'margin-top:14px' }, installCard()));
     }
 
     if (tab === 'log') {
-      var entries = [];
-      Object.keys(D.docs).forEach(function (p) {
-        if (p.indexOf('audit/') !== 0) return;
-        (D.docs[p].list || []).forEach(function (e) { entries.push(e); });
-      });
-      entries = A.sortBy(entries, 'at', 'desc').slice(0, 200);
+      var entries = A.sortBy(D.all('audit'), 'at', 'desc').slice(0, 200);
       view.appendChild(UI.card('Muhim harakatlar tarixi', entries.length ? UI.table([
         { label: 'Vaqt', render: function (e) { return h('span', { class: 'mono small' }, e.at); } },
         { label: 'Kim', render: function (e) { return h('div', {}, [h('b', {}, e.by), h('div', { class: 'small muted' }, A.ROLES[e.role] || '')]); } },
@@ -1227,6 +1175,338 @@
         'Parollar va maxfiy ma’lumotlar tarixga yozilmaydi.'));
     }
   };
+
+  /* ================= ZAXIRA NUSXA VA TIKLASH ================= */
+
+  /** Brauzerdagi barcha ma'lumotdan zaxira tuzish (server yo'q rejim uchun ham) */
+  function localDump() {
+    var docs = {};
+    A.COLLECTIONS.forEach(function (c) {
+      var items = D.col[c] || {};
+      Object.keys(items).forEach(function (id) { docs[c + '/' + id] = items[id]; });
+    });
+    Object.keys(D.docs || {}).forEach(function (p) { docs[p] = D.docs[p]; });
+    if (D.settings) docs['meta/settings'] = D.settings;
+    return {
+      format: 3, app: 'albyana-erp',
+      createdAt: new Date().toISOString(),
+      reason: 'qo’lda (brauzerdan)',
+      count: Object.keys(docs).length,
+      docs: docs
+    };
+  }
+
+  function dumpDocs(dump) {
+    if (dump && dump.docs && !dump.collections) return dump.docs;
+    // eski format
+    var docs = {};
+    Object.keys((dump && dump.collections) || {}).forEach(function (c) {
+      var items = dump.collections[c] || {};
+      Object.keys(items).forEach(function (id) { docs[c + '/' + id] = items[id]; });
+    });
+    Object.keys((dump && dump.docs) || {}).forEach(function (p) { docs[p] = dump.docs[p]; });
+    if (dump && dump.settings) docs['meta/settings'] = dump.settings;
+    return docs;
+  }
+
+  /** Faylni tekshirish — serverga yubormasdan oldin ham, serversiz rejimda ham */
+  function validateDump(dump) {
+    var errors = [], warnings = [];
+    if (!dump || typeof dump !== 'object') return { ok: false, errors: ['Fayl JSON emas.'], warnings: [], byCollection: {}, count: 0, docs: {} };
+    if (dump.app && dump.app !== 'albyana-erp') errors.push('Bu fayl Albyana zaxirasi emas.');
+    var docs = dumpDocs(dump);
+    var byCollection = {};
+    Object.keys(docs).forEach(function (p) {
+      if (p.split('/').length % 2 !== 0) { errors.push('Noto’g’ri yo’l: ' + p.slice(0, 40)); return; }
+      if (!docs[p] || typeof docs[p] !== 'object') { errors.push('Buzuq yozuv: ' + p.slice(0, 40)); return; }
+      var c = p.split('/')[0];
+      byCollection[c] = (byCollection[c] || 0) + 1;
+    });
+    if (!Object.keys(docs).length) errors.push('Ichida ma’lumot yo’q.');
+    if (!byCollection.users) errors.push('Zaxirada foydalanuvchilar yo’q — tiklashdan keyin hech kim kira olmaydi.');
+    if (!docs['meta/settings']) warnings.push('Sozlamalar yo’q — standart sozlamalar qo’llanadi.');
+    return { ok: errors.length === 0, errors: errors, warnings: warnings, byCollection: byCollection, count: Object.keys(docs).length, docs: docs };
+  }
+
+  function previewRows(check) {
+    var now = {};
+    A.COLLECTIONS.forEach(function (c) { now[c] = Object.keys(D.col[c] || {}).length; });
+    var cols = Object.keys(now).concat(Object.keys(check.byCollection));
+    var seen = {}, rows = [];
+    cols.forEach(function (c) {
+      if (seen[c]) return; seen[c] = 1;
+      var a = now[c] || 0, b = check.byCollection[c] || 0;
+      if (!a && !b) return;
+      rows.push({ name: c, hozir: a, keyin: b, farq: b - a });
+    });
+    return rows;
+  }
+
+  var COL_LABEL = {
+    users: 'Hisoblar', staff: 'Xodimlar', courses: 'Kurslar', rooms: 'Xonalar',
+    students: 'O’quvchilar', groups: 'Guruhlar', memberships: 'Guruhga yozilganlar',
+    leads: 'Murojaatlar', funnels: 'Voronkalar', tasks: 'Vazifalar', chats: 'Suhbatlar',
+    invoices: 'Hisob-fakturalar', payments: 'To’lovlar', expenses: 'Xarajatlar',
+    payroll: 'Oylik', audit: 'Harakatlar tarixi', attendance: 'Davomat', meta: 'Sozlamalar',
+    botreq: 'Bot so’rovlari', botout: 'Bot xabarlari', botin: 'Botga kelganlar'
+  };
+
+  function backupCard(App) {
+    var box = h('div', {});
+
+    function refresh() {
+      box.textContent = '';
+      box.appendChild(UI.card('Zaxira nusxa', [
+        h('p', { style: 'margin:0 0 12px' },
+          'Barcha ma’lumot bitta faylga yig’iladi. Fayl serverda ham saqlanadi, kompyuteringizga ham yuklab olsangiz bo’ladi.'),
+        h('div', { id: 'backup-state', class: 'small muted', style: 'margin-bottom:12px' }, 'Holat yuklanmoqda…'),
+        h('div', { class: 'rowflex' }, [
+          h('button', {
+            class: 'btn primary', onclick: function (e) {
+              UI.busy(e.currentTarget, async function () {
+                if (D.mode === 'server') {
+                  try {
+                    var r = await D.api('POST', 'api/backup/run');
+                    UI.toast('Serverda zaxira olindi: ' + r.file.name, 'ok');
+                  } catch (err) { UI.toast(err.message, 'bad'); }
+                }
+                await UI.saveText('albyana-zaxira-' + A.today() + '.json',
+                  JSON.stringify(localDump()));
+                refresh();
+              });
+            }
+          }, [UI.icon('down'), 'Hozir zaxira olish']),
+          h('button', {
+            class: 'btn', onclick: function () { restoreDialog(App, refresh); }
+          }, 'Zaxiradan tiklash')
+        ]),
+        h('p', { class: 'small muted', style: 'margin:12px 0 0' },
+          'Server rejimida zaxira har kuni avtomatik olinadi va ' +
+          'oxirgi 30 tasi saqlanadi. Xato bo’lsa direktorga suhbat orqali xabar boradi.')
+      ]));
+
+      if (D.mode === 'server') {
+        D.api('GET', 'api/backup/state').then(function (r) {
+          var el = box.querySelector('#backup-state');
+          if (!el) return;
+          el.textContent = '';
+          var st = r.state || {};
+          if (st.lastError) {
+            el.appendChild(h('div', { class: 'banner bad' }, h('div', {}, [
+              h('b', {}, 'Oxirgi zaxira olinmadi. '), st.lastError,
+              h('div', { class: 'small' }, 'Vaqti: ' + (st.lastErrorAt || '—'))
+            ])));
+          }
+          el.appendChild(h('div', {}, st.lastOkAt
+            ? 'Oxirgi muvaffaqiyatli zaxira: ' + String(st.lastOkAt).replace('T', ' ').slice(0, 16) +
+            ' · ' + (st.lastCount || 0) + ' yozuv · ' + Math.round((st.lastBytes || 0) / 1024) + ' KB'
+            : 'Hali zaxira olinmagan.'));
+          if ((r.files || []).length) {
+            el.appendChild(h('div', { style: 'margin-top:6px' },
+              'Serverdagi zaxiralar: ' + r.files.length + ' ta (eng yangisi: ' + r.files[0].name + ')'));
+          }
+        }).catch(function (e) {
+          var el = box.querySelector('#backup-state');
+          if (el) el.textContent = 'Holatni o’qib bo’lmadi: ' + e.message;
+        });
+      } else {
+        var el = box.querySelector('#backup-state');
+        if (el) el.textContent = 'Bu rejimda ma’lumot shu brauzerda saqlanadi — zaxirani qo’lda oling va xavfsiz joyda saqlang.';
+      }
+    }
+
+    refresh();
+    return box;
+  }
+
+  function restoreDialog(App, done) {
+    var fileInput = h('input', { type: 'file', accept: '.json,application/json' });
+    var serverPick = h('select', { class: 'inp' }, [h('option', { value: '' }, 'Serverdagi zaxiralardan tanlang…')]);
+    var result = h('div', { style: 'margin-top:12px' });
+    var chosen = null;           // {dump, name}
+    var confirmInput = h('input', { class: 'inp', placeholder: 'TIKLASH' });
+    var applyBtn = null;
+
+    if (D.mode === 'server') {
+      D.api('GET', 'api/backup/state').then(function (r) {
+        (r.files || []).forEach(function (f) {
+          serverPick.appendChild(h('option', { value: f.name },
+            f.name + ' — ' + Math.round(f.bytes / 1024) + ' KB'));
+        });
+      }).catch(function () { });
+      serverPick.onchange = function () {
+        if (!serverPick.value) return;
+        D.api('GET', 'api/backup/file?name=' + encodeURIComponent(serverPick.value))
+          .then(function (dump) { chosen = { dump: dump, name: serverPick.value, fromServer: true }; show(); })
+          .catch(function (e) { UI.toast(e.message, 'bad'); });
+      };
+    }
+
+    fileInput.onchange = function () {
+      var f = fileInput.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        try { chosen = { dump: JSON.parse(String(fr.result)), name: f.name }; }
+        catch (e) { chosen = null; UI.toast('Fayl JSON emas.', 'bad'); }
+        show();
+      };
+      fr.readAsText(f);
+    };
+
+    function show() {
+      result.textContent = '';
+      if (!chosen) return;
+      var check = validateDump(chosen.dump);
+      if (applyBtn) applyBtn.disabled = !check.ok;
+
+      result.appendChild(h('div', { class: 'small muted', style: 'margin-bottom:8px' },
+        'Fayl: ' + chosen.name + (chosen.dump.createdAt
+          ? ' · yaratilgan: ' + String(chosen.dump.createdAt).replace('T', ' ').slice(0, 16) : '')));
+
+      check.errors.forEach(function (msg) {
+        result.appendChild(h('div', { class: 'banner bad' }, h('div', {}, msg)));
+      });
+      check.warnings.forEach(function (msg) {
+        result.appendChild(h('div', { class: 'banner info' }, h('div', {}, msg)));
+      });
+      if (!check.ok) {
+        result.appendChild(h('p', { class: 'small' }, 'Bu fayl bilan tiklash mumkin emas.'));
+        return;
+      }
+
+      var rows = previewRows(check);
+      result.appendChild(h('p', { style: 'margin:8px 0' }, 'Tiklangandan keyin nima bo’ladi:'));
+      result.appendChild(UI.table([
+        { label: 'Bo’lim', render: function (r) { return COL_LABEL[r.name] || r.name; } },
+        { label: 'Hozir', right: true, render: function (r) { return r.hozir; } },
+        { label: 'Keyin', right: true, render: function (r) { return r.keyin; } },
+        {
+          label: 'O’zgarish', right: true, render: function (r) {
+            if (r.farq === 0) return h('span', { class: 'muted' }, '—');
+            return h('b', { style: 'color:' + (r.farq < 0 ? 'var(--bad)' : 'var(--ok)') },
+              (r.farq > 0 ? '+' : '') + r.farq);
+          }
+        }
+      ], rows));
+      var lost = rows.filter(function (r) { return r.farq < 0; });
+      if (lost.length) {
+        result.appendChild(h('div', { class: 'banner bad' }, h('div', {}, [
+          h('b', {}, 'Diqqat: '),
+          'zaxiradan keyin yaratilgan yozuvlar o’chadi (' +
+          lost.map(function (r) { return (COL_LABEL[r.name] || r.name) + ': ' + (-r.farq); }).join(', ') + ').'
+        ])));
+      }
+      result.appendChild(h('p', { class: 'small', style: 'margin:10px 0 4px' },
+        'Tiklashdan oldin joriy holat avtomatik zaxiraga olinadi. Davom etish uchun katta harflarda TIKLASH deb yozing:'));
+      result.appendChild(confirmInput);
+    }
+
+    var m = UI.modal({
+      title: 'Zaxiradan tiklash',
+      wide: true,
+      body: [
+        h('div', { class: 'banner info' }, h('div', {},
+          'Tiklash hozirgi ma’lumotlarni zaxiradagi holat bilan almashtiradi. Avval fayl tekshiriladi va o’zgarish ko’rsatiladi.')),
+        D.mode === 'server' ? h('label', { class: 'fld' }, [h('span', {}, 'Serverdagi zaxira'), serverPick]) : null,
+        h('label', { class: 'fld' }, [h('span', {}, 'Yoki kompyuteringizdagi fayl'), fileInput]),
+        result
+      ],
+      actions: [{
+        label: 'Tiklash', cls: 'danger',
+        onClick: function (close, btn) {
+          if (!chosen) { UI.toast('Avval zaxira faylini tanlang.', 'bad'); return; }
+          var check = validateDump(chosen.dump);
+          if (!check.ok) { UI.toast('Fayl yaroqsiz.', 'bad'); return; }
+          if (confirmInput.value.trim() !== 'TIKLASH') {
+            UI.toast('Tasdiqlash uchun TIKLASH deb yozing.', 'bad'); return;
+          }
+          UI.busy(btn, async function () {
+            try {
+              if (D.mode === 'server') {
+                var body = chosen.fromServer
+                  ? { name: chosen.name, confirm: 'TIKLASH' }
+                  : { dump: chosen.dump, confirm: 'TIKLASH' };
+                var r = await D.api('POST', 'api/backup/restore', body);
+                UI.toast('Tiklandi: ' + r.restored + ' yozuv. Oldingi holat "' + r.safety + '" fayliga saqlandi.', 'ok');
+                await D.loadBootstrap();
+              } else {
+                await UI.saveText('albyana-tiklashdan-oldin-' + A.today() + '.json', JSON.stringify(localDump()));
+                await localRestore(check.docs);
+                UI.toast('Tiklandi: ' + Object.keys(check.docs).length + ' yozuv.', 'ok');
+              }
+              close();
+              if (done) done();
+              App.render();
+            } catch (e) {
+              UI.toast(e.message || 'Tiklash bajarilmadi.', 'bad');
+            }
+          });
+        }
+      }]
+    });
+    applyBtn = m && m.box ? m.box.querySelector('.m-foot button.danger') : null;
+    if (applyBtn) applyBtn.disabled = true;
+  }
+
+  /** Serversiz rejimda tiklash */
+  async function localRestore(docs) {
+    // avval ortiqchalarini o'chiramiz
+    for (var ci = 0; ci < A.COLLECTIONS.length; ci++) {
+      var c = A.COLLECTIONS[ci];
+      var ids = Object.keys(D.col[c] || {});
+      for (var i = 0; i < ids.length; i++) {
+        if (!docs[c + '/' + ids[i]]) await D.remove(c, ids[i]);
+      }
+    }
+    var paths = Object.keys(docs);
+    for (var k = 0; k < paths.length; k++) {
+      var p = paths[k], parts = p.split('/'), name = parts[0];
+      if (p === 'meta/settings') { await D.saveSettings(docs[p]); continue; }
+      if (A.COLLECTIONS.indexOf(name) >= 0 && parts.length === 2) {
+        await D.save(name, docs[p]);
+      } else {
+        await D._setDoc(p, docs[p]);
+      }
+    }
+  }
+
+  A.Backup = {
+    localDump: localDump, dumpDocs: dumpDocs, validateDump: validateDump,
+    previewRows: previewRows, localRestore: localRestore
+  };
+
+  /* ================= TELEFONGA O'RNATISH ================= */
+  function installCard() {
+    var P = A.PWA;
+    var already = P && P.installed && P.installed();
+    var canWork = P && location.protocol.indexOf('http') === 0;
+    return UI.card('Telefonga o’rnatish', [
+      h('p', { style: 'margin:0 0 12px' }, already
+        ? 'Ilova shu qurilmaga o’rnatilgan — brauzersiz, alohida dastur kabi ochiladi.'
+        : 'Albyana’ni telefon yoki kompyuterga alohida ilova sifatida o’rnatish mumkin. ' +
+        'Bosh ekranda belgi paydo bo’ladi, ochilishi tezroq bo’ladi.'),
+      already ? null : h('div', { class: 'rowflex' }, [
+        h('button', {
+          class: 'btn primary', onclick: function (e) {
+            UI.busy(e.currentTarget, async function () {
+              if (!canWork) {
+                UI.toast('O’rnatish uchun ilovani server manzilidan (https) oching.', 'bad');
+                return;
+              }
+              var okd = await P.install();
+              if (okd) UI.toast('O’rnatildi.', 'ok');
+            });
+          }
+        }, 'Ilovani o’rnatish')
+      ]),
+      h('p', { class: 'small muted', style: 'margin:12px 0 0' },
+        'iPhone’da: Safari → "Ulashish" → "Bosh ekranga qo’shish". ' +
+        'Android’da: Chrome menyusi → "Ilovani o’rnatish". ' +
+        'Internet uzilsa, ochilgan ma’lumotlarni ko’rish mumkin, lekin to’lov va boshqa yozuvlar ' +
+        'saqlanmaydi — tizim buni ochiq aytadi.')
+    ]);
+  }
 
   /* ================= SOTUV VORONKALARI ================= */
   function intakeUrl(funnel) {
@@ -1524,12 +1804,16 @@
                 perms: Object.keys(perms).length ? perms : null
               });
               if (isNew) { rec.id = A.uid('usr'); rec.createdAt = A.nowStamp(); }
-              if (v.password) {
-                rec.salt = A.Seed.salt();
-                rec.hash = await A.Seed.mkHash(rec.login, v.password, rec.salt);
-                rec.isDefault = false;
+              if (D.mode === 'server') {
+                await D.saveUser(rec, v.password || '');
+              } else {
+                if (v.password) {
+                  rec.salt = A.Seed.salt();
+                  rec.hash = await A.Seed.mkHash(rec.login, v.password, rec.salt);
+                  rec.isDefault = false;
+                }
+                await D.save('users', rec);
               }
-              await D.save('users', rec);
               await A.Ops.audit(App.user, isNew ? 'Foydalanuvchi qo’shildi' : 'Foydalanuvchi o’zgartirildi',
                 rec.login, A.ROLES[rec.role]);
               c(); UI.toast('Saqlandi.', 'ok'); App.render();
