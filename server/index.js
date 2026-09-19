@@ -9,7 +9,7 @@ const crypto = require('crypto');
 try { require('dotenv').config(); } catch (e) { /* dotenv ixtiyoriy */ }
 
 const { createStore } = require('./store');
-const { A, writePermFor, readBlocked, safeUser, safeStaff, visibleData } = require('./shared');
+const { A, writePermFor, readBlocked, safeUser, safeStaff, visibleData, GENERAL_CHAT } = require('./shared');
 const backup = require('./backup');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
@@ -511,10 +511,16 @@ async function teacherScope(user) {
 
 /* ---------- Tegishlilik qoidalari (o'qish ham, yozish ham) ---------- */
 
-/** Umumiy suhbat hammaga ochiq; shaxsiy suhbat faqat ishtirokchilarga */
-function isChatMember(user, chat) {
+/**
+ * Suhbatga kirish huquqi.
+ * MUHIM: mijoz yuborgan "type" qiymatiga ishonilmaydi — aks holda shaxsiy suhbatni
+ * type: "group" qilib saqlab, uni hammaga ochiq qilib qo'yish mumkin edi.
+ * Umumiy suhbat faqat bitta — serverdagi GENERAL_CHAT identifikatori.
+ */
+function isChatMember(user, chat, id) {
+  const cid = id || (chat && chat.id);
+  if (cid === GENERAL_CHAT) return true;         // markazning umumiy suhbati
   if (!chat) return false;
-  if (chat.type === 'group') return true;
   return (chat.members || []).indexOf(user.id) >= 0;
 }
 /** Vazifani ijrochi, yaratgan odam va vazifa taqsimlovchi ko'radi */
@@ -560,38 +566,58 @@ async function guardWrite(user, p, method, next) {
     }
   }
 
-  /* --- Suhbat: faqat ishtirokchi; a'zolar ro'yxati va muallif himoyalangan --- */
+  /* --- Suhbat --- Xabar bu yo'l bilan yozilmaydi: /api/chat/send bor.
+     Bu yerda faqat suhbat yaratish va o'z "o'qildi" belgisini yangilash mumkin. */
   if (col === 'chats') {
+    const id = seg[1];
+    const admin = A.can(user, 'settings.edit');
     if (old) {
-      if (!isChatMember(user, old)) return no('Bu suhbat sizga tegishli emas.');
+      if (!isChatMember(user, old, id)) return no('Bu suhbat sizga tegishli emas.');
     } else if (method === 'PUT') {
-      if (!isChatMember(user, next) && !A.can(user, 'settings.edit')) {
+      if (id !== GENERAL_CHAT && !isChatMember(user, next, id) && !admin) {
         return no('O’zingiz ishtirok etmaydigan suhbat yarata olmaysiz.');
       }
     }
     if (method === 'DELETE') {
-      if (!A.can(user, 'settings.edit')) return no('Suhbatni o’chira olmaysiz.');
+      if (!admin) return no('Suhbatni o’chira olmaysiz.');
       return { data: null };
     }
-    const data = Object.assign({}, next);
+
+    const msgs = m => (Array.isArray(m) ? m : []);
+    const same = (a, b) => a.length === b.length &&
+      a.every((x, i) => x && b[i] && x.id === b[i].id && x.text === b[i].text && x.from === b[i].from);
+
     if (old) {
-      // a'zolar ro'yxatini oddiy foydalanuvchi o'zgartira olmaydi
-      if (!A.can(user, 'settings.edit') && old.type !== 'group') data.members = old.members || [];
-      const oldMsgs = Array.isArray(old.messages) ? old.messages : [];
-      const newMsgs = Array.isArray(data.messages) ? data.messages : [];
-      if (newMsgs.length < oldMsgs.length) return no('Eski xabarlarni o’chirib bo’lmaydi.');
-      for (let i = 0; i < oldMsgs.length; i++) {
-        const a = oldMsgs[i], b = newMsgs[i] || {};
-        if (a.id !== b.id || a.text !== b.text || a.from !== b.from) {
-          return no('Eski xabarlarni o’zgartirib bo’lmaydi.');
-        }
+      const data = Object.assign({}, old);
+      // type va members — oddiy foydalanuvchi o'zgartira olmaydi
+      if (admin) {
+        if (next.members) data.members = next.members;
+        if (next.title != null) data.title = next.title;
       }
-      // yangi xabarlarning muallifi va vaqti — serverdan
-      data.messages = oldMsgs.concat(newMsgs.slice(oldMsgs.length).map(m =>
-        Object.assign({}, m, { from: user.id, at: stamp() })));
-    } else {
-      data.messages = (Array.isArray(data.messages) ? data.messages : []).map(m =>
-        Object.assign({}, m, { from: user.id, at: stamp() }));
+      // xabarlar bu yo'l bilan umuman o'zgarmaydi
+      if (!same(msgs(next.messages), msgs(old.messages))) {
+        return { code: 400, error: 'Xabar yuborish uchun “chat/send” amali ishlatiladi.' };
+      }
+      // faqat O'ZINING "o'qildi" belgisi
+      data.readAt = Object.assign({}, old.readAt || {});
+      const mine = next.readAt && next.readAt[user.id];
+      if (mine) data.readAt[user.id] = mine;
+      return { data };
+    }
+
+    // yangi suhbat
+    const data = Object.assign({}, next);
+    data.id = id;
+    data.messages = [];                       // xabarlar faqat chat/send orqali
+    data.readAt = {};
+    if (id === GENERAL_CHAT) {
+      data.type = 'group';
+      data.members = [];
+    } else if (!admin) {
+      data.type = 'direct';
+      const mem = Array.isArray(next.members) ? next.members.filter(x => typeof x === 'string') : [];
+      if (mem.indexOf(user.id) < 0) mem.push(user.id);
+      data.members = mem;
     }
     return { data };
   }
@@ -639,7 +665,7 @@ async function filterReadDoc(user, p, data) {
   /* Suhbat va vazifalar: ID orqali ham bootstrap bilan bir xil qoida ishlasin */
   if (col === 'chats') {
     if (!A.can(user, 'nav.chat')) return false;
-    if (!isChatMember(user, data)) return false;
+    if (!isChatMember(user, data, seg[1])) return false;
     return data;
   }
   if (col === 'tasks') {
@@ -776,6 +802,74 @@ async function handleApi(req, res, url) {
 
   if (route === 'me') return send(res, 200, { user: safeUser(user) });
   if (route === 'bootstrap') return send(res, 200, await apiBootstrap(user));
+
+  /* ---------- Suhbat: xabar qo'shish faqat shu yerda ----------
+     Butun ro'yxat qayta yozilmaydi — faqat bitta yangi xabar qo'shiladi.
+     Shuning uchun ikki xodim bir vaqtda yozsa ham xabar yo'qolmaydi va
+     200 tadan oshgani uchun hech narsa "eskirgan" deb rad etilmaydi.        */
+  const CHAT_KEEP = Number(process.env.CHAT_KEEP || 500);   // bazada saqlanadigan oxirgi xabarlar
+  if (route === 'chat/send' && req.method === 'POST') {
+    if (!A.can(user, 'nav.chat') || !A.can(user, 'chat.use')) {
+      return send(res, 403, { error: 'Sizda suhbat ruxsati yo’q.' });
+    }
+    const body = await readBody(req);
+    const chatId = String(body.chatId || '');
+    const text = String(body.text == null ? '' : body.text).trim();
+    if (!/^[A-Za-z0-9_\-.:@+]+$/.test(chatId)) return send(res, 400, { error: 'Suhbat nomi noto’g’ri.' });
+    if (!text) return send(res, 400, { error: 'Xabar bo’sh.' });
+    if (text.length > 4000) return send(res, 400, { error: 'Xabar juda uzun (4000 belgidan ko’p).' });
+    const msgId = String(body.msgId || '').slice(0, 40) ||
+      ('msg_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex'));
+
+    try {
+      const result = await withLock('chat:' + chatId, async () => {
+        const doc = await store.get('chats/' + chatId);
+        if (!doc) throw Object.assign(new Error('Suhbat topilmadi.'), { code: 404 });
+        if (!isChatMember(user, doc, chatId)) {
+          throw Object.assign(new Error('Bu suhbat sizga tegishli emas.'), { code: 403 });
+        }
+        const list = Array.isArray(doc.messages) ? doc.messages.slice() : [];
+        const already = list.filter(m => m && m.id === msgId)[0];
+        if (already) return { message: already, duplicate: true, count: list.length };
+        const msg = { id: msgId, from: user.id, text, at: stamp() };   // muallif va vaqt — serverdan
+        list.push(msg);
+        const kept = list.length > CHAT_KEEP ? list.slice(-CHAT_KEEP) : list;
+        doc.messages = kept;
+        doc.updatedAt = msg.at;
+        doc.readAt = Object.assign({}, doc.readAt || {});
+        doc.readAt[user.id] = msg.at;
+        await store.set('chats/' + chatId, doc);
+        return { message: msg, duplicate: false, count: list.length };
+      });
+      return send(res, 200, Object.assign({ ok: true }, result));
+    } catch (e) {
+      return send(res, e.code || 400, { error: e.message || 'Xabar yuborilmadi.' });
+    }
+  }
+
+  /* Faqat o'zining "o'qildi" belgisini yangilaydi — boshqasining xabariga tegmaydi */
+  if (route === 'chat/read' && req.method === 'POST') {
+    if (!A.can(user, 'nav.chat')) return send(res, 403, { error: 'Ruxsat yo’q.' });
+    const body = await readBody(req);
+    const chatId = String(body.chatId || '');
+    if (!/^[A-Za-z0-9_\-.:@+]+$/.test(chatId)) return send(res, 400, { error: 'Suhbat nomi noto’g’ri.' });
+    try {
+      const at = await withLock('chat:' + chatId, async () => {
+        const doc = await store.get('chats/' + chatId);
+        if (!doc) throw Object.assign(new Error('Suhbat topilmadi.'), { code: 404 });
+        if (!isChatMember(user, doc, chatId)) {
+          throw Object.assign(new Error('Bu suhbat sizga tegishli emas.'), { code: 403 });
+        }
+        doc.readAt = Object.assign({}, doc.readAt || {});
+        doc.readAt[user.id] = stamp();
+        await store.set('chats/' + chatId, doc);
+        return doc.readAt[user.id];
+      });
+      return send(res, 200, { ok: true, at });
+    } catch (e) {
+      return send(res, e.code || 400, { error: e.message || 'Saqlanmadi.' });
+    }
+  }
 
   /* ---------- To'lov: faqat server yozadi ---------- */
   if (route === 'payment' && req.method === 'POST') {

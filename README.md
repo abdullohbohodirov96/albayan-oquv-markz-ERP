@@ -360,6 +360,7 @@ npm run test:backup      # zaxira va tiklash, vaqtinchalik bazada
 npm run test:menu        # telefondagi menyu: ikonka/qator o'lchami, 4 til, screenshot
 npm run test:perm        # tegishlilik: davomat, ish haqi tasdig'i, suhbat, vazifa
 npm run test:bot-idle    # bot bo'sh turganda baza so'rovlari sanaladi
+npm run test:sw          # eski brauzer profiliga yangi versiya yetib boradimi
 node tests/mobile-test.js       # 360 / 390 / 430 px
 node tests/export-test.js       # Excel va CSV fayli haqiqatan yuklanadimi
 node tests/ui-backup-test.js    # zaxira oynasi
@@ -370,6 +371,8 @@ node tests/i18n-audit.js        # tarjima qamrovi
 # Server ishlab turganda (alohida baza bilan):
 node tests/security-test.js  <port> <parol>    # maxfiy fayllar, huquqlar, pul
 node tests/perm-test.js      <port> <parol>    # yozuv kimga tegishli va holat o'zgarishi
+node tests/chat-test.js      <port> <parol>    # suhbat maxfiyligi va xabar yuborish
+node tests/chat-ui-test.js   <port> <parol>    # suhbat brauzer tomoni
 node tests/advance-test.js   <port> <parol>    # avansdan qoplash
 node tests/autoinvoice-test.js <port> <parol>  # avtomatik oylik hisoblar
 node tests/pwa-test.js       <port> <parol>    # o'rnatish, kesh, internetsiz holat
@@ -435,6 +438,30 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 ---
 
+## 12-b. Yangilanish (versiya va brauzer keshi)
+
+Ilova telefonga o'rnatilganda yoki brauzer keshida turganda, yangi kodni ko'rish
+uchun keshni qo'lda tozalash **shart emas**:
+
+- `node build.js` barcha `js/`, `css/`, `index.html` va `manifest` fayllari
+  mazmunidan versiya hisoblaydi va uni `sw.js` ichiga yozadi
+  (masalan `albayan-9e69710ad6b9`). Qo'lda o'zgartirish kerak emas — ilgari
+  shu unutilib qolar edi va yangilanish yetib bormasdi.
+- Brauzer yangi `sw.js` ni ko'radi → yangi versiyani fonda yuklaydi →
+  ilovada **"Yangi versiya tayyor · Yangilash"** chizig'i chiqadi.
+- O'zi qayta yuklamaydi. Saqlanmagan forma yoki ochiq oyna bo'lsa, avval
+  ogohlantiradi.
+- HTML ham, JS/CSS ham bitta versiya keshidan beriladi — yangi sahifa eski
+  kod bilan aralashmaydi.
+- Yangilangandan keyin faqat shu ilovaning eski keshlari o'chiriladi.
+- `/api/` javoblari hech qachon keshlanmaydi.
+
+Buni `npm run test:sw` tekshiradi: eski versiya ochiladi, kesh hosil bo'ladi,
+keyin yangi versiya chiqariladi va **o'sha brauzer profilida** taklif chiqishi,
+yangilangandan keyin menyu to'g'ri o'lchamda bo'lishi o'lchanadi.
+
+---
+
 ## 13. Xavfsizlik
 
 - `.env`, `data/` va zaxira fayllari `.gitignore` orqali chiqarib tashlangan.
@@ -457,6 +484,15 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
   bo'lmaydi, xabar muallifi serverdagi sessiyadan olinadi.
 - Vazifani ijrochi, yaratgan odam va `task.assign` huquqi borlar ko'radi;
   begona vazifani ID orqali o'qib yoki o'zgartirib bo'lmaydi.
+- Suhbat "umumiy"mi yoki shaxsiymi — buni mijoz yuborgan `type` emas, **server
+  tomonidagi identifikator** (`chat_umumiy`) hal qiladi. Shuning uchun shaxsiy
+  suhbatni "group" qilib saqlab, uni hammaga ochiq qilib bo'lmaydi. Mavjud
+  suhbatning `type` va `members` maydonlarini oddiy foydalanuvchi o'zgartira olmaydi.
+- Xabar faqat `POST /api/chat/send` orqali qo'shiladi: muallif va vaqt serverdagi
+  sessiyadan olinadi, qo'shish atomik (bir vaqtda yozilgan xabarlar yo'qolmaydi),
+  `msgId` takroriy so'rovda ikkinchi xabar yaratmaydi. Umumiy `PUT` bilan
+  xabarlarni o'chirish, tahrirlash yoki muallifini almashtirish mumkin emas;
+  "o'qildi" belgisi esa faqat o'zinikini yangilaydi.
 - Rad etilgan so'rov bazani o'zgartirmaydi (sinovlar shuni tekshiradi).
 
 ---

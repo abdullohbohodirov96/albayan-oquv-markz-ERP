@@ -38,6 +38,8 @@ const put = (path, data, cookie, extra) => req('/api/doc?path=' + encodeURICompo
   { method: 'PUT', cookie, body: Object.assign({ data }, extra || {}) });
 const get = (path, cookie) => req('/api/doc?path=' + encodeURIComponent(path), { cookie });
 const del = (path, cookie) => req('/api/doc?path=' + encodeURIComponent(path), { method: 'DELETE', cookie });
+const sendMsg = (chatId, text, cookie) =>
+  req('/api/chat/send', { method: 'POST', cookie, body: { chatId, text } });
 async function login(l, p) {
   const r = await req('/api/login', { method: 'POST', body: { login: l, password: p } });
   return r.status === 200 ? r.cookie : null;
@@ -185,9 +187,9 @@ async function dbDoc(path, dirCookie) {
   const CH = 'chats/pchat_dir_bux';
   await put(CH, {
     id: 'pchat_dir_bux', type: 'direct', members: ['usr_admin', 'usr_pbux'],
-    messages: [{ id: 'm1', from: 'usr_admin', text: 'Maxfiy gap', at: '2026-09-19 10:00' }],
-    readAt: {}, updatedAt: '2026-09-19 10:00'
+    messages: [], readAt: {}, updatedAt: '2026-09-19 10:00'
   }, dir);
+  await sendMsg('pchat_dir_bux', 'Maxfiy gap', dir);   // xabar faqat shu amal orqali
 
   const chatByBux = await get(CH, bux);
   ok('Ishtirokchi o’qiy oladi', chatByBux.status === 200 && !!chatByBux.json.data, chatByBux.text.slice(0, 120));
@@ -219,6 +221,8 @@ async function dbDoc(path, dirCookie) {
     messages: [], readAt: {}, updatedAt: '2026-09-19 12:00'
   }, ustoz);
   eq('Begona xabarlarni o’chira olmadi', wipeTry.status, 403);
+  const wipeBySelf = await sendMsg('pchat_dir_bux', 'Men kirdim', ustoz);
+  eq('Begona xabar yubora olmadi', wipeBySelf.status, 403);
   eq('Xabar joyida', ((await dbDoc(CH, dir)).messages || []).length, 1);
   const chatDel = await del(CH, ustoz);
   eq('Begona suhbatni o’chira olmadi', chatDel.status, 403);
@@ -228,13 +232,20 @@ async function dbDoc(path, dirCookie) {
   await del(MY, dir);
   const mk = await put(MY, {
     id: 'pchat_dir_ust', type: 'direct', members: ['usr_admin', 'usr_pust'],
-    messages: [{ id: 'ms1', from: 'usr_admin', text: 'Ustozdan salom', at: '2026-09-19 10:00' }],
-    readAt: {}, updatedAt: '2026-09-19 10:00'
+    messages: [], readAt: {}, updatedAt: '2026-09-19 10:00'
   }, ustoz);
   eq('O’z suhbatini yarata oldi', mk.status, 200);
+  // muallifni soxtalashtirishga urinib ko'ramiz — server o'zi qo'yadi
+  const sent = await req('/api/chat/send', {
+    method: 'POST', cookie: ustoz,
+    body: { chatId: 'pchat_dir_ust', text: 'Ustozdan salom', from: 'usr_admin', at: '2000-01-01 00:00' }
+  });
+  eq('Xabar yuborildi', sent.status, 200);
   const mine = await dbDoc(MY, dir);
   eq('Muallif almashtirildi', (mine.messages[0] || {}).from, 'usr_pust');
   eq('Matn saqlandi', (mine.messages[0] || {}).text, 'Ustozdan salom');
+  ok('Vaqt ham serverdan', (mine.messages[0] || {}).at !== '2000-01-01 00:00',
+    String((mine.messages[0] || {}).at));
 
   /* ================= 4. VAZIFALAR ================= */
   section('4. Begona vazifa ID orqali ochilmaydi');

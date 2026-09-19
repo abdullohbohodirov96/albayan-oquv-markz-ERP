@@ -71,12 +71,45 @@
       global.navigator.standalone === true;
   }
 
-  /* ---------- Yangilanish ---------- */
+  /* ---------- Yangilanish ----------
+     Avtomatik qayta yuklash YO'Q: faqat foydalanuvchi "Yangilash" ni bossa.
+     Saqlanmagan ma'lumot bo'lsa — avval so'raladi. */
+  var updating = false;
+
+  /** Ekranda saqlanmagan ma'lumot bormi (ochiq oyna yoki to'ldirilgan forma) */
+  function hasUnsaved() {
+    var backs = document.querySelectorAll('#modal-root .modal-back');
+    for (var i = 0; i < backs.length; i++) {
+      if (typeof backs[i].__isDirty === 'function' && backs[i].__isDirty()) return true;
+    }
+    var fields = document.querySelectorAll('#app input, #app textarea, #app select');
+    for (var j = 0; j < fields.length; j++) {
+      var f = fields[j];
+      if (f.type === 'hidden' || f.disabled || f.readOnly) continue;
+      if (f.id === 'global-search' || f.type === 'search') continue;
+      if ((f.value || '') !== (f.defaultValue || '')) return true;
+    }
+    return false;
+  }
+
+  function doUpdate(worker) {
+    updating = true;
+    if (worker) worker.postMessage({ type: 'SKIP_WAITING' });
+    // yangi ishchi boshqaruvni olganda qayta yuklaymiz
+    setTimeout(function () { if (updating) location.reload(); }, 1500);
+  }
+
   function offerUpdate(worker) {
     bar('Yangi versiya tayyor.', [{
       label: 'Yangilash', cls: 'primary', onClick: function () {
-        if (worker) worker.postMessage({ type: 'SKIP_WAITING' });
-        setTimeout(function () { location.reload(); }, 400);
+        if (!hasUnsaved()) return doUpdate(worker);
+        if (A && A.UI && A.UI.confirm) {
+          A.UI.confirm('Saqlanmagan ma’lumot bor',
+            'Yangilansa, kiritganlaringiz yo’qoladi. Baribir yangilansinmi?',
+            'Ha, yangilansin', true).then(function (yes) { if (yes) doUpdate(worker); });
+        } else {
+          doUpdate(worker);
+        }
       }
     }, {
       label: 'Keyinroq', onClick: hideBar
@@ -88,7 +121,7 @@
     if (location.protocol !== 'http:' && location.protocol !== 'https:') return null;
     try {
       reg = await navigator.serviceWorker.register('sw.js', { scope: './' });
-      if (reg.waiting) offerUpdate(reg.waiting);
+      if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
       reg.addEventListener('updatefound', function () {
         var w = reg.installing;
         if (!w) return;
@@ -96,7 +129,17 @@
           if (w.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(w);
         });
       });
-      // har soatda yangilanishni tekshirish
+      // yangi ishchi boshqaruvni oldi — faqat biz so'raganimizda qayta yuklaymiz
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (!updating) return;
+        updating = false;
+        location.reload();
+      });
+      // yangilanishni tekshirish: ochilganda, oynaga qaytganda va har soatda
+      try { reg.update(); } catch (e) { }
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) { try { reg.update(); } catch (e) { } }
+      });
       setInterval(function () { try { reg.update(); } catch (e) { } }, 60 * 60 * 1000);
       return reg;
     } catch (e) {
@@ -114,6 +157,11 @@
 
   A.PWA = {
     start: start, install: install, installed: installed,
+    version: function () {
+      var m = document.querySelector('meta[name="app-version"]');
+      return m ? m.getAttribute('content') : '';
+    },
+    hasUnsaved: hasUnsaved,
     canInstall: function () { return !!installEvent; },
     online: online, register: register
   };

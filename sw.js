@@ -1,12 +1,18 @@
-/* Albyana ERP — xizmat ishchisi (service worker).
+/* AlBayan Cairo ERP — xizmat ishchisi (service worker).
    Qoidalar:
    1. Faqat dastur qobig'i (HTML, CSS, JS, rasm) keshlanadi.
    2. /api/ so'rovlari HECH QACHON keshlanmaydi — maxfiy ma'lumot brauzerda qolmaydi.
    3. Internet yo'qligida to'lov yoki boshqa yozuv "muvaffaqiyatli" deb ko'rsatilmaydi:
-      so'rov xato qaytaradi va ilova buni ochiq aytadi.                      */
+      so'rov xato qaytaradi va ilova buni ochiq aytadi.
+   4. VERSION ni `node build.js` fayllar mazmunidan hisoblab yozadi — qo'lda
+      tahrirlash shart emas. Shu sabab har bir yangi chiqarilishda brauzer yangi
+      ishchini ko'radi va foydalanuvchiga "Yangilash" taklifi chiqadi.
+   5. HTML ham, JS/CSS ham BITTA versiya keshidan beriladi: yangi HTML eski JS
+      bilan aralashib qolmaydi. Yangi versiya faqat foydalanuvchi roziligidan
+      keyin (SKIP_WAITING) ishga tushadi.                                    */
 'use strict';
 
-const VERSION = 'albyana-v3';
+const VERSION = 'albayan-9e69710ad6b9';
 const SHELL = [
   './index.html',
   './css/app.css',
@@ -41,7 +47,10 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const names = await caches.keys();
-    await Promise.all(names.filter(n => n !== VERSION).map(n => caches.delete(n)));
+    // faqat SHU ilovaning eski keshlari o'chiriladi, boshqalarga tegilmaydi
+    await Promise.all(names
+      .filter(n => n !== VERSION && /^(albayan|albyana)-/.test(n))
+      .map(n => caches.delete(n)));
     await self.clients.claim();
   })());
 });
@@ -68,16 +77,20 @@ self.addEventListener('fetch', event => {
   const isHtml = req.mode === 'navigate' ||
     (req.headers.get('accept') || '').indexOf('text/html') >= 0;
 
+  // 3) HTML — shu versiya keshidan (JS/CSS bilan bir xil to'plamdan).
+  //    Yangi chiqarilish brauzerga sw.js orqali yetadi: u o'zgargani uchun
+  //    yangi ishchi o'rnatiladi va ilova "Yangilash" tugmasini ko'rsatadi.
   if (isHtml) {
     event.respondWith((async () => {
+      const cache = await caches.open(VERSION);
+      const cached = await cache.match('./index.html');
+      if (cached) return cached;
       try {
         const fresh = await fetch(req);
-        const cache = await caches.open(VERSION);
-        cache.put('./index.html', fresh.clone());
+        if (fresh && fresh.status === 200) cache.put('./index.html', fresh.clone());
         return fresh;
       } catch (e) {
-        const cached = await caches.match('./index.html');
-        return cached || new Response(
+        return new Response(
           '<h1>Internet yo’q</h1><p>Ilova ochilishi uchun bir marta internetga ulaning.</p>',
           { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
       }
@@ -85,14 +98,14 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4) Qolgan statik fayllar — avval kesh, keyin tarmoq
+  // 4) Qolgan statik fayllar — shu versiya keshidan, bo'lmasa tarmoqdan
   event.respondWith((async () => {
-    const cached = await caches.match(req);
+    const cache = await caches.open(VERSION);
+    const cached = await cache.match(req);
     if (cached) return cached;
     try {
       const fresh = await fetch(req);
       if (fresh && fresh.status === 200 && fresh.type === 'basic') {
-        const cache = await caches.open(VERSION);
         cache.put(req, fresh.clone());
       }
       return fresh;

@@ -330,6 +330,16 @@
       return Object.keys(m).map(function (k) { return m[k]; });
     },
     one: function (name, id) { return (this.col[name] || {})[id] || null; },
+    /** Faqat xotiradagi nusxani yangilash (serverga yozmaydi).
+        Server o'zi yozadigan yozuvlar uchun — masalan suhbat xabarlari. */
+    putLocal: function (name, obj) {
+      if (!obj || !obj.id) return obj;
+      this.col[name] = this.col[name] || {};
+      this.col[name][obj.id] = obj;
+      if (this.mode === 'local') this._saveLocal();
+      this._emit();
+      return obj;
+    },
     async save(name, obj, meta) {
       if (!obj.id) obj.id = uid(name.slice(0, 3));
       this.col[name][obj.id] = obj;

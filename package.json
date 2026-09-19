@@ -22,7 +22,9 @@
     "test:lang": "node tests/lang-switch-test.js",
     "test:menu": "node tests/menu-test.js",
     "test:perm": "node tests/perm-test.js",
-    "test:bot-idle": "node tests/bot-idle-test.js"
+    "test:bot-idle": "node tests/bot-idle-test.js",
+    "test:chat": "node tests/chat-test.js",
+    "test:sw": "node tests/sw-update-test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

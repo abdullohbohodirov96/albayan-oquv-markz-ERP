@@ -18,7 +18,7 @@
     return (chat.members || []).filter(function (m) { return m !== meId; })[0];
   }
   function chatTitle(chat, meId) {
-    if (chat.type === 'group') return chat.title || 'Umumiy suhbat';
+    if (chat.id === GENERAL) return chat.title || 'Umumiy suhbat';
     return chat.title || userName(otherMember(chat, meId));
   }
   function unreadCount(chat, meId) {
@@ -51,7 +51,7 @@
     });
 
     var myChats = D.all('chats').filter(function (c) {
-      return c.type === 'group' || (c.members || []).indexOf(me.id) >= 0;
+      return c.id === GENERAL || (c.members || []).indexOf(me.id) >= 0;
     });
     myChats = A.sortBy(myChats, 'updatedAt', 'desc');
 
@@ -122,25 +122,63 @@
     view.appendChild(h('section', { class: 'card' }, h('div', { class: 'chat' }, [list, pane])));
     setTimeout(function () { msgs.scrollTop = msgs.scrollHeight; }, 30);
 
-    // o'qilgan deb belgilash
+    // o'qilgan deb belgilash — faqat O'ZIMNING belgim, boshqaning xabariga tegilmaydi
     if (unreadCount(active, me.id) > 0) {
-      var upd = A.clone(active);
-      upd.readAt = upd.readAt || {};
-      upd.readAt[me.id] = A.nowStamp();
-      D.save('chats', upd);
+      if (D.mode === 'server') {
+        D.api('POST', 'api/chat/read', { chatId: active.id }).then(function (r) {
+          var cur = D.one('chats', active.id);
+          if (!cur || !r || !r.at) return;
+          var c = A.clone(cur);
+          c.readAt = c.readAt || {};
+          c.readAt[me.id] = r.at;
+          D.putLocal('chats', c);
+        }).catch(function () { });
+      } else {
+        var upd = A.clone(active);
+        upd.readAt = upd.readAt || {};
+        upd.readAt[me.id] = A.nowStamp();
+        D.save('chats', upd);
+      }
     }
   };
 
+  /**
+   * Xabar yuborish.
+   * Serverli rejimda butun ro'yxat qayta yozilmaydi — serverga faqat bitta yangi
+   * xabar yuboriladi (/api/chat/send). Shuning uchun ikki kishi bir vaqtda yozsa
+   * ham hech narsa yo'qolmaydi va 200 tadan oshgani uchun rad etilmaydi.
+   * Muallif va vaqtni server qo'yadi. msgId — bir so'rov ikki marta ketib qolsa,
+   * xabar ikkilanmasligi uchun.
+   */
   async function send(chat, me, text, App) {
-    var doc = A.clone(D.one('chats', chat.id) || chat);
-    doc.messages = (doc.messages || []).concat([{
-      id: A.uid('msg'), from: me.id, text: text, at: A.nowStamp()
-    }]);
-    if (doc.messages.length > MAX_MSG) doc.messages = doc.messages.slice(-MAX_MSG);
-    doc.updatedAt = A.nowStamp();
-    doc.readAt = doc.readAt || {};
-    doc.readAt[me.id] = doc.updatedAt;
-    await D.save('chats', doc);
+    var msgId = A.uid('msg');
+    if (D.mode === 'server') {
+      try {
+        var r = await D.api('POST', 'api/chat/send', { chatId: chat.id, text: text, msgId: msgId });
+        var doc = A.clone(D.one('chats', chat.id) || chat);
+        var list = (doc.messages || []).slice();
+        if (r && r.message && !list.some(function (m) { return m.id === r.message.id; })) {
+          list.push(r.message);
+        }
+        doc.messages = list;
+        doc.updatedAt = (r && r.message && r.message.at) || A.nowStamp();
+        doc.readAt = doc.readAt || {};
+        doc.readAt[me.id] = doc.updatedAt;
+        D.putLocal('chats', doc);          // ekranda darhol ko'rinsin
+      } catch (e) {
+        UI.toast(e.message || 'Xabar yuborilmadi.', 'bad');
+        return;
+      }
+    } else {
+      var d2 = A.clone(D.one('chats', chat.id) || chat);
+      d2.messages = (d2.messages || []).concat([{
+        id: msgId, from: me.id, text: text, at: A.nowStamp()
+      }]);
+      d2.updatedAt = A.nowStamp();
+      d2.readAt = d2.readAt || {};
+      d2.readAt[me.id] = d2.updatedAt;
+      await D.save('chats', d2);
+    }
     App.render();
   }
 

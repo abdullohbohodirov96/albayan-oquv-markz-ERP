@@ -36,5 +36,51 @@ ${headTags.join('\n')}
 <body>
 `;
 
-fs.writeFileSync(path.join(__dirname, 'index.html'), head + body.trimStart() + '\n</body>\n</html>\n');
+const html = head + body.trimStart() + '\n</body>\n</html>\n';
+fs.writeFileSync(path.join(__dirname, 'index.html'), html);
 console.log('index.html yangilandi (' + headTags.length + ' ta head tegi ko’chirildi).');
+
+/* ---------------- Versiya: fayllar mazmunidan hisoblanadi ----------------
+   sw.js dagi VERSION shu yerda yoziladi. Fayl o'zgarsa — versiya ham o'zgaradi,
+   brauzer yangi xizmat ishchisini ko'radi va foydalanuvchiga "Yangilash" chiqadi.
+   Qo'lda tahrirlash shart emas (ilgari unutilib qolardi).                    */
+const crypto = require('crypto');
+
+function filesOf(dir, ext) {
+  try {
+    return fs.readdirSync(path.join(__dirname, dir))
+      .filter(n => ext.some(e => n.endsWith(e)))
+      .sort()
+      .map(n => dir + '/' + n);
+  } catch (e) { return []; }
+}
+
+const VERSIONED = ['index.html', 'manifest.webmanifest']
+  .concat(filesOf('css', ['.css']))
+  .concat(filesOf('js', ['.js']));
+
+const hash = crypto.createHash('sha256');
+VERSIONED.forEach(rel => {
+  const f = path.join(__dirname, rel);
+  if (!fs.existsSync(f)) return;
+  hash.update(rel + '\0');
+  hash.update(fs.readFileSync(f));
+});
+const VERSION = 'albayan-' + hash.digest('hex').slice(0, 12);
+
+const swPath = path.join(__dirname, 'sw.js');
+let sw = fs.readFileSync(swPath, 'utf8');
+const before = sw;
+sw = sw.replace(/const VERSION = '[^']*';/, "const VERSION = '" + VERSION + "';");
+if (sw === before && !/const VERSION = '/.test(sw)) {
+  throw new Error('sw.js da VERSION qatori topilmadi.');
+}
+fs.writeFileSync(swPath, sw);
+
+// Ilova ham o'z versiyasini bilsin (kerak bo'lsa ko'rsatish uchun)
+const withVer = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8')
+  .replace(/<meta name="app-version"[^>]*>\n?/, '')
+  .replace('</head>', '<meta name="app-version" content="' + VERSION + '">\n</head>');
+fs.writeFileSync(path.join(__dirname, 'index.html'), withVer);
+
+console.log('Versiya: ' + VERSION + ' (' + VERSIONED.length + ' ta fayl mazmunidan).');

@@ -85,6 +85,9 @@ function safeStudent(s, user) {
   };
 }
 
+/* Markazning yagona umumiy suhbati — identifikator server tomonida belgilangan */
+const GENERAL_CHAT = 'chat_umumiy';
+
 /**
  * Foydalanuvchiga ko'rsatish mumkin bo'lgan ma'lumotlarni ajratish.
  * Serverda bajariladi — brauzerga ortiqchasi umuman yuborilmaydi.
@@ -149,7 +152,8 @@ function visibleData(user, all) {
         if (user.role === 'oqituvchi') return null;
         return d;
       case 'chats':
-        if (d.type === 'group') return d;
+        // "type" mijozdan keladi — unga ishonilmaydi. Umumiy suhbat faqat bitta.
+        if (d.id === GENERAL_CHAT) return d;
         return (d.members || []).indexOf(user.id) >= 0 ? d : null;
       case 'tasks':
         if (A.can(user, 'task.assign') || A.can(user, 'settings.edit')) return d;
@@ -188,4 +192,4 @@ function visibleData(user, all) {
   return { col, docs, settings };
 }
 
-module.exports = { A, writePermFor, readBlocked, safeUser, safeStaff, safeStudent, visibleData };
+module.exports = { A, writePermFor, readBlocked, safeUser, safeStaff, safeStudent, visibleData, GENERAL_CHAT };
