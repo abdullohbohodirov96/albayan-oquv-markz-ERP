@@ -1399,6 +1399,10 @@
       var s = D.settings || A.Seed.DEFAULT_SETTINGS;
       var f = UI.form([
         { name: 'centerName', label: 'Markaz nomi', required: true, value: s.centerName },
+      {
+        name: 'about', label: 'Sayt uchun qisqa matn', type: 'textarea', value: s.about,
+        help: 'Ochiq saytda markaz nomi tagida chiqadi.'
+      },
         { name: 'phone', label: 'Telefon', value: s.phone },
         { name: 'address', label: 'Manzil', value: s.address, full: true },
         { name: 'workStart', label: 'Ish boshlanishi', type: 'time', value: s.workStart },

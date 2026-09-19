@@ -239,6 +239,34 @@ ishga tushgach yuboriladi — hech biri yo'qolmaydi.
 
 ---
 
+## 4-a. Ochiq sayt va ariza formasi
+
+Manzilga kirgan odam birinchi **saytni** ko'radi (kirish talab qilinmaydi):
+markaz haqida ma'lumot, logotip, kurslar va narxlar, bog'lanish ma'lumotlari,
+pastda esa **ariza formasi**. Tepa o'ng burchakda — **"Kirish"** tugmasi
+(xodimlar uchun) va **"O'quvchi kabineti"**.
+
+Forma to'ldirilganda (ism, telefon, kurs, izoh):
+
+- murojaat **Murojaatlar** bo'limiga, asosiy voronkaning birinchi bosqichiga
+  tushadi (`source: Sayt`);
+- **direktorlarga ichki suhbatda** xabar boradi;
+- **Telegram botga** ham xabar ketadi — buning uchun Sozlamalar → Telegram bot
+  bo'limidagi **"Xabar keladigan Telegram chat raqami"** ni to'ldiring.
+  Raqamni bilish uchun botga **`/id`** deb yozing, bot raqamni aytadi.
+  Bir nechta bo'lsa vergul bilan yozing.
+- bir xil raqamdan 7 kun ichida kelgan takroriy ariza ikkinchi marta
+  yaratilmaydi; daqiqasiga 60 tadan ko'p so'rov qabul qilinmaydi.
+
+Sayt matnini o'zgartirish: **Sozlamalar → Markaz** bo'limida "Markaz nomi",
+"Sayt uchun qisqa matn", telefon, manzil va ish vaqti. Kurslar ro'yxati
+**Guruhlar → Kurslar** bo'limidan olinadi (faol kurslar ko'rinadi).
+
+Manzillar: `/` — sayt, `#kirish` — xodimlar kirishi, `#kabinet` — o'quvchi
+kabineti.
+
+---
+
 ## 4-b. O'quvchi kabineti — shaxsiy kod
 
 Har bir o'quvchiga **4 xonali shaxsiy kod** beriladi (masalan `4077`). Kod
@@ -427,6 +455,8 @@ node tests/chat-test.js      <port> <parol>    # suhbat maxfiyligi va xabar yubo
 node tests/chat-ui-test.js   <port> <parol>    # suhbat brauzer tomoni
 node tests/kabinet-test.js   <port> <parol>    # shaxsiy kod, ma'lumot va himoya
 node tests/kabinet-ui-test.js <port> <parol>   # kabinet sahifasi (brauzer)
+node tests/site-test.js      <port> <parol>    # ochiq sayt va ariza formasi
+node tests/ui-flow-test.js   <port> <parol>    # oyna yopilishi, hisob ochish, davomat
 node tests/advance-test.js   <port> <parol>    # avansdan qoplash
 node tests/autoinvoice-test.js <port> <parol>  # avtomatik oylik hisoblar
 node tests/pwa-test.js       <port> <parol>    # o'rnatish, kesh, internetsiz holat

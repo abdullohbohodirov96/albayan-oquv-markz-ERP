@@ -11,7 +11,7 @@
   var DEFAULT_SETTINGS = {
     centerName: 'AlBayan Cairo',
     address: '',
-    phone: '',
+    phone: '+998 (55) 588-20-28',
     workStart: '08:00',
     workEnd: '20:00',
     dueDay: 5,

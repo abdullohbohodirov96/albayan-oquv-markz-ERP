@@ -340,6 +340,28 @@ async function flushQueue(now) {
   return { sent, failed, skipped, nextAt };
 }
 
+/**
+ * Markaz xodimlariga xabar (masalan saytdagi formadan murojaat kelganda).
+ * Chat ID lar sozlamada: bot.staffChats — vergul bilan yoki ro'yxat ko'rinishida.
+ * Bot o'chiq bo'lsa yoki ID berilmagan bo'lsa — hech narsa qilinmaydi.
+ */
+async function notifyStaff(text) {
+  if (!store) return { queued: 0, off: true };
+  const s = (await store.get('meta/settings')) || {};
+  const raw = (s.bot && (s.bot.staffChats || s.bot.adminChatId)) || '';
+  const ids = (Array.isArray(raw) ? raw : String(raw).split(/[,\s]+/))
+    .map(x => String(x).trim()).filter(Boolean);
+  let queued = 0;
+  for (const chatId of ids) {
+    const r = await enqueue({
+      kind: 'elon', chatId, text,
+      dedupeKey: 'staff:' + chatId + ':' + hash(String(text))
+    }, 5 * 60 * 1000);
+    if (!r.skipped) queued++;
+  }
+  return { queued };
+}
+
 /* ---------------- To'lov muddati eslatmasi ---------------- */
 
 /**
@@ -508,6 +530,13 @@ async function onMessage(msg) {
   const conf = await botConf();
   let st = await getState(chatId);
   const student = await findStudentByChat(chatId);
+
+  // Chat ID ni bilish (sozlamalarga yozish uchun) — hamma uchun ochiq, zararsiz
+  if (text === '/id') {
+    return sendMessage(chatId, 'Shu suhbat raqami (chat ID):\n<code>' + chatId + '</code>\n\n' +
+      'Sozlamalar → Telegram bot bo’limiga shu raqamni yozsangiz, saytdagi ' +
+      'formadan kelgan murojaatlar shu yerga tushadi.');
+  }
 
   if (text === '/start') {
     if (student) {
@@ -681,7 +710,7 @@ function _test(ctx) {
     onMessage, flushQueue, enqueue, remindDebtors, notifyApproved,
     makeCode, normCode, studentByCode, botConf, getState, setState,
     balanceText, attendanceText, scheduleText, daysBetween, KINDS, MAX_TRIES,
-    handleLinkFlow, findStudentByChat,
+    handleLinkFlow, findStudentByChat, notifyStaff,
     wake,
     /** Sinovda navbatchini qo'lda ishga tushirish/to'xtatish */
     startQueue: function (opts) { running = true; queueLoop(opts); },
@@ -689,4 +718,4 @@ function _test(ctx) {
   };
 }
 
-module.exports = { start, stop, setTransport, makeCode, normCode, wake, _test };
+module.exports = { start, stop, setTransport, makeCode, normCode, wake, notifyStaff, _test };

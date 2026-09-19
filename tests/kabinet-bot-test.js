@@ -130,6 +130,26 @@ function stamp() { return new Date(Date.now() + 5 * 3600 * 1000).toISOString().s
   const stillOne = await store.get('students/s1');
   eq('Begona chat bog’lanmadi', (stillOne.telegram || {}).id, '555');
 
+  /* ---------- 4. Saytdagi formadan xabar ---------- */
+  section('4. Saytdagi formadan kelgan murojaat botga tushadi');
+  await store.set('meta/settings', Object.assign((await store.get('meta/settings')) || {}, {
+    bot: { welcome: 'Xush kelibsiz!', staffChats: '900900, 800800', notify: { elon: true } }
+  }));
+  const before = sent.length;
+  const res = await t.notifyStaff('Yangi murojaat (sayt)\nIsm: Mijoz\nTelefon: +998901234567');
+  eq('Ikkita chatga navbatga qo’yildi', res.queued, 2);
+  await t.flushQueue();
+  const fresh = sent.slice(before);
+  eq('Ikkita xabar ketdi', fresh.length, 2);
+  ok('Matnda ism va telefon bor', fresh.every(m => /Mijoz/.test(m.text) && /998901234567/.test(m.text)),
+    JSON.stringify(fresh.map(m => m.chatId)));
+  ok('Ikkala chatga ham', fresh.map(m => m.chatId).sort().join(',') === '800800,900900',
+    JSON.stringify(fresh.map(m => m.chatId)));
+
+  section('   /id buyrug’i chat raqamini aytadi');
+  await t.onMessage({ chat: { id: 4242 }, text: '/id', from: {} });
+  ok('Chat raqami qaytdi', /4242/.test(last()), last().slice(0, 120));
+
   await store.close();
   fs.rmSync(tmp, { recursive: true, force: true });
 

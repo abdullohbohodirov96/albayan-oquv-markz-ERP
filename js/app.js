@@ -441,6 +441,277 @@
   }
   A.renderKabinet = renderKabinet;
 
+
+  /* ================= SAYT (kirishsiz sahifa) =================
+     Markaz haqida ma'lumot, kurslar va pastda ariza formasi.
+     Forma to'ldirilsa — murojaat "Murojaatlar" bo'limiga tushadi va
+     administratorlarga (ichki suhbat + Telegram bot) xabar boradi. */
+  var PUBLIC = null;
+
+  async function publicInfo() {
+    if (PUBLIC) return PUBLIC;
+    try {
+      var r = await fetch('api/public', { credentials: 'same-origin' });
+      PUBLIC = r.ok ? await r.json() : {};
+    } catch (e) { PUBLIC = {}; }
+    return PUBLIC;
+  }
+
+  function renderLanding() {
+    document.getElementById('boot').hidden = true;
+    document.getElementById('app').hidden = true;
+    var wrap = document.getElementById('auth');
+    wrap.hidden = false;
+    wrap.className = 'site';
+    UI.clear(wrap);
+
+    var name = centerNameNow();
+
+    /* --- Tepa panel --- */
+    var top = h('header', { class: 'site-top' }, [
+      h('div', { class: 'site-brand' }, [
+        h('img', { class: 'logo', src: LOGO, alt: '' }),
+        h('div', {}, [
+          h('b', { id: 'site-name' }, name),
+          h('span', {}, 'Arab tili o’quv markazi')
+        ])
+      ]),
+      h('nav', { class: 'site-nav' }, [
+        h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('kurslar'); } }, 'Kurslar'),
+        h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('ariza'); } }, 'Ariza'),
+        h('button', {
+          class: 'btn sm', type: 'button',
+          onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
+        }, 'O’quvchi kabineti'),
+        h('button', {
+          class: 'btn sm primary', type: 'button',
+          onclick: function () { location.hash = 'kirish'; renderLogin(null); }
+        }, [UI.icon('key'), 'Kirish'])
+      ])
+    ]);
+
+    /* --- Hero --- */
+    var hero = h('section', { class: 'site-hero' }, [
+      h('div', { class: 'hero-text' }, [
+        h('span', { class: 'hero-eyebrow' }, 'Toshkentda arab tili'),
+        h('h1', {}, name),
+        h('p', { class: 'hero-lead', id: 'site-about' },
+          'Qur’on tili — boshlang’ichdan suhbatgacha. Kichik guruhlar, tajribali ' +
+          'ustozlar va har bir o’quvchi uchun aniq natija rejasi.'),
+        h('div', { class: 'hero-cta' }, [
+          h('button', { class: 'btn primary lg', type: 'button', onclick: function () { scrollTo('ariza'); } },
+            'Darsga yozilish'),
+          h('a', { class: 'btn lg', id: 'site-call', href: '#ariza' },
+            [UI.icon('phone'), h('span', { id: 'site-call-text' }, 'Bog’lanish')])
+        ]),
+        h('div', { class: 'hero-stats' }, [
+          stat('4', 'daraja: A1–B2'),
+          stat('8–12', 'kishilik guruh'),
+          stat('6', 'kun ish rejimi')
+        ])
+      ]),
+      h('div', { class: 'hero-art' }, [
+        h('div', { class: 'hero-logo' }, [
+          h('span', { class: 'hero-ar', 'aria-hidden': 'true' }, 'البيان'),
+          h('img', { src: LOGO, alt: '' })
+        ]),
+        h('div', { class: 'hero-badge' }, [h('b', {}, 'AlBayan'), h('span', {}, 'Cairo')])
+      ])
+    ]);
+
+    function stat(v, l) {
+      return h('div', { class: 'hero-stat' }, [h('b', {}, v), h('span', {}, l)]);
+    }
+
+    /* --- Nima beramiz --- */
+    var feats = h('section', { class: 'site-sec' }, [
+      h('h2', {}, 'Nega AlBayan Cairo?'),
+      h('div', { class: 'feat-grid' }, [
+        feat('users', 'Kichik guruhlar', 'Har bir o’quvchiga vaqt yetadi — 8–12 kishilik guruhlar.'),
+        feat('badge', 'Tajribali ustozlar', 'Arab tilini Misrda o’rgangan va yillar davomida dars bergan ustozlar.'),
+        feat('check', 'Davomat va natija', 'Har dars davomat olinadi, ota-ona va o’quvchi kabinetdan ko’rib turadi.'),
+        feat('wallet', 'Shaffof to’lov', 'Oylik hisob, qarz va to’lov tarixi — hammasi kabinetda ko’rinadi.'),
+        feat('calendar', 'Qulay jadval', 'Ertalabki va kechki guruhlar; ishlaydiganlar uchun ham vaqt bor.'),
+        feat('bot', 'Telegram bot', 'Davomat, to’lov va e’lonlar bot orqali darhol yetib boradi.')
+      ])
+    ]);
+    function feat(icon, t, d) {
+      return h('div', { class: 'feat' }, [
+        h('div', { class: 'feat-ico' }, UI.icon(icon)),
+        h('b', {}, t), h('p', {}, d)
+      ]);
+    }
+
+    /* --- Kurslar --- */
+    var courseBox = h('div', { class: 'course-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
+    var courses = h('section', { class: 'site-sec', id: 'kurslar' }, [
+      h('h2', {}, 'Kurslar'),
+      courseBox
+    ]);
+
+    /* --- Ariza formasi --- */
+    var fName = UI.field({ label: 'Ismingiz', id: 'lead-name', required: true, placeholder: 'Ism familiya' });
+    var fPhone = UI.field({
+      label: 'Telefon', id: 'lead-phone', required: true,
+      placeholder: '+998 90 123 45 67', inputmode: 'tel'
+    });
+    var fCourse = UI.field({ label: 'Qaysi kurs', id: 'lead-course', type: 'select', options: [{ value: '', label: 'Tanlanmagan' }] });
+    var fNote = UI.field({ label: 'Izoh (ixtiyoriy)', id: 'lead-note', type: 'textarea', placeholder: 'Qaysi vaqt qulay?' });
+    var err = h('div', { class: 'err-msg', hidden: true });
+    var okBox = h('div', { class: 'lead-ok', hidden: true });
+    var btn = h('button', { class: 'btn primary block lg', type: 'submit' }, 'Yuborish');
+
+    var form = h('form', {
+      class: 'lead-form', onsubmit: function (e) { e.preventDefault(); sendLead(); }
+    }, [fName.wrap, fPhone.wrap, fCourse.wrap, fNote.wrap, err, btn,
+    h('p', { class: 'small muted', style: 'margin:0;text-align:center' },
+      'Arizangizni olib, bir ish kuni ichida qo’ng’iroq qilamiz.')]);
+
+    var contact = h('div', { class: 'site-contact' }, [
+      h('h3', {}, 'Bog’lanish'),
+      h('div', { class: 'contact-row', id: 'site-phone-row', hidden: true }, [
+        UI.icon('phone'), h('a', { id: 'site-phone-link', href: '#' }, '')
+      ]),
+      h('div', { class: 'contact-row', id: 'site-addr-row', hidden: true }, [
+        UI.icon('home'), h('span', { id: 'site-addr' }, '')
+      ]),
+      h('div', { class: 'contact-row', id: 'site-time-row', hidden: true }, [
+        UI.icon('calendar'), h('span', { id: 'site-time' }, '')
+      ]),
+      h('div', { class: 'contact-row', id: 'site-tg-row', hidden: true }, [
+        UI.icon('bot'), h('a', { id: 'site-tg', href: '#', target: '_blank', rel: 'noopener' }, '')
+      ])
+    ]);
+
+    var apply = h('section', { class: 'site-sec', id: 'ariza' }, [
+      h('h2', {}, 'Darsga yozilish'),
+      h('p', { class: 'muted' }, 'Formani to’ldiring — administratorimiz bog’lanadi.'),
+      h('div', { class: 'apply-grid' }, [h('div', { class: 'apply-card' }, [form, okBox]), contact])
+    ]);
+
+    var foot = h('footer', { class: 'site-foot' }, [
+      h('div', { class: 'foot-brand' }, [
+        h('img', { class: 'logo-sm', src: LOGO, alt: '' }),
+        h('span', {}, '© ' + new Date().getFullYear() + ' ' + name)
+      ]),
+      h('div', { class: 'rowflex' }, [
+        h('button', {
+          class: 'btn sm ghost', type: 'button',
+          onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
+        }, 'O’quvchi kabineti'),
+        h('button', {
+          class: 'btn sm ghost', type: 'button',
+          onclick: function () { location.hash = 'kirish'; renderLogin(null); }
+        }, 'Xodimlar kirishi')
+      ])
+    ]);
+
+    wrap.appendChild(h('div', { class: 'site-wrap' }, [top, hero, feats, courses, apply, foot]));
+    A.I18N.apply(wrap);
+    fillPublic();
+
+    function scrollTo(id) {
+      var el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    async function fillPublic() {
+      var d = await publicInfo();
+      if (d.centerName) {
+        var el = document.getElementById('site-name');
+        if (el) el.textContent = d.centerName;
+      }
+      if (d.about) {
+        var ab = document.getElementById('site-about');
+        if (ab) ab.textContent = d.about;
+      }
+      if (d.phone) {
+        show('site-phone-row');
+        var tel = 'tel:' + String(d.phone).replace(/[^+0-9]/g, '');
+        var pl = document.getElementById('site-phone-link');
+        pl.textContent = d.phone; pl.href = tel;
+        var call = document.getElementById('site-call');
+        if (call) {
+          call.href = tel;
+          var ct = document.getElementById('site-call-text');
+          if (ct) ct.textContent = d.phone;
+        }
+      }
+      if (d.address) { show('site-addr-row'); document.getElementById('site-addr').textContent = d.address; }
+      if (d.workStart && d.workEnd) {
+        show('site-time-row');
+        document.getElementById('site-time').textContent =
+          'Dushanba–Shanba · ' + d.workStart + '–' + d.workEnd;
+      }
+      if (d.telegram) {
+        show('site-tg-row');
+        var tg = document.getElementById('site-tg');
+        var u = String(d.telegram).replace(/^@/, '');
+        tg.textContent = '@' + u; tg.href = 'https://t.me/' + u;
+      }
+      UI.clear(courseBox);
+      var list = d.courses || [];
+      if (!list.length) {
+        courseBox.appendChild(h('p', { class: 'muted' },
+          'Kurslar ro’yxati tez orada. Ariza qoldiring — o’zimiz bog’lanamiz.'));
+      } else {
+        list.forEach(function (c) {
+          courseBox.appendChild(h('div', { class: 'course' }, [
+            h('b', {}, c.name),
+            c.note ? h('p', {}, c.note) : null,
+            c.fee ? h('div', { class: 'course-fee' }, [h('b', {}, A.som(c.fee)), h('span', {}, 'so’m / oy')]) : null,
+            h('button', {
+              class: 'btn sm', type: 'button',
+              onclick: function () { fCourse.input.value = c.id; scrollTo('ariza'); fName.input.focus(); }
+            }, 'Yozilish')
+          ]));
+        });
+        UI.clear(fCourse.input);
+        [{ value: '', label: 'Tanlanmagan' }].concat(list.map(function (c) {
+          return { value: c.id, label: c.name };
+        })).forEach(function (o) {
+          fCourse.input.appendChild(h('option', { value: o.value }, o.label));
+        });
+      }
+      A.I18N.apply(wrap);
+    }
+    function show(id) { var el = document.getElementById(id); if (el) el.hidden = false; }
+
+    function sendLead() {
+      err.hidden = true;
+      var name2 = fName.input.value.trim();
+      var phone = fPhone.input.value.trim();
+      if (name2.length < 2) { err.hidden = false; err.textContent = 'Ismingizni yozing.'; return; }
+      if (A.phoneDigits(phone).length < 9) { err.hidden = false; err.textContent = 'Telefon raqamni to’liq yozing.'; return; }
+      UI.busy(btn, async function () {
+        try {
+          var r = await D.api('POST', 'api/lead', {
+            name: name2, phone: phone,
+            courseId: fCourse.input.value, note: fNote.input.value.trim()
+          });
+          form.hidden = true;
+          okBox.hidden = false;
+          UI.clear(okBox);
+          okBox.appendChild(h('div', { class: 'lead-ok-in' }, [
+            h('div', { class: 'ok-ico' }, UI.icon('check')),
+            h('b', {}, r && r.duplicate ? 'Arizangiz allaqachon qabul qilingan' : 'Arizangiz qabul qilindi!'),
+            h('p', {}, 'Administratorimiz tez orada shu raqamga qo’ng’iroq qiladi.'),
+            h('button', {
+              class: 'btn sm', type: 'button', onclick: function () {
+                form.hidden = false; okBox.hidden = true;
+                fName.input.value = ''; fPhone.input.value = ''; fNote.input.value = '';
+              }
+            }, 'Yana ariza qoldirish')
+          ]));
+        } catch (ex) {
+          err.hidden = false;
+          err.textContent = ex.message || 'Yuborilmadi. Birozdan keyin urinib ko’ring.';
+        }
+      });
+    }
+  }
+  A.renderLanding = renderLanding;
+
   /* ---------- Til tanlash ---------- */
   function renderLangPick() {
     var box = document.getElementById('lang-pick');
@@ -660,11 +931,10 @@
             return;
           } catch (e) { console.error(e); }
         }
-        if (String(location.hash || '').replace('#', '').split('?')[0] === 'kabinet') {
-          renderKabinet(kabinetCodeFromHash());
-          return;
-        }
-        renderLogin(null);
+        var where = String(location.hash || '').replace('#', '').split('?')[0];
+        if (where === 'kabinet') { renderKabinet(kabinetCodeFromHash()); return; }
+        if (where === 'kirish' || where === 'login') { renderLogin(null); return; }
+        renderLanding();                 // saytning ochiq sahifasi
         return;
       }
 

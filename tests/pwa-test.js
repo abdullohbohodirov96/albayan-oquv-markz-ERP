@@ -41,7 +41,7 @@ function section(t) { out.push('\n' + t); }
   page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi: ' + e.message); });
 
   section('2. Xizmat ishchisi ro’yxatdan o’tadi');
-  await page.goto(BASE + '/');
+  await page.goto(BASE + '/#kirish');
   await page.waitForSelector('#login-user', { timeout: 20000 });
   await page.waitForTimeout(1500);
   const swState = await page.evaluate(async () => {

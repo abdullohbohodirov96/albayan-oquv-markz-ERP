@@ -13,6 +13,28 @@
 
   /* uz -> [ru, en, ar] */
   var T = {
+    /* --- Ochiq sayt --- */
+    'Sayt uchun qisqa matn': ['Короткий текст для сайта', 'Short text for the website', 'نص قصير للموقع'],
+    'Ochiq saytda markaz nomi tagida chiqadi.': [
+      'Появится на сайте под названием центра.',
+      'Shown on the public website under the centre name.',
+      'يظهر في الموقع تحت اسم المركز.'],
+    'Xabar keladigan Telegram chat raqami': [
+      'Telegram-чат для уведомлений', 'Telegram chat for notifications', 'محادثة تيليجرام للإشعارات'],
+    'Arab tili o’quv markazi': ['Центр арабского языка', 'Arabic language centre', 'مركز تعليم اللغة العربية'],
+    'Kurslar': ['Курсы', 'Courses', 'الدورات'],
+    'Ariza': ['Заявка', 'Apply', 'طلب'],
+    'Kirish': ['Вход', 'Log in', 'تسجيل الدخول'],
+    'Darsga yozilish': ['Записаться на урок', 'Enrol for a lesson', 'التسجيل في الدرس'],
+    'Bog’lanish': ['Связаться', 'Contact', 'تواصل معنا'],
+    'Yuborish': ['Отправить', 'Send', 'إرسال'],
+    'Ismingiz': ['Ваше имя', 'Your name', 'اسمك'],
+    'Qaysi kurs': ['Какой курс', 'Which course', 'أي دورة'],
+    'Izoh (ixtiyoriy)': ['Комментарий (необязательно)', 'Comment (optional)', 'ملاحظة (اختياري)'],
+    'Nega AlBayan Cairo?': ['Почему AlBayan Cairo?', 'Why AlBayan Cairo?', 'لماذا البيان القاهرة؟'],
+    'Tanlanmagan': ['Не выбрано', 'Not selected', 'غير محدد'],
+    'Yozilish': ['Записаться', 'Enrol', 'سجّل'],
+
     /* --- O'quvchi kabineti (shaxsiy kod) --- */
     'O’quvchi kabineti': ['Кабинет ученика', 'Student cabinet', 'صفحة الطالب'],
     'O’quvchimisiz?': ['Вы ученик?', 'Are you a student?', 'هل أنت طالب؟'],

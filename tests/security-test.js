@@ -369,8 +369,15 @@ async function login(l, p) {
   ok('Kirishsiz ham javob beradi', pub.status === 200, String(pub.status));
   ok('Markaz nomi bor', !!(pub.json && pub.json.centerName), pub.text);
   const pubKeys = Object.keys(pub.json || {});
-  ok('Faqat markaz nomi beriladi', pubKeys.length === 1 && pubKeys[0] === 'centerName',
+  const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
+    'telegram', 'instagram', 'courses'];
+  ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
+  ok('O’quvchi yoki xodim ma’lumoti yo’q',
+    !/students|staff|users|leads|payments|invoices/i.test(pub.text), pub.text.slice(0, 160));
+  ok('Kurslarda faqat nom va narx', (pub.json.courses || []).every(c =>
+    Object.keys(c).every(k => ['id', 'name', 'fee', 'note'].indexOf(k) >= 0)),
+    JSON.stringify((pub.json.courses || [])[0] || {}));
   ok('Maxfiy so’z chiqmadi',
     !/parol|token|hash|salt|DATABASE|secret/i.test(pub.text), pub.text.slice(0, 120));
   const pubPost = await req('/api/public', { method: 'POST', body: { centerName: 'Boshqa' } });

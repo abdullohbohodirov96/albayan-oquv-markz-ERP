@@ -67,7 +67,7 @@ const ID = n => R + '_' + n;
 
   /* ---------- 1. Kirish sahifasidan kabinetga ---------- */
   section('1. Kirish sahifasida "O’quvchimisiz?" havolasi');
-  await page.goto(BASE);
+  await page.goto(BASE + '#kirish');
   await page.waitForSelector('#login-user', { timeout: 20000 });
   const hasLink = await page.evaluate(() =>
     !!Array.from(document.querySelectorAll('button')).find(b => /Shaxsiy kod/.test(b.textContent)));

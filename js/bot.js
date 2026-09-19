@@ -25,6 +25,7 @@
     return {
       username: s.username || '',
       welcome: s.welcome || 'Assalomu alaykum! AlBayan Cairo o’quv markazi botiga xush kelibsiz.',
+      staffChats: s.staffChats || '',
       notify: {
         davomat: on('davomat', s.notifyAttendance),
         tolov: on('tolov', s.notifyPayment),
@@ -383,6 +384,12 @@
         },
         { name: 'welcome', label: 'Salomlashuv matni', type: 'textarea', value: conf.welcome, full: true },
         {
+          name: 'staffChats', label: 'Xabar keladigan Telegram chat raqami',
+          value: conf.staffChats || '',
+          help: 'Saytdagi formadan kelgan murojaatlar shu suhbatga yuboriladi. ' +
+            'Raqamni bilish uchun botga /id deb yozing. Bir nechta bo’lsa vergul bilan.'
+        },
+        {
           name: 'remindDays', label: 'Muddatdan necha kun o’tsa eslatilsin', type: 'number',
           value: conf.remindDays, help: 'Masalan 3 — muddat o’tgandan 3 kun keyin'
         },
@@ -431,6 +438,7 @@
                 bot: {
                   username: String(v.username || '').replace('@', ''),
                   welcome: v.welcome,
+                  staffChats: String(v.staffChats || '').trim(),
                   notify: notify,
                   remindDays: Math.max(0, Number(v.remindDays) || 3),
                   remindEvery: Math.max(1, Number(v.remindEvery) || 7),

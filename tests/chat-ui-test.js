@@ -30,7 +30,7 @@ function section(t) { out.push('\n' + t); }
     if (u.indexOf('/api/') >= 0) calls.push(r.method() + ' ' + u.replace(BASE, ''));
   });
 
-  await page.goto(BASE);
+  await page.goto(BASE + '#kirish');
   await page.waitForSelector('#login-user', { timeout: 20000 });
   await page.fill('#login-user', 'admin');
   await page.fill('#login-pass', PASS);

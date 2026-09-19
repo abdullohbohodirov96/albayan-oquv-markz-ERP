@@ -203,10 +203,15 @@ async function migrateMonthDocs() {
 async function ensureSeed() {
   await migrateMonthDocs();
   const settings = await store.get('meta/settings');
+  // Eski bazada telefon bo'sh bo'lsa — markaz raqamini qo'yamiz (sayt uchun kerak)
+  if (settings && !settings.phone) {
+    settings.phone = '+998 (55) 588-20-28';
+    await store.set('meta/settings', settings);
+  }
   if (!settings) {
     await store.set('meta/settings', {
       centerName: process.env.APP_NAME || 'AlBayan Cairo',
-      address: '', phone: '', workStart: '08:00', workEnd: '20:00', dueDay: 5,
+      address: '', phone: '+998 (55) 588-20-28', workStart: '08:00', workEnd: '20:00', dueDay: 5,
       expenseCategories: ['Ijara', 'Kommunal', 'Reklama', 'Jihozlar', 'Xo’jalik', 'Ish haqi', 'Boshqa'],
       bot: {
         username: process.env.TELEGRAM_BOT_USERNAME || '',
@@ -797,12 +802,76 @@ async function handleApi(req, res, url) {
   /* Kirish sahifasi uchun ochiq ma'lumot: faqat markaz nomi.
      (U kirish sahifasida baribir ko'rinadi — boshqa hech narsa berilmaydi.) */
   if (route === 'public' && req.method === 'GET') {
-    let name = process.env.APP_NAME || 'AlBayan Cairo';
+    const out = { centerName: process.env.APP_NAME || 'AlBayan Cairo' };
     try {
-      const s = await store.get('meta/settings');
-      if (s && s.centerName) name = String(s.centerName);
-    } catch (e) { /* baza javob bermasa standart nom */ }
-    return send(res, 200, { centerName: name });
+      const s = (await store.get('meta/settings')) || {};
+      if (s.centerName) out.centerName = String(s.centerName);
+      out.phone = String(s.phone || '');
+      out.address = String(s.address || '');
+      out.workStart = String(s.workStart || '');
+      out.workEnd = String(s.workEnd || '');
+      out.about = String(s.about || '');
+      out.telegram = String((s.bot && s.bot.username) || '');
+      out.instagram = String(s.instagram || '');
+      // Kurslar: faqat nomi va (ruxsat berilgan bo'lsa) oylik narxi
+      const courses = (await store.list('courses/'))
+        .filter(r => r.path.split('/').length === 2)
+        .map(r => r.data).filter(c => c && c.active !== false);
+      out.courses = courses.slice(0, 12).map(c => ({
+        id: c.id, name: c.name,
+        fee: (c.publicPrice === false || s.publicPrices === false) ? null : Math.round(c.monthlyFee || 0),
+        note: String(c.note || '').slice(0, 120)
+      }));
+    } catch (e) { /* baza javob bermasa standart ma'lumot */ }
+    return send(res, 200, out);
+  }
+
+  /* ---------- Saytdagi forma: yangi murojaat ----------
+     Kirishsiz ishlaydi. Har bir so'rov leads bo'limiga tushadi va
+     administratorlarga xabar beriladi (ichki suhbat + Telegram bot).      */
+  if (route === 'lead' && req.method === 'POST') {
+    if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov. Birozdan keyin urinib ko’ring.' });
+    const body = await readBody(req);
+    const name = String(body.name || '').trim().slice(0, 80);
+    const phone = A.normPhone(String(body.phone || ''));
+    const note = String(body.note || '').trim().slice(0, 500);
+    const courseId = String(body.courseId || '').slice(0, 60);
+    if (name.length < 2) return send(res, 400, { error: 'Ismingizni yozing.' });
+    if (A.phoneDigits(phone).length < 9) return send(res, 400, { error: 'Telefon raqamni to’liq yozing.' });
+
+    const funnels = (await store.list('funnels/')).map(x => x.data).filter(Boolean);
+    const funnel = funnels.filter(f => f.isDefault)[0] || funnels[0];
+    if (!funnel) return send(res, 503, { error: 'Markaz hali sozlanmagan.' });
+
+    const leads = (await store.list('leads/')).map(x => x.data).filter(Boolean);
+    const digits = A.phoneDigits(phone);
+    const dup = leads.filter(l => A.phoneDigits(l.phone) === digits &&
+      Date.parse((l.createdAt || '').replace(' ', 'T') + ':00') > Date.now() - 7 * 864e5)[0];
+    if (dup) return send(res, 200, { ok: true, duplicate: true });
+
+    const course = courseId ? await store.get('courses/' + courseId) : null;
+    const stages = A.funnelStages(funnel);
+    const id = 'led_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+    await store.set('leads/' + id, {
+      id, funnelId: funnel.id, name, phone,
+      courseId: course ? course.id : '',
+      source: 'Sayt', ownerStaffId: '',
+      stage: stages[0] ? stages[0].id : 'yangi',
+      note: note,
+      nextContact: A.today(),
+      createdAt: stamp(), viaSite: true
+    });
+    await writeAudit(null, 'Saytdan murojaat', name, phone + (course ? ' · ' + course.name : ''));
+
+    const text = 'Yangi murojaat (sayt)\n' +
+      'Ism: ' + name + '\n' +
+      'Telefon: ' + phone +
+      (course ? '\nKurs: ' + course.name : '') +
+      (note ? '\nIzoh: ' + note : '');
+    notifyDirectors(text).catch(() => { });
+    try { require('./bot').notifyStaff(text); } catch (e) { /* bot o'chiq bo'lsa muhim emas */ }
+
+    return send(res, 200, { ok: true, id });
   }
 
   /* --- Tashqi murojaat qabul qilish (Instagram, target reklama, sayt formasi) --- */

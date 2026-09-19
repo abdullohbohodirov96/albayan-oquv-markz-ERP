@@ -250,6 +250,125 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .empty h3{font-size:16px;color:var(--ink);margin-bottom:6px}
 .empty p{margin:0 auto 14px;max-width:44ch;font-size:13.5px}
 
+/* ================= SAYT (ochiq sahifa) ================= */
+.site{min-height:100%;background:var(--bg);color:var(--ink);overflow-x:hidden;
+  background-image:radial-gradient(900px 420px at 80% -10%, color-mix(in srgb,var(--brand) 16%,transparent), transparent 70%)}
+.site-wrap{max-width:1100px;margin:0 auto;padding:0 16px 44px}
+
+.site-top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:12px 0;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px)}
+.site-brand{display:flex;align-items:center;gap:11px;flex:1;min-width:0}
+.site-brand .logo{width:42px;height:42px;border-radius:12px;box-shadow:var(--shadow)}
+.site-brand b{display:block;font-family:var(--display);font-size:16.5px;line-height:1.15;letter-spacing:-.01em}
+.site-brand span{font-size:11.5px;color:var(--muted)}
+.site-nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn.ghost{border-color:transparent;background:none}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn.lg{padding:12px 20px;font-size:15px;border-radius:12px}
+
+/* --- Hero --- */
+.site-hero{display:grid;grid-template-columns:1.15fr .85fr;gap:30px;align-items:center;padding:30px 0 40px}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--brand);background:var(--brand-soft);
+  border:1px solid color-mix(in srgb,var(--brand) 22%,transparent);
+  border-radius:999px;padding:5px 13px;margin-bottom:14px}
+.site-hero h1{font-size:clamp(32px,6.4vw,56px);line-height:1.03;margin-bottom:14px;
+  background:linear-gradient(120deg,var(--ink),color-mix(in srgb,var(--brand) 75%,var(--ink)));
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-lead{font-size:16.5px;color:var(--ink-2);max-width:54ch;margin:0 0 22px;line-height:1.6}
+.hero-cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+.hero-cta .btn.lg .ico{width:18px;height:18px}
+.hero-stats{display:flex;gap:14px;flex-wrap:wrap}
+.hero-stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:10px 14px;min-width:104px;box-shadow:var(--shadow)}
+.hero-stat b{display:block;font-family:var(--display);font-size:22px;line-height:1.1;color:var(--brand)}
+.hero-stat span{font-size:11.5px;color:var(--muted)}
+
+.hero-art{position:relative;display:grid;place-items:center;min-height:240px}
+.hero-logo{position:relative;display:grid;place-items:center;
+  width:min(280px,72vw);aspect-ratio:1;border-radius:30px;
+  background:linear-gradient(150deg,var(--surface),var(--surface-2));
+  border:1px solid var(--line);box-shadow:var(--shadow-lg);overflow:hidden}
+.hero-logo::before{content:'';position:absolute;inset:-30% -30% auto auto;width:70%;aspect-ratio:1;
+  background:radial-gradient(circle,color-mix(in srgb,var(--brand) 30%,transparent),transparent 65%)}
+.hero-logo img{position:relative;width:52%;height:auto;border-radius:22px;box-shadow:var(--shadow)}
+.hero-ar{position:absolute;bottom:10px;left:0;right:0;text-align:center;
+  font-size:clamp(34px,9vw,52px);line-height:1;color:var(--brand);opacity:.12;
+  font-family:'Times New Roman',serif;pointer-events:none;user-select:none}
+.hero-badge{position:absolute;right:-6px;bottom:14px;background:var(--surface);border:1px solid var(--line);
+  border-radius:13px;padding:9px 13px;box-shadow:var(--shadow-lg);text-align:center}
+.hero-badge b{display:block;font-family:var(--display);font-size:14px}
+.hero-badge span{font-size:10.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+
+/* --- Bo'limlar --- */
+.site-sec{padding:30px 0}
+.site-sec h2{font-size:clamp(21px,3.6vw,30px);margin-bottom:6px;letter-spacing:-.02em}
+.site-sec>.muted{margin:0 0 18px}
+
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
+.feat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;
+  transition:transform .14s,box-shadow .14s,border-color .14s}
+.feat:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--line-strong)}
+.feat-ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+  background:var(--brand-soft);color:var(--brand);margin-bottom:12px}
+.feat-ico .ico{width:20px;height:20px}
+.feat b{display:block;margin-bottom:5px;font-size:15.5px}
+.feat p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.55}
+
+.course-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.course{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;
+  display:flex;flex-direction:column;gap:9px;position:relative;overflow:hidden;
+  transition:transform .14s,box-shadow .14s}
+.course::after{content:'';position:absolute;inset:0 auto 0 0;width:3px;background:var(--brand);opacity:.9}
+.course:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.course b{font-size:16.5px}
+.course p{margin:0;font-size:13px;color:var(--muted)}
+.course-fee{display:flex;align-items:baseline;gap:6px;margin-top:auto}
+.course-fee b{font-family:var(--display);font-size:21px;color:var(--brand)}
+.course-fee span{font-size:12px;color:var(--muted)}
+.course .btn{align-self:flex-start}
+
+/* --- Ariza --- */
+.apply-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}
+.apply-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px;
+  box-shadow:var(--shadow-lg)}
+.lead-form{display:flex;flex-direction:column;gap:13px}
+.lead-ok-in{text-align:center;display:flex;flex-direction:column;align-items:center;gap:9px;padding:14px 0}
+.lead-ok-in .ok-ico{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+  background:var(--ok-soft);color:var(--ok)}
+.lead-ok-in .ok-ico .ico{width:26px;height:26px}
+.lead-ok-in b{font-size:17.5px}
+.lead-ok-in p{margin:0;color:var(--muted);font-size:13.5px}
+.site-contact{background:var(--surface-2);border:1px solid var(--line);border-radius:18px;padding:20px}
+.site-contact h3{font-size:15px;margin-bottom:12px;letter-spacing:.02em}
+.contact-row{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;
+  border-bottom:1px dashed var(--line)}
+.contact-row:last-child{border-bottom:0}
+.contact-row .ico{width:18px;height:18px;flex:none;color:var(--brand)}
+.contact-row a{font-weight:600}
+
+.site-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  border-top:1px solid var(--line);padding-top:18px;margin-top:12px;color:var(--muted);font-size:13px}
+.foot-brand{display:flex;align-items:center;gap:9px}
+
+@media (max-width:900px){
+  .site-hero{grid-template-columns:1fr;gap:20px;padding:18px 0 26px}
+  .hero-art{order:-1;min-height:0}
+  .hero-logo{width:min(210px,58vw);border-radius:26px}
+  .hero-badge{right:2px;bottom:8px;padding:7px 11px}
+  .feat-grid,.course-grid{grid-template-columns:1fr 1fr}
+  .apply-grid{grid-template-columns:1fr}
+}
+@media (max-width:560px){
+  .feat-grid,.course-grid{grid-template-columns:1fr}
+  .site-nav{width:100%}
+  .site-nav .btn{flex:1 1 auto;justify-content:center}
+  .hero-stats{gap:10px}
+  .hero-stat{flex:1 1 30%;min-width:92px;padding:9px 11px}
+  .site-hero h1{font-size:clamp(28px,8.6vw,40px)}
+}
+
 /* ---------- O'qituvchi uchun davomat kartasi ---------- */
 .att-list{display:flex;flex-direction:column;gap:8px}
 .att-row{display:flex;align-items:center;gap:10px;width:100%;text-align:start;cursor:pointer;

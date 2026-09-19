@@ -51,10 +51,10 @@ async function typeIn(page, sel, val) {
   fs.mkdirSync(SHOTS, { recursive: true });
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const page = await ctx.newPage();
+  let page = await ctx.newPage();
   page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi: ' + e.message); });
 
-  await page.goto(BASE);
+  await page.goto(BASE + '#kirish');
   await page.waitForSelector('#login-user', { timeout: 20000 });
   await page.fill('#login-user', 'admin');
   await page.fill('#login-pass', PASS);
@@ -248,14 +248,19 @@ async function typeIn(page, sel, val) {
   await page.waitForTimeout(800);
 
   // chiqib, o'qituvchi bo'lib kiramiz
-  await page.evaluate(() => window.A.Data.serverLogout());
-  await page.goto(BASE);
-  await page.waitForSelector('#login-user', { timeout: 20000 });
-  await page.fill('#login-user', LOGIN);
-  await page.fill('#login-pass', PW);
-  await page.click('button[type=submit]');
-  await page.waitForSelector('#app:not([hidden])', { timeout: 20000 });
-  await page.waitForTimeout(1000);
+  // o'qituvchi uchun toza oyna (direktor sessiyasi aralashmasin)
+  const tctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const tpage = await tctx.newPage();
+  tpage.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi (ustoz): ' + e.message); });
+  await tpage.goto(BASE + '#kirish');
+  await tpage.waitForSelector('#login-user', { state: 'visible', timeout: 20000 });
+  await tpage.fill('#login-user', LOGIN);
+  await tpage.fill('#login-pass', PW);
+  await tpage.click('button[type=submit]');
+  await tpage.waitForSelector('#app:not([hidden])', { timeout: 20000 });
+  await tpage.waitForTimeout(1000);
+  await page.close();
+  page = tpage;
 
   const dash = await page.evaluate(() => {
     const cards = Array.from(document.querySelectorAll('#view .card'));
