@@ -250,6 +250,24 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .empty h3{font-size:16px;color:var(--ink);margin-bottom:6px}
 .empty p{margin:0 auto 14px;max-width:44ch;font-size:13.5px}
 
+/* ---------- Telefondagi "Menyu" varag'i ----------
+   Alohida klass: umumiy .list-item uslubi o'zgarmaydi, boshqa sahifalar buzilmaydi.
+   Ikonka o'lchami aniq belgilangan — cho'zilib ketmaydi.                      */
+.menu-sheet{display:flex;flex-direction:column;gap:2px;
+  max-height:min(60vh,420px);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  margin:-6px -4px;padding:2px 4px}
+.menu-sheet .menu-item{display:flex;align-items:center;gap:12px;width:100%;
+  min-height:48px;padding:10px 12px;border:0;border-radius:10px;
+  background:none;color:var(--ink);font:inherit;font-size:14.5px;font-weight:500;
+  text-align:start;cursor:pointer}
+.menu-sheet .menu-item .ico{width:22px;height:22px;flex:0 0 22px;opacity:.75;color:var(--muted)}
+.menu-sheet .menu-item b{flex:1;min-width:0;font-weight:inherit;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.menu-sheet .menu-item:hover{background:var(--surface-2)}
+.menu-sheet .menu-item[aria-current="page"]{background:var(--brand-soft);color:var(--brand);font-weight:700}
+.menu-sheet .menu-item[aria-current="page"] .ico{opacity:1;color:var(--brand)}
+.menu-sheet .menu-item .tick{width:18px;height:18px;flex:0 0 18px;color:var(--brand)}
+
 /* ---------- Ro'yxat elementlari ---------- */
 .list{display:flex;flex-direction:column}
 .list-item{display:flex;gap:12px;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line);cursor:pointer}

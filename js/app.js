@@ -187,11 +187,16 @@
   }
 
   function openMenuSheet() {
-    var list = h('div', { class: 'list' }, allowedNav().map(function (n) {
+    var list = h('div', { class: 'menu-sheet' }, allowedNav().map(function (n) {
+      var here = App.route.name === n.id;
       return h('button', {
-        class: 'list-item', type: 'button', style: 'width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line)',
+        class: 'menu-item', type: 'button',
+        'aria-current': here ? 'page' : null,
         onclick: function () { m.close(); App.go(n.id); }
-      }, [UI.icon(n.icon), h('div', { class: 'main-col' }, h('b', {}, n.label))]);
+      }, [
+        UI.icon(n.icon),
+        h('b', {}, n.label)
+      ]);
     }));
     var m = UI.modal({
       title: 'Menyu', body: list,

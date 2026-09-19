@@ -161,10 +161,19 @@ bu 0.5 GB da o'nlab yillarga yetadi. Sozlamalar → Ma'lumotlar bo'limida
 bazaning joriy hajmi ko'rinib turadi.
 
 Neon'ning bepul tarifida **hisoblash soati** ham cheklangan (oyiga 100 CU-soat).
-Tizim ulanishni bo'sh turganda yopadi (`PG_IDLE_MS`), shunda Neon uyquga ketadi va
-soat sarflanmaydi. Kun bo'yi ishlatilsa ham oylik chegara odatda yetadi, lekin
-tugab qolsa — oy oxirigacha ulanish to'xtaydi. Shu xavf bo'lmasin desangiz:
-Render'ning doimiy diski (tarifda bor, 1 GB) yoki Neon'ning pullik tarifi.
+Bunga ta'sir qiladigan ikki narsa sozlangan:
+
+- ulanish bo'sh turganda yopiladi (`PG_IDLE_MS`);
+- bot navbatchisi bo'sh navbat uchun bazani doimiy so'ramaydi: yangi xabar yoki
+  administrator tasdig'i bo'lganda uyg'onadi, aks holda `BOT_IDLE_MS` (standart
+  10 daqiqa) da bir marta tekshiradi. Bitta tekshiruv — 3 ta o'qish
+  (`npm run test:bot-idle` shuni sanaydi), ya'ni bo'sh turganda soatiga ~18 ta.
+  Ilgari har 5 soniyada tekshirilardi — soatiga ~1440 ta so'rov.
+
+**Baribir o'lchanmagan:** bu sonlar mahalliy bazada sanaldi. Haqiqiy Neon'da
+qancha CU-soat ketishi o'lchanmagan — "bepul tarif aniq yetadi" deb ayta olmaymiz.
+Xavfsiz yo'l: Render'ning doimiy diski (tarifda bor, 1 GB) yoki Neon'ning pullik
+tarifi. Neon'ni tanlasangiz, birinchi oy davomida uning "Usage" sahifasini kuzating.
 
 Render'ning o'z Postgres'ini ishlatsangiz ham xuddi shunday: `Internal Database URL`
 ni `DATABASE_URL` ga qo'ying, boshqa hech narsa o'zgartirmaysiz.
@@ -348,6 +357,9 @@ npm run test:browser     # brauzerda asosiy jarayonlar
 npm run test:perf        # 2000 o'quvchi bilan tezlik (sekin bo'lsa yiqiladi)
 npm run test:bot         # bot mantiqi — soxta qabul qiluvchi bilan
 npm run test:backup      # zaxira va tiklash, vaqtinchalik bazada
+npm run test:menu        # telefondagi menyu: ikonka/qator o'lchami, 4 til, screenshot
+npm run test:perm        # tegishlilik: davomat, ish haqi tasdig'i, suhbat, vazifa
+npm run test:bot-idle    # bot bo'sh turganda baza so'rovlari sanaladi
 node tests/mobile-test.js       # 360 / 390 / 430 px
 node tests/export-test.js       # Excel va CSV fayli haqiqatan yuklanadimi
 node tests/ui-backup-test.js    # zaxira oynasi
@@ -357,6 +369,7 @@ node tests/i18n-audit.js        # tarjima qamrovi
 
 # Server ishlab turganda (alohida baza bilan):
 node tests/security-test.js  <port> <parol>    # maxfiy fayllar, huquqlar, pul
+node tests/perm-test.js      <port> <parol>    # yozuv kimga tegishli va holat o'zgarishi
 node tests/advance-test.js   <port> <parol>    # avansdan qoplash
 node tests/autoinvoice-test.js <port> <parol>  # avtomatik oylik hisoblar
 node tests/pwa-test.js       <port> <parol>    # o'rnatish, kesh, internetsiz holat
@@ -430,6 +443,21 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 - Sessiya `HttpOnly` cookie'da; ishlab chiqarishda `Secure` bayrog'i bilan.
 - O'zgarishlar tarixiga parol va maxfiy ma'lumot yozilmaydi.
 - Telegram bot tokeni faqat serverda.
+
+**Ruxsat nomi yetarli emas — tegishlilik ham tekshiriladi (server tomonida):**
+
+- O'qituvchi faqat o'ziga biriktirilgan guruh davomatini yozadi, o'zgartiradi
+  va o'chiradi. Begona guruh uchun PUT/DELETE 403 qaytaradi.
+- Ish haqi: `payroll.manage` — faqat hisoblash va qoralama. Tasdiqlash yoki
+  tasdiqlangan/to'langan yozuvga tegish uchun `payroll.approve` shart.
+  Qoralamaga qaytarish va o'chirish orqali aylanib o'tib bo'lmaydi.
+- Shaxsiy suhbatni faqat ishtirokchilari ko'radi — bootstrap, collection va
+  `doc?path=chats/ID` uchun bir xil qoida. A'zolar ro'yxatini o'zgartirib
+  begona suhbatga qo'shilib bo'lmaydi, eski xabarlarni o'chirib/tahrirlab
+  bo'lmaydi, xabar muallifi serverdagi sessiyadan olinadi.
+- Vazifani ijrochi, yaratgan odam va `task.assign` huquqi borlar ko'radi;
+  begona vazifani ID orqali o'qib yoki o'zgartirib bo'lmaydi.
+- Rad etilgan so'rov bazani o'zgartirmaydi (sinovlar shuni tekshiradi).
 
 ---
 

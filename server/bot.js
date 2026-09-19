@@ -24,6 +24,10 @@ const MAX_TRIES = 3;
 const RETRY_MS = [0, 60 * 1000, 10 * 60 * 1000];   // 1-urinish darhol, keyin 1 daq, 10 daq
 const KINDS = ['davomat', 'tolov', 'qarz', 'elon', 'ulash'];
 
+/* Navbat bo'sh bo'lsa baza shuncha vaqtda bir marta so'raladi (ehtiyot tekshiruvi).
+   Yangi xabar yoki tasdiq paydo bo'lsa — kutmasdan uyg'onadi (wake). */
+const IDLE_MS = Number(process.env.BOT_IDLE_MS || 10 * 60 * 1000);
+
 /* ---------------- Telegram API ---------------- */
 async function tg(method, params) {
   const res = await fetch(API + method, {
@@ -233,7 +237,29 @@ async function enqueue(msg, windowMs) {
     id, status: 'pending', tries: 0, createdAt: stamp()
   }, msg, { id, dedupeKey: key });
   await store.set('botout/' + id, rec);
+  wake();                                   // navbatchi darhol uyg'onadi
   return { skipped: false, id };
+}
+
+/* ---------------- Uyg'otish: bo'sh navbat uchun bazani bezovta qilmaymiz ----------------
+   Ilgari har 5 soniyada botout/ va botreq/ so'ralardi (soatiga ~1440 so'rov, hech nima
+   bo'lmasa ham). Endi: yangi xabar navbatga qo'yilganda yoki administrator tasdiqlaganda
+   wake() chaqiriladi; aks holda IDLE_MS da bir marta ehtiyot tekshiruvi bo'ladi. */
+let wakeup = null;          // kutayotgan va'dani uyg'otish
+let woken = false;          // kutish boshlanmasdan oldin kelgan uyg'otish
+function wake() {
+  woken = true;
+  if (wakeup) { const w = wakeup; wakeup = null; w(); }
+}
+function waitFor(ms) {
+  if (woken) { woken = false; return Promise.resolve(); }
+  return new Promise(resolve => {
+    let done = false;
+    const finish = () => { if (done) return; done = true; woken = false; clearTimeout(t); wakeup = null; resolve(); };
+    const t = setTimeout(finish, ms);
+    if (t.unref) t.unref();
+    wakeup = finish;
+  });
 }
 
 /** Navbatni yuborish: xato bo'lsa belgilaydi va keyin qayta urinadi */
@@ -242,10 +268,15 @@ async function flushQueue(now) {
   const t = now || Date.now();
   const rows = (await store.list('botout/')).map(r => r.data).filter(Boolean);
   let sent = 0, failed = 0, skipped = 0;
+  let nextAt = 0;                          // keyingi qayta urinish vaqti (uyg'onish uchun)
 
   for (const m of rows) {
     if (m.status !== 'pending' && m.status !== 'error') continue;
-    if (m.nextTryAt && Date.parse(m.nextTryAt) > t) continue;
+    if (m.nextTryAt && Date.parse(m.nextTryAt) > t) {
+      const at = Date.parse(m.nextTryAt);
+      if (!nextAt || at < nextAt) nextAt = at;
+      continue;
+    }
     // xabar turi o'chirilgan bo'lsa — yubormaymiz va shunday deb belgilaymiz
     if (m.kind && conf.notify[m.kind] === false) {
       m.status = 'skipped';
@@ -268,7 +299,9 @@ async function flushQueue(now) {
         failed++;
       } else {
         m.status = 'error';
-        m.nextTryAt = new Date(t + RETRY_MS[Math.min(m.tries, RETRY_MS.length - 1)]).toISOString();
+        const at = t + RETRY_MS[Math.min(m.tries, RETRY_MS.length - 1)];
+        m.nextTryAt = new Date(at).toISOString();
+        if (!nextAt || at < nextAt) nextAt = at;
       }
     }
     await store.set('botout/' + m.id, m);
@@ -280,7 +313,7 @@ async function flushQueue(now) {
     done.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
     for (const old of done.slice(0, done.length - 200)) await store.del('botout/' + old.id);
   }
-  return { sent, failed, skipped };
+  return { sent, failed, skipped, nextAt };
 }
 
 /* ---------------- To'lov muddati eslatmasi ---------------- */
@@ -513,7 +546,7 @@ async function poll() {
       for (const u of updates) {
         offset = u.update_id + 1;
         if (u.message && u.message.text) {
-          try { await onMessage(u.message); }
+          try { await onMessage(u.message); wake(); }
           catch (e) { console.error('bot message:', e.message); }
         }
       }
@@ -524,11 +557,25 @@ async function poll() {
   }
 }
 
-async function tick() {
+/**
+ * Navbatchi. Bazani faqat kerak bo'lganda so'raydi:
+ *   — uyg'otish kelganda (yangi xabar, administrator tasdig'i, botdagi suhbat);
+ *   — qayta urinish vaqti kelganda;
+ *   — aks holda IDLE_MS da bir marta (ehtiyot tekshiruvi).
+ * Shuning uchun bo'sh turganda baza deyarli bezovta qilinmaydi.
+ */
+async function queueLoop(opts) {
+  const idle = (opts && opts.idleMs) || IDLE_MS;
   while (running) {
-    try { await flushQueue(); await notifyApproved(); }
-    catch (e) { console.error('bot queue:', e.message); }
-    await new Promise(r => setTimeout(r, 5000));
+    let nextAt = 0;
+    try {
+      const r = await flushQueue();
+      nextAt = r && r.nextAt ? r.nextAt : 0;
+      await notifyApproved();
+    } catch (e) { console.error('bot queue:', e.message); }
+    let waitMs = idle;
+    if (nextAt) waitMs = Math.max(500, Math.min(idle, nextAt - Date.now()));
+    await waitFor(waitMs);
   }
 }
 
@@ -558,7 +605,7 @@ function start(ctx) {
   tg('getMe').then(me => {
     console.log('  Telegram bot ishga tushdi: @' + me.username);
     poll();
-    tick();
+    queueLoop();
   }).catch(e => {
     console.error('  Bot ulanmadi: ' + e.message);
     running = false;
@@ -567,6 +614,7 @@ function start(ctx) {
 
 function stop() {
   running = false;
+  wake();                                     // kutayotgan navbatchi darhol to'xtasin
   timers.forEach(t => clearInterval(t));
   timers = [];
 }
@@ -578,8 +626,12 @@ function _test(ctx) {
   return {
     onMessage, flushQueue, enqueue, remindDebtors, notifyApproved,
     makeCode, normCode, studentByCode, botConf, getState, setState,
-    balanceText, attendanceText, scheduleText, daysBetween, KINDS, MAX_TRIES
+    balanceText, attendanceText, scheduleText, daysBetween, KINDS, MAX_TRIES,
+    wake,
+    /** Sinovda navbatchini qo'lda ishga tushirish/to'xtatish */
+    startQueue: function (opts) { running = true; queueLoop(opts); },
+    stopQueue: function () { running = false; wake(); }
   };
 }
 
-module.exports = { start, stop, setTransport, makeCode, normCode, _test };
+module.exports = { start, stop, setTransport, makeCode, normCode, wake, _test };

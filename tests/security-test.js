@@ -173,12 +173,59 @@ async function login(l, p) {
   const auditWrite = await put('audit/fake', { id: 'fake', by: 'Direktor', action: 'soxta' }, adminCookie);
   eq('Tarixga qo’lda yoza olmadi', auditWrite.status, 403);
 
-  section('   Buxgalter huquqlari');
-  const payrollPut = await put('payroll/2026-09__stf_t1',
+  section('   Buxgalter huquqlari (hisoblash mumkin, tasdiqlash mumkin emas)');
+  const PRP = 'payroll/2026-09__stf_t1';
+  const prRead = async () => (await req('/api/doc?path=' + encodeURIComponent(PRP), { cookie: dirCookie })).json.data;
+
+  const payrollPut = await put(PRP,
+    { id: '2026-09__stf_t1', staffId: 'stf_t1', month: '2026-09', accrued: 80000, status: 'qoralama' }, buxCookie);
+  eq('Buxgalter qoralama hisoblay oladi', payrollPut.status, 200);
+
+  const payrollApprove = await put(PRP,
     { id: '2026-09__stf_t1', staffId: 'stf_t1', month: '2026-09', accrued: 80000, status: 'tasdiqlangan' }, buxCookie);
-  ok('Buxgalter ish haqini hisoblay oladi', payrollPut.status === 200);
-  // tasdiqlash huquqi yo'q — buni ilova tekshiradi, server esa payroll.approve ruxsatini talab qiladi
-  ok('Buxgalterda payroll.approve ruxsati yo’q', true);
+  eq('Buxgalter tasdiqlay olmadi (403)', payrollApprove.status, 403);
+  eq('Bazada holat hali qoralama', (await prRead()).status, 'qoralama');
+
+  const dirApprove = await put(PRP,
+    { id: '2026-09__stf_t1', staffId: 'stf_t1', month: '2026-09', accrued: 80000, status: 'tasdiqlangan' }, dirCookie);
+  eq('Direktor tasdiqlay oldi', dirApprove.status, 200);
+  eq('Bazada tasdiqlangan', (await prRead()).status, 'tasdiqlangan');
+
+  const buxUndo = await put(PRP,
+    { id: '2026-09__stf_t1', staffId: 'stf_t1', month: '2026-09', accrued: 1, status: 'qoralama' }, buxCookie);
+  eq('Tasdiqlanganni qoralamaga qaytara olmadi', buxUndo.status, 403);
+  const afterUndo = await prRead();
+  eq('Holat o’zgarmadi', afterUndo.status, 'tasdiqlangan');
+  eq('Summa o’zgarmadi', afterUndo.accrued, 80000);
+  const buxDel = await req('/api/doc?path=' + encodeURIComponent(PRP), { method: 'DELETE', cookie: buxCookie });
+  eq('Tasdiqlanganni o’chira olmadi', buxDel.status, 403);
+  ok('Yozuv bazada qoldi', !!(await prRead()));
+
+  section('   O’qituvchi begona guruh davomatini yoza olmaydi');
+  const FOR = 'lessons/g2__2026-09';
+  await put(FOR, { id: 'g2__2026-09', marks: { '2026-09-03': { s2: 'keldi' } } }, dirCookie);
+  const foreignMark = await put(FOR, { id: 'g2__2026-09', marks: { '2026-09-03': { s2: 'kelmadi' } } }, ustozCookie);
+  eq('Begona guruhga davomat yozilmadi', foreignMark.status, 403);
+  const forNow = (await req('/api/doc?path=' + encodeURIComponent(FOR), { cookie: dirCookie })).json.data;
+  eq('Belgi o’zgarmadi', forNow.marks['2026-09-03'].s2, 'keldi');
+  const ownMark = await put('lessons/g1__2026-09', { id: 'g1__2026-09', marks: { '2026-09-02': { s1: 'keldi' } } }, ustozCookie);
+  eq('O’z guruhiga yoza oldi', ownMark.status, 200);
+
+  section('   Begona shaxsiy suhbat hamma yo’lda yopiq');
+  const SCH = 'chats/sec_dir_bux';
+  await put(SCH, {
+    id: 'sec_dir_bux', type: 'direct', members: ['usr_admin', 'usr_bux'],
+    messages: [{ id: 'sm1', from: 'usr_admin', text: 'Maxfiy matn', at: '2026-09-19 10:00' }],
+    readAt: {}, updatedAt: '2026-09-19 10:00'
+  }, dirCookie);
+  const chatDoc = await req('/api/doc?path=' + encodeURIComponent(SCH), { cookie: ustozCookie });
+  ok('doc orqali berilmadi', chatDoc.status === 403 || !chatDoc.json.data, chatDoc.text.slice(0, 100));
+  const chatCol = await req('/api/collection?name=chats', { cookie: ustozCookie });
+  ok('collection orqali berilmadi', !(chatCol.json.items || {}).sec_dir_bux);
+  const chatBoot = await req('/api/bootstrap', { cookie: ustozCookie });
+  ok('bootstrap orqali berilmadi', !((chatBoot.json.col.chats || {}).sec_dir_bux));
+  ok('Uchala yo’lda ham matn yo’q',
+    !/Maxfiy matn/.test(chatDoc.text + chatCol.text + chatBoot.text));
 
   /* ---------- 7. Parallel to'lovlar ---------- */
   section('7. Ikki administrator bir vaqtda to’lov yozsa');

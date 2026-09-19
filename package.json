@@ -19,7 +19,10 @@
     "test:bot": "node tests/bot-test.js",
     "test:backup": "node tests/backup-test.js",
     "test:time": "node tests/time-test.js",
-    "test:lang": "node tests/lang-switch-test.js"
+    "test:lang": "node tests/lang-switch-test.js",
+    "test:menu": "node tests/menu-test.js",
+    "test:perm": "node tests/perm-test.js",
+    "test:bot-idle": "node tests/bot-idle-test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

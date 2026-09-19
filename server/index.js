@@ -509,6 +509,114 @@ async function teacherScope(user) {
   return { gid, sid };
 }
 
+/* ---------- Tegishlilik qoidalari (o'qish ham, yozish ham) ---------- */
+
+/** Umumiy suhbat hammaga ochiq; shaxsiy suhbat faqat ishtirokchilarga */
+function isChatMember(user, chat) {
+  if (!chat) return false;
+  if (chat.type === 'group') return true;
+  return (chat.members || []).indexOf(user.id) >= 0;
+}
+/** Vazifani ijrochi, yaratgan odam va vazifa taqsimlovchi ko'radi */
+function canSeeTask(user, task) {
+  if (!task) return false;
+  if (A.can(user, 'task.assign') || A.can(user, 'settings.edit')) return true;
+  return task.assigneeId === user.id || task.createdById === user.id;
+}
+/** Ish haqi qoralamadan boshqa holatda — faqat payroll.approve bilan */
+const PAYROLL_LOCKED = ['tasdiqlangan', 'to’langan', 'tolangan'];
+function payrollLocked(item) {
+  return !!item && PAYROLL_LOCKED.indexOf(String(item.status || 'qoralama')) >= 0;
+}
+
+/**
+ * Yozish (PUT/DELETE) uchun tegishlilik tekshiruvi.
+ * Ruxsat nomi yetarli emas: yozuv kimga tegishli ekani va holat o'zgarishi ham tekshiriladi.
+ * Natija: { code, error } — rad etilgan bo'lsa; yoki { data } — saqlanadigan (tozalangan) ma'lumot.
+ */
+async function guardWrite(user, p, method, next) {
+  const seg = p.split('/');
+  const col = seg[0];
+  const old = await store.get(p);
+  const no = (msg) => ({ code: 403, error: msg || 'Sizda bu amal uchun ruxsat yo’q.' });
+
+  /* --- Davomat: o'qituvchi faqat o'ziga biriktirilgan guruhga --- */
+  if (col === 'lessons' && user.role === 'oqituvchi') {
+    const gid = String(seg[1] || '').split('__')[0];
+    const sc = await teacherScope(user);
+    if (!sc || !sc.gid[gid]) return no('Bu guruh sizga biriktirilmagan.');
+  }
+
+  /* --- Ish haqi: tasdiqlash va tasdiqlangan yozuv alohida ruxsat talab qiladi --- */
+  if (col === 'payroll') {
+    const canApprove = A.can(user, 'payroll.approve');
+    if (!canApprove) {
+      if (payrollLocked(old)) {
+        return no('Tasdiqlangan ish haqini faqat tasdiqlash huquqi bor odam o’zgartiradi.');
+      }
+      if (method === 'PUT' && payrollLocked(next)) {
+        return no('Ish haqini tasdiqlash uchun alohida ruxsat kerak.');
+      }
+    }
+  }
+
+  /* --- Suhbat: faqat ishtirokchi; a'zolar ro'yxati va muallif himoyalangan --- */
+  if (col === 'chats') {
+    if (old) {
+      if (!isChatMember(user, old)) return no('Bu suhbat sizga tegishli emas.');
+    } else if (method === 'PUT') {
+      if (!isChatMember(user, next) && !A.can(user, 'settings.edit')) {
+        return no('O’zingiz ishtirok etmaydigan suhbat yarata olmaysiz.');
+      }
+    }
+    if (method === 'DELETE') {
+      if (!A.can(user, 'settings.edit')) return no('Suhbatni o’chira olmaysiz.');
+      return { data: null };
+    }
+    const data = Object.assign({}, next);
+    if (old) {
+      // a'zolar ro'yxatini oddiy foydalanuvchi o'zgartira olmaydi
+      if (!A.can(user, 'settings.edit') && old.type !== 'group') data.members = old.members || [];
+      const oldMsgs = Array.isArray(old.messages) ? old.messages : [];
+      const newMsgs = Array.isArray(data.messages) ? data.messages : [];
+      if (newMsgs.length < oldMsgs.length) return no('Eski xabarlarni o’chirib bo’lmaydi.');
+      for (let i = 0; i < oldMsgs.length; i++) {
+        const a = oldMsgs[i], b = newMsgs[i] || {};
+        if (a.id !== b.id || a.text !== b.text || a.from !== b.from) {
+          return no('Eski xabarlarni o’zgartirib bo’lmaydi.');
+        }
+      }
+      // yangi xabarlarning muallifi va vaqti — serverdan
+      data.messages = oldMsgs.concat(newMsgs.slice(oldMsgs.length).map(m =>
+        Object.assign({}, m, { from: user.id, at: stamp() })));
+    } else {
+      data.messages = (Array.isArray(data.messages) ? data.messages : []).map(m =>
+        Object.assign({}, m, { from: user.id, at: stamp() }));
+    }
+    return { data };
+  }
+
+  /* --- Vazifalar: begona vazifani ID orqali o'zgartirib bo'lmaydi --- */
+  if (col === 'tasks') {
+    if (old && !canSeeTask(user, old)) return no('Bu vazifa sizga tegishli emas.');
+    if (!old && method === 'PUT' && !A.can(user, 'task.assign')) {
+      const mine = next && (next.createdById === user.id || next.assigneeId === user.id);
+      if (!mine) return no('Vazifani faqat o’zingizga yoki o’zingizdan yarata olasiz.');
+    }
+    if (method === 'DELETE' && old && !A.can(user, 'task.assign') && old.createdById !== user.id) {
+      return no('Vazifani o’chira olmaysiz.');
+    }
+    if (method === 'PUT' && old && !A.can(user, 'task.assign')) {
+      const data = Object.assign({}, next, {
+        assigneeId: old.assigneeId, createdById: old.createdById   // o'zgartirib bo'lmaydi
+      });
+      return { data };
+    }
+  }
+
+  return { data: next };
+}
+
 /** false — ruxsat yo'q; aks holda ko'rsatish mumkin bo'lgan ma'lumot */
 async function filterReadDoc(user, p, data) {
   const seg = p.split('/');
@@ -527,6 +635,18 @@ async function filterReadDoc(user, p, data) {
     : (data ? { id: data.id, name: data.name, role: data.role } : null);
   if (col === 'staff') return safeStaff(data, user);
   if (!data) return null;
+
+  /* Suhbat va vazifalar: ID orqali ham bootstrap bilan bir xil qoida ishlasin */
+  if (col === 'chats') {
+    if (!A.can(user, 'nav.chat')) return false;
+    if (!isChatMember(user, data)) return false;
+    return data;
+  }
+  if (col === 'tasks') {
+    if (!A.can(user, 'nav.tasks')) return false;
+    if (!canSeeTask(user, data)) return false;
+    return data;
+  }
 
   if (user.role === 'oqituvchi') {
     const sc = await teacherScope(user);
@@ -803,6 +923,9 @@ async function handleApi(req, res, url) {
       if (!body || typeof body.data !== 'object' || body.data === null) {
         return send(res, 400, { error: 'Ma’lumot noto’g’ri.' });
       }
+      const g = await guardWrite(user, p, 'PUT', body.data);
+      if (g.error) return send(res, g.code || 403, { error: g.error });
+      body.data = g.data;
       // Parolni FAQAT server hisoblaydi — mijoz hash yubora olmaydi
       if (p.indexOf('users/') === 0) {
         const old = await store.get(p);
@@ -826,12 +949,18 @@ async function handleApi(req, res, url) {
       }
       await store.set(p, body.data);
       await writeAudit(user, body.action || 'Ma’lumot saqlandi', body.entity || p, body.details || '');
+      // Bot navbatchisini uyg'otamiz (tasdiq/ e'lon darhol ketsin, bo'sh vaqtda esa baza tinch)
+      if (p.indexOf('botreq/') === 0 || p.indexOf('botout/') === 0) {
+        try { require('./bot').wake(); } catch (e) { /* bot ishlamayotgan bo'lsa muhim emas */ }
+      }
       return send(res, 200, { ok: true });
     }
     if (req.method === 'DELETE') {
       if (p.indexOf('users/') === 0 && p === 'users/' + user.id) {
         return send(res, 400, { error: 'O’z hisobingizni o’chira olmaysiz.' });
       }
+      const gd = await guardWrite(user, p, 'DELETE', null);
+      if (gd.error) return send(res, gd.code || 403, { error: gd.error });
       await store.del(p);
       await writeAudit(user, 'Yozuv o’chirildi', p, '');
       return send(res, 200, { ok: true });
