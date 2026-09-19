@@ -59,6 +59,9 @@
     { id: 'finance', label: 'Moliya', icon: 'wallet', perm: 'nav.finance' },
     { id: 'staff', label: 'Xodimlar', icon: 'badge', perm: 'nav.staff' },
     { id: 'reports', label: 'Hisobotlar', icon: 'chart', perm: 'nav.reports' },
+    { id: 'chat', label: 'Suhbat', icon: 'chat', perm: 'nav.chat' },
+    { id: 'tasks', label: 'Vazifalar', icon: 'task', perm: 'nav.tasks' },
+    { id: 'bot', label: 'Telegram bot', icon: 'bot', perm: 'nav.bot' },
     { id: 'settings', label: 'Sozlamalar', icon: 'gear', perm: 'settings.edit' }
   ];
 
@@ -140,7 +143,9 @@
       hint,
       fLogin.wrap, fPass.wrap, err, btn,
       h('div', { class: 'small muted', style: 'text-align:center' },
-        D.mode === 'cloud' ? 'Ma’lumotlar markaz bazasida saqlanadi.' : 'Diqqat: baza ulanmadi, ma’lumotlar faqat shu brauzerda saqlanadi.')
+        D.mode === 'local'
+          ? 'Diqqat: baza ulanmadi, ma’lumotlar faqat shu brauzerda saqlanadi.'
+          : 'Ma’lumotlar markaz bazasida saqlanadi.')
     ]);
     wrap.appendChild(formEl);
 
@@ -151,20 +156,65 @@
       var pass = fPass.input.value;
       if (!login || !pass) { err.hidden = false; err.textContent = 'Login va parolni kiriting.'; return; }
       UI.busy(btn, async function () {
+        if (D.mode === 'server') {
+          try {
+            var su = await D.serverLogin(login, pass);
+            await startSession(su);
+          } catch (ex) {
+            err.hidden = false;
+            err.textContent = ex.message || 'Kirishda xatolik.';
+          }
+          return;
+        }
         var user = D.all('users').filter(function (u) { return String(u.login).toLowerCase() === login; })[0];
         if (!user || user.active === false) {
           err.hidden = false; err.textContent = 'Login yoki parol xato.'; return;
         }
         var hashed = await hashPass(user.login, pass, user.salt);
         if (hashed !== user.hash) { err.hidden = false; err.textContent = 'Login yoki parol xato.'; return; }
-        startSession(user);
+        await startSession(user);
       });
     }
   }
 
-  function startSession(user) {
+  /* ---------- Til tanlash ---------- */
+  function renderLangPick() {
+    var box = document.getElementById('lang-pick');
+    if (!box) return;
+    UI.clear(box);
+    A.I18N.langs.forEach(function (l) {
+      box.appendChild(h('button', {
+        type: 'button', 'aria-pressed': A.I18N.lang === l.id ? 'true' : 'false',
+        title: l.label, 'aria-label': l.label,
+        onclick: function () {
+          A.I18N.set(l.id);
+          renderLangPick();
+          if (App.user) App.render(); else renderLogin(null);
+        }
+      }, l.short));
+    });
+  }
+
+  var restPromise = null;
+
+  function busyIndicator(n) {
+    var pill = document.getElementById('mode-pill');
+    if (!pill) return;
+    if (n > 0) { pill.hidden = false; pill.textContent = 'Saqlanmoqda…'; pill.className = 'pill warn'; }
+    else if (D.mode === 'local') { pill.hidden = false; pill.textContent = 'Faqat shu brauzerda'; pill.className = 'pill mute'; }
+    else { pill.hidden = true; }
+  }
+
+  async function startSession(user) {
     App.user = user;
     try { sessionStorage.setItem('albyana_session', user.id); } catch (e) { }
+    if (restPromise) {
+      var boot = document.getElementById('boot');
+      boot.hidden = false;
+      document.getElementById('auth').hidden = true;
+      try { await restPromise; } catch (e) { console.error(e); }
+      restPromise = null;
+    }
     document.getElementById('auth').hidden = true;
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = false;
@@ -174,13 +224,14 @@
       (user.name || '?').trim().split(/\s+/).map(function (p) { return p[0]; }).slice(0, 2).join('').toUpperCase();
     document.getElementById('center-name').textContent = (D.settings && D.settings.centerName) || 'Albyana';
     var mp = document.getElementById('mode-pill');
-    if (D.mode !== 'cloud') { mp.hidden = false; mp.textContent = 'Faqat shu brauzerda'; }
+    if (D.mode === 'local') { mp.hidden = false; mp.textContent = 'Faqat shu brauzerda'; }
     var first = allowedNav()[0];
     App.go(first ? first.id : 'dashboard');
   }
 
   function logout() {
     try { sessionStorage.removeItem('albyana_session'); } catch (e) { }
+    if (D.mode === 'server') { D.serverLogout(); }
     App.user = null;
     document.getElementById('app').hidden = true;
     renderLogin(null);
@@ -224,22 +275,45 @@
   async function boot() {
     LOGO = document.querySelector('#boot img').getAttribute('src');
     wireTheme();
+    A.I18N.init();
+    A.I18N.observe();
+    renderLangPick();
+    A.I18N.apply(document.body);
     try {
-      await D.init();
-      await A.Fin.loadIndex();
-      await A.Fin.loadAll();
+      await D.initAuth();
+
+      if (D.mode === 'server') {
+        wireSearch();
+        document.getElementById('logout').addEventListener('click', logout);
+        D.onBusy = busyIndicator;
+        if (D.currentServerUser) {
+          try {
+            await D.loadBootstrap();
+            await startSession(D.currentServerUser);
+            return;
+          } catch (e) { console.error(e); }
+        }
+        renderLogin(null);
+        return;
+      }
+
       if (!D.settings || D.all('users').length === 0) {
+        // birinchi ishga tushirish — hammasi kerak
+        await D.initRest();
+        await A.Fin.loadIndex();
+        await A.Fin.loadAll();
         await A.Seed.bootstrap();
+      } else {
+        // kirish darhol ko'rsatiladi, qolgani fonda yuklanadi
+        restPromise = (async function () {
+          await D.initRest();
+          await A.Fin.loadIndex();
+          await A.Fin.loadAll();
+        })();
       }
       wireSearch();
       document.getElementById('logout').addEventListener('click', logout);
-      D.onBusy = function (n) {
-        var pill = document.getElementById('mode-pill');
-        if (!pill) return;
-        if (n > 0) { pill.hidden = false; pill.textContent = 'Saqlanmoqda…'; pill.className = 'pill warn'; }
-        else if (D.mode !== 'cloud') { pill.hidden = false; pill.textContent = 'Faqat shu brauzerda'; pill.className = 'pill mute'; }
-        else { pill.hidden = true; }
-      };
+      D.onBusy = busyIndicator;
       D.onChange(function () { /* mahalliy keshni yangilash — sahifa o'zi qayta chiziladi */ });
 
       var sid = null;

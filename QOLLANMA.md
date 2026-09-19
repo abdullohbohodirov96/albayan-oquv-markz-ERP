@@ -6,7 +6,8 @@ Bu yo'riqnoma administrator uchun yozilgan. Dasturlashni bilish shart emas.
 
 ## Birinchi kun: tizimni o'zingizga moslash
 
-1. **Kirish.** Login `admin`, parol `1234`.
+1. **Kirish.** Serverli versiyada login va parolni `.env` faylida o'zingiz
+   belgilaysiz. Sinov (serversiz) versiyada: login `admin`, parol `1234`.
 2. **Sozlamalar → Markaz**: markaz nomi, telefon, manzil, ish vaqti va
    to'lov muddati (oyning nechanchi kunigacha to'lansin) ni kiriting.
 3. **Sozlamalar → Foydalanuvchilar**: har bir xodimga alohida login va parol
@@ -105,12 +106,82 @@ Barcha asosiy ro'yxatlarni Excel'ga yuklab olish mumkin — har sahifadagi
 
 ---
 
+---
+
+## Tilni va ko'rinishni almashtirish
+
+Yuqori o'ng burchakda **UZ / RU / EN / AR** tugmalari. Arabchani tanlasangiz
+interfeys o'ngdan chapga o'giriladi. Yonidagi tugma yorug' va qorong'i
+ko'rinishni almashtiradi. Tanlovingiz shu brauzerda eslab qolinadi.
+
+Sozlamalar → Markaz bo'limida ham bir joydan tanlash mumkin.
+
+---
+
+## Excel'dan ro'yxat yuklash
+
+**O'quvchilar → Excel'dan import** (yoki Murojaatlarda shu tugma).
+
+1. Faylni tanlang — `.xlsx`, `.xls`, `.csv` bo'lishi mumkin.
+2. Tizim ustunlarni o'zi taniydi. **Ustunlar tartibi muhim emas**,
+   sarlavhalar o'zbek, rus yoki ingliz tilida bo'lishi mumkin.
+3. Moslashtirishni ko'rib chiqing — noto'g'ri tanilgan bo'lsa qo'lda o'zgartiring.
+4. Dastlabki 5 qator ko'rsatiladi. To'g'ri bo'lsa "Import qilish" ni bosing.
+5. Oxirida nechta qo'shilgani va nechta o'tkazib yuborilgani yoziladi.
+
+Faylda guruh kodi ustuni bo'lsa (masalan `A001`), o'quvchi o'sha guruhga
+avtomatik yoziladi.
+
+---
+
+## Ruxsatlarni sozlash
+
+**Sozlamalar → Foydalanuvchilar → (foydalanuvchini oching) → Ruxsatlarni sozlash.**
+
+Har bir bo'lim uchun alohida ruxsat berish yoki olib qo'yish mumkin.
+"Rol bo'yicha" deb turgan ruxsat — rolning odatdagi huquqi.
+"Alohida" deb belgilangani — siz qo'lda o'zgartirgan.
+
+- **Hammasiga ruxsat berish** — bitta bosishda to'liq huquq (ishonchli xodim uchun).
+- **Rol bo'yicha qaytarish** — o'zgartirishlarni bekor qiladi.
+
+---
+
+## Xodimlar bilan ishlash
+
+**Suhbat** — xodimlar o'rtasida yozishmalar. "Umumiy suhbat" hammaga ko'rinadi,
+"Yangi suhbat" orqali bitta xodim bilan alohida yozishish mumkin.
+O'qilmagan xabarlar soni ro'yxatda qizil belgi bilan ko'rsatiladi.
+
+**Vazifalar** — xodimga topshiriq berish. Muddati o'tgan vazifa qizil rangda.
+Xodim o'zi "Boshlash" va "Bajarildi" tugmalari bilan holatni o'zgartiradi.
+
+---
+
+## Telegram bot
+
+Bot faqat serverli versiyada ishlaydi (README ga qarang).
+
+**O'quvchini ulash:** o'quvchi botga `/start` bosadi, ism-familiyasi va
+guruh kodini yozadi. So'rov **Telegram bot → Holat** bo'limiga tushadi —
+siz kimligini tanlab "Ulash" ni bosasiz.
+
+**Guruh kodi** har bir guruhda ko'rsatilgan (masalan `A001`). Uni guruh
+tahrirlash oynasida o'zgartirish mumkin.
+
+**Xabar yuborish:** Telegram bot → Xabar yuborish. Barcha ulanganlarga,
+bitta guruhga yoki faqat qarzdorlarga yuborish mumkin.
+
+Davomat belgilanganda va to'lov qabul qilinganda o'quvchiga avtomatik xabar
+boradi — buni sozlamalarda o'chirib qo'yish mumkin.
+
+---
+
 ## Nimalar hali yo'q
 
-- Telegram/SMS xabarnomalar
+- SMS xabarnomalar
 - Onlayn to'lov va fiskal chek
-- O'quvchi va ota-ona kabineti
+- Ota-ona uchun alohida kabinet (hozircha bot orqali)
 - Bir nechta filial
 
-Bular keyingi bosqichga rejalashtirilgan. Tizimda ular bor deb ko'rsatuvchi
-ishlamaydigan tugmalar yo'q.
+Tizimda bular bor deb ko'rsatuvchi ishlamaydigan tugmalar yo'q.

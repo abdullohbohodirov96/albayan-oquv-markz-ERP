@@ -1,0 +1,27 @@
+# Render.com uchun tayyor sozlama.
+# Repozitoriyani Render'ga ulaganda shu fayl avtomatik o'qiladi.
+services:
+  - type: web
+    name: albyana-erp
+    runtime: node
+    plan: starter          # doimiy disk uchun eng kam tarif
+    buildCommand: npm install && node build.js
+    startCommand: node server/index.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: SEED_DIRECTOR_LOGIN
+        value: admin
+      - key: SEED_DIRECTOR_PASSWORD
+        sync: false        # qiymatni Render panelida qo'lda kiriting
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+    disk:
+      name: albyana-data
+      mountPath: /var/data
+      sizeGB: 1

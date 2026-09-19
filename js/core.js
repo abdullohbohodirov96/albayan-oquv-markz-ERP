@@ -112,7 +112,9 @@
   function pad2hex(b) { return b < 16 ? '0' + b.toString(16) : b.toString(16); }
 
   /* ---------------- Ma'lumotlar qatlami ---------------- */
-  var COLLECTIONS = ['users', 'staff', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads'];
+  var COLLECTIONS = ['users', 'staff', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads',
+    'tasks', 'chats', 'botreq', 'botout'];
+  var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 
   var Data = {
@@ -131,8 +133,63 @@
       for (var i = 0; i < l.length; i++) { try { l[i](); } catch (e) { console.error(e); } }
     },
 
-    async init() {
+    /* ---------- Server rejimi ---------- */
+    async api(method, path, body) {
+      var res = await fetch(path, {
+        method: method,
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+        credentials: 'same-origin'
+      });
+      var data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok) {
+        var err = new Error((data && data.error) || ('Server xatosi (' + res.status + ')'));
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    },
+    async serverLogin(login, password) {
+      var r = await this.api('POST', 'api/login', { login: login, password: password });
+      await this.loadBootstrap();
+      return r.user;
+    },
+    async serverLogout() {
+      try { await this.api('POST', 'api/logout'); } catch (e) { }
+    },
+    async loadBootstrap() {
+      var b = await this.api('GET', 'api/bootstrap');
+      var self = this;
+      COLLECTIONS.forEach(function (c) { self.col[c] = (b.col && b.col[c]) || {}; });
+      this.docs = b.docs || {};
+      this.settings = b.settings || null;
+      if (b.finindex && global.A && global.A.Fin) global.A.Fin.index = b.finindex;
+      this.ready = true;
+      return b;
+    },
+
+    /** 1-bosqich: kirish uchun kerakli minimal ma'lumot (tez) */
+    async initAuth() {
       COLLECTIONS.forEach(function (c) { Data.col[c] = {}; });
+
+      // Avval o'z serverimiz bormi tekshiramiz
+      try {
+        var ctrl = new AbortController();
+        var t = setTimeout(function () { ctrl.abort(); }, 2500);
+        var res = await fetch('api/health', { signal: ctrl.signal, credentials: 'same-origin' });
+        clearTimeout(t);
+        if (res.ok) {
+          this.mode = 'server';
+          this.authReady = true;
+          try {
+            var me = await this.api('GET', 'api/me');
+            this.currentServerUser = me.user;
+          } catch (e) { this.currentServerUser = null; }
+          return;
+        }
+      } catch (e) { /* server yo'q — davom etamiz */ }
+
       var db = null;
       try {
         if (global.claude && typeof global.claude.use === 'function') {
@@ -141,25 +198,42 @@
       } catch (e) { db = null; }
       if (db) {
         this.db = db; this.mode = 'cloud';
-        await this._loadCloud();
+        await Promise.all([
+          this._loadCollection('users'),
+          this._loadSettings()
+        ]);
       } else {
         this.mode = 'local';
         this._loadLocal();
       }
-      if (!this.settings) this.settings = null;
+      this.authReady = true;
+    },
+
+    /** 2-bosqich: qolgan hamma narsa (fonda) */
+    async initRest() {
+      if (this.mode === 'server') { this.ready = true; return; }
+      if (this.mode === 'cloud') {
+        var rest = COLLECTIONS.filter(function (c) { return AUTH_COLLECTIONS.indexOf(c) < 0; });
+        await Promise.all(rest.map(function (c) { return Data._loadCollection(c); }));
+      }
       this.ready = true;
     },
 
-    async _loadCloud() {
-      for (var i = 0; i < COLLECTIONS.length; i++) {
-        var name = COLLECTIONS[i];
-        try {
-          var snap = await this.db.collection(name).limit(1000).get();
-          var map = {};
-          snap.docs.forEach(function (d) { var v = d.data(); if (v) { v.id = d.id; map[d.id] = v; } });
-          this.col[name] = map;
-        } catch (e) { console.error('load ' + name, e); this.col[name] = {}; }
-      }
+    /** Eski nom bilan moslik */
+    async init() {
+      await this.initAuth();
+      await this.initRest();
+    },
+
+    async _loadCollection(name) {
+      try {
+        var snap = await this.db.collection(name).limit(1000).get();
+        var map = {};
+        snap.docs.forEach(function (d) { var v = d.data(); if (v) { v.id = d.id; map[d.id] = v; } });
+        this.col[name] = map;
+      } catch (e) { console.error('load ' + name, e); this.col[name] = {}; }
+    },
+    async _loadSettings() {
       try {
         var s = await this.db.doc('meta/settings').get();
         this.settings = s.exists ? s.data() : null;
@@ -208,6 +282,8 @@
       return this._enqueue(path, async function () {
         if (self.mode === 'cloud') {
           await self.db.doc(path).set(data);
+        } else if (self.mode === 'server') {
+          await self.api('PUT', 'api/doc?path=' + encodeURIComponent(path), { data: data });
         } else {
           self._saveLocal();
         }
@@ -217,6 +293,7 @@
       var self = this;
       return this._enqueue(path, async function () {
         if (self.mode === 'cloud') { await self.db.doc(path).delete(); }
+        else if (self.mode === 'server') { await self.api('DELETE', 'api/doc?path=' + encodeURIComponent(path)); }
         else { self._saveLocal(); }
       });
     },
@@ -240,6 +317,29 @@
       this._emit();
     },
 
+    /** Kolleksiyani jonli kuzatish */
+    subscribe: function (name, cb) {
+      var self = this;
+      if (this.mode === 'server') {
+        var timer = setInterval(async function () {
+          try {
+            var r = await self.api('GET', 'api/collection?name=' + encodeURIComponent(name));
+            if (r && r.items) { self.col[name] = r.items; if (cb) cb(); }
+          } catch (e) { /* jim */ }
+        }, 8000);
+        return function () { clearInterval(timer); };
+      }
+      if (this.mode !== 'cloud' || !this.db) return function () { };
+      try {
+        return this.db.collection(name).limit(1000).onSnapshot(function (snap) {
+          var map = {};
+          snap.docs.forEach(function (d) { var v = d.data(); if (v) { v.id = d.id; map[d.id] = v; } });
+          Data.col[name] = map;
+          if (cb) cb();
+        }, function (e) { console.error('subscribe ' + name, e); });
+      } catch (e) { return function () { }; }
+    },
+
     /* --- oylik hujjatlar --- */
     docPath: function (kind, ym) { return kind + '/' + ym; },
     async loadMonth(kind, ym) {
@@ -250,6 +350,11 @@
         try {
           var s = await this.db.doc(path).get();
           if (s.exists) { data = clone(s.data()); if (!data.items) data.items = {}; }
+        } catch (e) { console.error('loadMonth', path, e); }
+      } else if (this.mode === 'server') {
+        try {
+          var r = await this.api('GET', 'api/doc?path=' + encodeURIComponent(path));
+          if (r && r.data) { data = r.data; if (!data.items) data.items = {}; }
         } catch (e) { console.error('loadMonth', path, e); }
       }
       this.docs[path] = data;
@@ -279,6 +384,11 @@
         try {
           var s = await this.db.doc(path).get();
           if (s.exists) { data = clone(s.data()); if (!data.items) data.items = {}; }
+        } catch (e) { console.error('loadLessons', e); }
+      } else if (this.mode === 'server') {
+        try {
+          var r = await this.api('GET', 'api/doc?path=' + encodeURIComponent(path));
+          if (r && r.data) { data = r.data; if (!data.items) data.items = {}; }
         } catch (e) { console.error('loadLessons', e); }
       }
       this.docs[path] = data;

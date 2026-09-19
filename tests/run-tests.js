@@ -13,6 +13,7 @@ const load = (f) => {
 load('core.js');
 load('model.js');
 load('ops.js');
+load('import.js');
 
 const A = globalThis.A;
 const D = A.Data;
@@ -281,6 +282,86 @@ function section(t) { results.push('\n' + t); }
   eq('Kiritilgan matndan son olinadi', A.parseSom('1 250 000 so’m'), 1250000);
   eq('To’lov muddati 28-kundan oshmaydi', A.dueDateFor('2026-09', 31), '2026-09-28');
   eq('Telefon normallashtiriladi', A.normPhone('901234567'), '+998901234567');
+
+  /* ---------------- 16. Alohida ruxsatlar ---------------- */
+  section('16. Alohida (shaxsiy) ruxsatlar');
+  const ustoz2 = { role: 'oqituvchi', name: 'U2', staffId: 't1', perms: { 'nav.finance': true, 'finance.payments': true } };
+  ok('Berilgan ruxsat rol cheklovidan ustun', A.can(ustoz2, 'nav.finance'));
+  ok('Berilmagan ruxsat baribir yopiq', !A.can(ustoz2, 'settings.edit'));
+  const admin2 = { role: 'admin', name: 'A2', perms: { 'payment.create': false } };
+  ok('Olib qo’yilgan ruxsat ishlamaydi', !A.can(admin2, 'payment.create'));
+  ok('Qolgan rol ruxsatlari saqlanadi', A.can(admin2, 'nav.students'));
+  const full = { role: 'oqituvchi', name: 'F', perms: {} };
+  A.allPermIds().forEach(p => { full.perms[p] = true; });
+  ok('Hamma ruxsat berilganda sozlamalar ham ochiladi', A.can(full, 'settings.edit'));
+  ok('Ruxsatlar ro’yxati bo’sh emas', A.allPermIds().length > 20);
+
+  /* ---------------- 17. Guruh kodi ---------------- */
+  section('17. Guruh kodi');
+  eq('Birinchi kod', A.nextGroupCode('Arab tili', []), 'A001');
+  eq('Keyingi raqam', A.nextGroupCode('Arab tili', [{ code: 'A001' }, { code: 'A019' }]), 'A020');
+  eq('Boshqa harf alohida sanaladi', A.nextGroupCode('Qur’on', [{ code: 'A005' }]), 'Q001');
+  eq('Harfsiz nom uchun zaxira harf', A.nextGroupCode('123', []), 'G001');
+  eq('Guruh yorlig’i kod bilan', A.groupLabel({ code: 'B020', name: 'Arab A1' }), 'B020 · Arab A1');
+
+  /* ---------------- 18. Excel / CSV import ---------------- */
+  section('18. Import (ustunlar tartibiga qaramaydi)');
+  const IH = A.importHelpers;
+
+  // Ustunlar aralash tartibda, turli tillarda
+  let rows = IH.parseCsvText(
+    'Telefon;Guruh;Ismi;Familiyasi;Ota-ona telefoni\n' +
+    '901234567;A001;Ali;Valiyev;+998901112233\n' +
+    '935551122;A001;Zuhra;Karimova;\n');
+  let res = IH.analyse(rows);
+  eq('Sarlavha qatori topildi', res.headerRow, 0);
+  eq('Familiya ustuni tanildi', res.map.lastName, 3);
+  eq('Ism ustuni tanildi', res.map.firstName, 2);
+  eq('Telefon ustuni tanildi', res.map.phone, 0);
+  eq('Ota-ona telefoni ajratildi', res.map.parentPhone, 4);
+  eq('Guruh ustuni tanildi', res.map.group, 1);
+  eq('Ma’lumot qatorlari', res.rows.length, 2);
+
+  // Ruscha sarlavhalar
+  res = IH.analyse(IH.parseCsvText('Фамилия,Имя,Телефон\nИванов,Иван,901112233\n'));
+  eq('Ruscha "Фамилия" tanildi', res.map.lastName, 0);
+  eq('Ruscha "Телефон" tanildi', res.map.phone, 2);
+
+  // Inglizcha sarlavhalar, boshqa tartib
+  res = IH.analyse(IH.parseCsvText('Phone\tFirst name\tLast name\n901112233\tAli\tValiyev\n'));
+  eq('Inglizcha "Last name" tanildi', res.map.lastName, 2);
+  eq('Tab bilan ajratilgan fayl o’qildi', res.rows.length, 1);
+
+  // Sarlavhasiz fayl — mazmun bo'yicha taxmin
+  res = IH.analyse(IH.parseCsvText(
+    'Valiyev;Ali;901234567\nKarimova;Zuhra;935551122\nToshev;Rustam;909998877\n'));
+  eq('Sarlavhasiz faylda ham telefon topildi', res.map.phone, 2);
+  eq('Birinchi matn ustuni familiya deb olindi', res.map.lastName, 0);
+  eq('Barcha qatorlar ma’lumot sifatida olindi', res.rows.length, 3);
+
+  // Sana formatlari
+  eq('Nuqtali sana o’giriladi', IH.cellDate('05.03.2010'), '2010-03-05');
+  eq('ISO sana saqlanadi', IH.cellDate('2010-03-05'), '2010-03-05');
+  eq('Bo’sh sana bo’sh qoladi', IH.cellDate(''), '');
+
+  // Sarlavha nomlarini tanish
+  eq('"Telefon raqami" tanildi', IH.guessField('Telefon raqami'), 'phone');
+  eq('"F.I.O" tanildi', IH.guessField('F.I.O'), 'fullName');
+  eq('"Guruh kodi" tanildi', IH.guessField('Guruh kodi'), 'group');
+  eq('Noma’lum ustun bo’sh qaytadi', IH.guessField('Qandaydir ustun'), '');
+
+  /* ---------------- 19. Bot: ism moslashtirish ---------------- */
+  section('19. Bot — ism bo’yicha o’quvchini topish');
+  const bot = require('../server/bot.js');
+  ok('To’liq mos ism', bot.nameMatches('Ali Valiyev', 'Valiyev Ali'));
+  ok('Tartib muhim emas', bot.nameMatches('Valiyev Ali', 'Ali Valiyev'));
+  ok('Katta-kichik harf muhim emas', bot.nameMatches('ALI valiyev', 'Valiyev Ali'));
+  ok('Apostrof farq qilmaydi', bot.nameMatches('Yo’ldoshev Maqsud', 'Yoldoshev Maqsud'));
+  ok('Otasining ismi qo’shilsa ham topadi', bot.nameMatches('Valiyev Ali Akramovich', 'Valiyev Ali'));
+  ok('Boshqa odam topilmaydi', !bot.nameMatches('Karimova Zuhra', 'Valiyev Ali'));
+  ok('Faqat ism yozilsa ham nomzod sifatida taklif qilinadi', bot.nameMatches('Ali', 'Valiyev Ali'));
+  ok('Bo’sh matn hech kimga mos kelmaydi', !bot.nameMatches('', 'Valiyev Ali'));
+  eq('Ism normallashtirish', bot.normName('  Valiyev   ALI '), 'ali valiyev');
 
   /* ---------------- Natija ---------------- */
   console.log(results.join('\n'));

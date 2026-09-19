@@ -1,12 +1,22 @@
 /* index.html ni artifact.html dan hosil qiladi.
    artifact.html — Claude Artifact uchun (u o'zi <html>/<head> qo'shadi).
-   index.html   — oddiy brauzer/hosting uchun to'liq hujjat.
+   index.html   — oddiy brauzer, server yoki hosting uchun to'liq hujjat.
    Ishga tushirish:  node build.js                                        */
 'use strict';
 const fs = require('fs');
 const path = require('path');
 
 const src = fs.readFileSync(path.join(__dirname, 'artifact.html'), 'utf8');
+
+// <title>, <link> va <style> teglarini <head> ga ko'chiramiz
+const headTags = [];
+const body = src.replace(/^[\s\S]*?(?=<div id="boot")/, function (top) {
+  top.replace(/<title>[\s\S]*?<\/title>|<style>[\s\S]*?<\/style>|<(?:link|meta)\b[^>]*>/gi, function (tag) {
+    headTags.push('  ' + tag.trim());
+    return '';
+  });
+  return '';
+});
 
 const head = `<!doctype html>
 <html lang="uz">
@@ -21,9 +31,10 @@ const head = `<!doctype html>
   img{max-width:100%}
   [hidden]{display:none!important}
 </style>
+${headTags.join('\n')}
 </head>
 <body>
 `;
 
-fs.writeFileSync(path.join(__dirname, 'index.html'), head + src + '\n</body>\n</html>\n');
-console.log('index.html yangilandi.');
+fs.writeFileSync(path.join(__dirname, 'index.html'), head + body.trimStart() + '\n</body>\n</html>\n');
+console.log('index.html yangilandi (' + headTags.length + ' ta head tegi ko’chirildi).');

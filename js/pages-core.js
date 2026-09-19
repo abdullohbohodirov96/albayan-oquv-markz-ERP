@@ -12,6 +12,11 @@
       return s ? (s.lastName + ' ' + s.firstName) : '—';
     },
     groupName: function (id) { var g = D.one('groups', id); return g ? g.name : '—'; },
+    groupLabel: function (id) { return A.groupLabel(D.one('groups', id)); },
+    groupByCode: function (code) {
+      var c = String(code || '').trim().toUpperCase();
+      return D.all('groups').filter(function (g) { return String(g.code || '').toUpperCase() === c; })[0] || null;
+    },
     courseName: function (id) { var c = D.one('courses', id); return c ? c.name : '—'; },
     staffName: function (id) { var s = D.one('staff', id); return s ? s.name : '—'; },
     roomName: function (id) { var r = D.one('rooms', id); return r ? r.name : '—'; },
@@ -300,6 +305,8 @@
     view.appendChild(UI.pageHead('Murojaatlar', 'Yangi mijozlarni bog’lanishdan o’quvchiga aylanguncha kuzating', [
       App.can('lead.edit') ? h('button', { class: 'btn primary', onclick: function () { leadForm(null, App); } },
         [UI.icon('plus'), 'Murojaat qo’shish']) : null,
+      App.can('lead.import') ? h('button', { class: 'btn', onclick: function () { A.importModal('leads', App); } },
+        [UI.icon('upload'), 'Excel’dan import']) : null,
       h('button', {
         class: 'btn', onclick: function () {
           UI.exportCsv('murojaatlar.csv', [['Ism', 'Telefon', 'Kurs', 'Manba', 'Holat', 'Keyingi aloqa', 'Izoh']].concat(
@@ -499,6 +506,8 @@
     view.appendChild(UI.pageHead('O’quvchilar', list.length + ' ta ko’rsatilmoqda', [
       App.can('student.edit') ? h('button', { class: 'btn primary', onclick: function () { A.studentForm(null, App); } },
         [UI.icon('plus'), 'O’quvchi qo’shish']) : null,
+      App.can('student.import') ? h('button', { class: 'btn', onclick: function () { A.importModal('students', App); } },
+        [UI.icon('upload'), 'Excel’dan import']) : null,
       h('button', {
         class: 'btn', onclick: function () {
           UI.exportCsv('oquvchilar.csv', [['Familiya', 'Ism', 'Telefon', 'Ota-ona', 'Ota-ona telefoni', 'Guruhlar', 'Holat', 'Qarz', 'Avans']].concat(

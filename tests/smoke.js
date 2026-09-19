@@ -77,7 +77,7 @@ require('fs').mkdirSync(shots, { recursive: true });
     await inputs.nth(1).fill('Test');
     await inputs.nth(4).fill('901234567');
     await page.screenshot({ path: path.join(shots, '15-student-form.png') });
-    await page.click('.modal .m-foot button:has-text("Saqlash")');
+    await page.locator('.modal .m-foot button').last().click();
     await page.waitForTimeout(1400);
     const url = await page.locator('.page-head h1').first().textContent();
     steps.push('Yangi o’quvchi saqlandi → ' + url);
@@ -153,4 +153,83 @@ require('fs').mkdirSync(shots, { recursive: true });
   await browser.close();
   console.log('QADAMLAR:\n' + steps.map(s => ' • ' + s).join('\n'));
   console.log('\nKONSOL XATOLARI: ' + (errors.length ? '\n' + errors.map(e => ' ! ' + e).join('\n') : 'yo’q'));
+})();
+
+/* ---------- Qo'shimcha tekshiruvlar: tillar, chat, vazifa, bot ---------- */
+(async () => {
+  const { chromium } = require('playwright');
+  const path2 = require('path');
+  const browser = await chromium.launch();
+  const errors = [], steps = [];
+  const ctx = await browser.newContext({ viewport: { width: 1320, height: 900 } });
+  const page = await ctx.newPage();
+  page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
+  await page.goto('file://' + path2.join(__dirname, '..', 'index.html'));
+  await page.waitForSelector('#login-user', { timeout: 15000 });
+  const t0 = Date.now();
+  await page.fill('#login-user', 'admin');
+  await page.fill('#login-pass', '1234');
+  await page.click('button[type=submit]');
+  await page.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  steps.push('Kirish vaqti: ' + (Date.now() - t0) + ' ms');
+  await page.waitForTimeout(600);
+
+  // Tillar
+  for (const [code, expect] of [['ru', 'Ученики'], ['en', 'Students'], ['ar', 'الطلاب']]) {
+    await page.click(`#lang-pick button:has-text("${code.toUpperCase()}")`);
+    await page.waitForTimeout(500);
+    const navText = await page.locator('#nav').innerText();
+    const dir = await page.evaluate(() => document.documentElement.getAttribute('dir'));
+    steps.push(code.toUpperCase() + ': menyuda "' + expect + '" bor = ' + navText.includes(expect) + ', dir=' + dir);
+  }
+  await page.click('#lang-pick button:has-text("UZ")');
+  await page.waitForTimeout(400);
+
+  // Suhbat
+  await page.click('#nav button:has-text("Suhbat")');
+  await page.waitForTimeout(600);
+  await page.fill('#chat-input', 'Salom jamoa, ertaga yig’ilish soat 10:00 da.');
+  await page.click('.chat-form button[type=submit]');
+  await page.waitForTimeout(900);
+  const msgCount = await page.locator('.chat-msgs .msg').count();
+  steps.push('Chatga xabar yozildi, xabarlar soni: ' + msgCount);
+
+  // Vazifa
+  await page.click('#nav button:has-text("Vazifalar")');
+  await page.waitForTimeout(500);
+  await page.click('.page-actions button:has-text("Vazifa berish")');
+  await page.waitForSelector('.modal');
+  await page.fill('.modal textarea, .modal input[type=text]', 'Sentabr hisobotini tayyorlash');
+  await page.locator('.modal .m-foot button').last().click();
+  await page.waitForTimeout(1000);
+  await page.click('.seg button:has-text("Barchasi")');
+  await page.waitForTimeout(600);
+  const taskRows = await page.locator('table.tbl tbody tr').count();
+  steps.push('Vazifa qo’shildi, ro’yxatdagi qatorlar: ' + taskRows);
+
+  // Bot
+  await page.click('#nav button:has-text("Telegram bot")');
+  await page.waitForTimeout(600);
+  const botTiles = await page.locator('.tile').count();
+  steps.push('Bot sahifasi ochildi, plitkalar: ' + botTiles);
+
+  // Import oynasi
+  await page.click('#nav button:has-text("O’quvchilar")');
+  await page.waitForTimeout(500);
+  await page.click('.page-actions button:has-text("import")');
+  await page.waitForSelector('.modal');
+  steps.push('Import oynasi ochildi: ' + (await page.locator('#imp-file').count() > 0));
+  await page.keyboard.press('Escape');
+
+  // Guruh kodlari
+  await page.click('#nav button:has-text("Guruhlar")');
+  await page.waitForTimeout(600);
+  const codes = await page.locator('.card .pill.info').allInnerTexts();
+  steps.push('Guruh kodlari: ' + codes.slice(0, 5).join(', '));
+
+  await page.screenshot({ path: path2.join(__dirname, '..', 'shots', 'x01-groups.png'), fullPage: true });
+  await ctx.close();
+  await browser.close();
+  console.log('\nQO’SHIMCHA:\n' + steps.map(s => ' • ' + s).join('\n'));
+  console.log('Xatolar: ' + (errors.length ? errors.join('; ') : 'yo’q'));
 })();

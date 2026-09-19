@@ -47,7 +47,11 @@
     edit: 'M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z',
     trash: 'M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6',
     alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
-    history: 'M3 3v5h5M3.05 13A9 9 0 1 0 6 5.3L3 8M12 7v5l4 2'
+    history: 'M3 3v5h5M3.05 13A9 9 0 1 0 6 5.3L3 8M12 7v5l4 2',
+    chat: 'M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z',
+    task: 'M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9',
+    bot: 'M12 8V4H8M4 8h16v12H4zM2 14h2M20 14h2M9 13v2M15 13v2',
+    upload: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12'
   };
   function icon(name, cls) {
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -178,10 +182,9 @@
       (o.options || []).forEach(function (op) {
         input.appendChild(h('option', { value: op.value }, op.label));
       });
-      input.value = o.value == null ? '' : o.value;
-      if (input.value !== (o.value == null ? '' : String(o.value)) && (o.options || []).length) {
-        input.value = o.options[0].value;
-      }
+      if (o.value != null && String(o.value) !== '') input.value = String(o.value);
+      // qiymat ro'yxatda bo'lmasa yoki berilmagan bo'lsa — birinchi variant tanlanadi
+      if ((input.selectedIndex < 0) && input.options.length) input.selectedIndex = 0;
     } else if (o.type === 'textarea') {
       input = h('textarea', { id: id, rows: o.rows || 3 });
       input.value = o.value == null ? '' : o.value;

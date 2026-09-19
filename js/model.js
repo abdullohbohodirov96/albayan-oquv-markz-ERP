@@ -15,38 +15,157 @@
     direktor: ['*'],
     admin: [
       'nav.dashboard', 'nav.leads', 'nav.students', 'nav.groups', 'nav.schedule',
-      'nav.attendance', 'nav.finance', 'nav.reports',
-      'lead.view', 'lead.edit',
-      'student.view', 'student.edit',
+      'nav.attendance', 'nav.finance', 'nav.reports', 'nav.chat', 'nav.tasks', 'nav.bot',
+      'lead.view', 'lead.edit', 'lead.import',
+      'student.view', 'student.edit', 'student.import',
       'group.view', 'group.edit',
       'schedule.view', 'schedule.edit',
       'attendance.view', 'attendance.mark',
       'finance.payments', 'finance.debts',
       'payment.create', 'invoice.create',
-      'reports.basic'
+      'reports.basic',
+      'chat.use', 'task.view', 'task.assign',
+      'bot.broadcast'
     ],
     oqituvchi: [
       'nav.dashboard', 'nav.groups', 'nav.schedule', 'nav.attendance', 'nav.students',
+      'nav.chat', 'nav.tasks',
       'student.view', 'group.view', 'schedule.view',
-      'attendance.view', 'attendance.mark'
+      'attendance.view', 'attendance.mark',
+      'chat.use', 'task.view'
     ],
     buxgalter: [
       'nav.dashboard', 'nav.students', 'nav.groups', 'nav.finance', 'nav.staff', 'nav.reports',
+      'nav.chat', 'nav.tasks',
       'student.view', 'group.view', 'schedule.view',
       'attendance.view',
       'finance.payments', 'finance.debts', 'finance.expenses', 'finance.payroll',
       'payment.create', 'payment.void', 'invoice.create',
       'expense.edit', 'payroll.manage', 'staff.view',
-      'reports.basic', 'reports.finance'
+      'reports.basic', 'reports.finance',
+      'chat.use', 'task.view'
     ]
   };
-  // Faqat direktorga tegishli: payroll.approve, settings.edit, users.manage, staff.edit
+  // Standart holatda faqat direktorda: payroll.approve, settings.edit, users.manage,
+  // staff.edit, bot.manage. Ularni har bir foydalanuvchi uchun alohida berish mumkin.
 
+  /** Interfeysda ko'rsatiladigan ruxsatlar ro'yxati */
+  var PERM_GROUPS = [
+    {
+      key: 'leads', label: 'Murojaatlar', perms: [
+        { id: 'nav.leads', label: 'Bo’limni ko’rish' },
+        { id: 'lead.edit', label: 'Qo’shish va tahrirlash' },
+        { id: 'lead.import', label: 'Excel’dan import' }
+      ]
+    },
+    {
+      key: 'students', label: 'O’quvchilar', perms: [
+        { id: 'nav.students', label: 'Bo’limni ko’rish' },
+        { id: 'student.view', label: 'Kartani ko’rish' },
+        { id: 'student.edit', label: 'Qo’shish va tahrirlash' },
+        { id: 'student.import', label: 'Excel’dan import' }
+      ]
+    },
+    {
+      key: 'groups', label: 'Guruhlar va kurslar', perms: [
+        { id: 'nav.groups', label: 'Bo’limni ko’rish' },
+        { id: 'group.view', label: 'Guruhni ko’rish' },
+        { id: 'group.edit', label: 'Ochish va tahrirlash' }
+      ]
+    },
+    {
+      key: 'schedule', label: 'Jadval', perms: [
+        { id: 'nav.schedule', label: 'Bo’limni ko’rish' },
+        { id: 'schedule.view', label: 'Jadvalni ko’rish' },
+        { id: 'schedule.edit', label: 'Dars ko’chirish va bekor qilish' }
+      ]
+    },
+    {
+      key: 'attendance', label: 'Davomat', perms: [
+        { id: 'nav.attendance', label: 'Bo’limni ko’rish' },
+        { id: 'attendance.view', label: 'Davomatni ko’rish' },
+        { id: 'attendance.mark', label: 'Davomat olish' }
+      ]
+    },
+    {
+      key: 'finance', label: 'Moliya', perms: [
+        { id: 'nav.finance', label: 'Bo’limni ko’rish' },
+        { id: 'finance.payments', label: 'To’lovlar' },
+        { id: 'finance.debts', label: 'Qarzdorlik' },
+        { id: 'finance.expenses', label: 'Xarajatlar' },
+        { id: 'finance.payroll', label: 'Ish haqi' },
+        { id: 'payment.create', label: 'To’lov qabul qilish' },
+        { id: 'payment.void', label: 'To’lovni bekor qilish' },
+        { id: 'invoice.create', label: 'Oylik hisob yaratish' },
+        { id: 'expense.edit', label: 'Xarajat kiritish' },
+        { id: 'payroll.manage', label: 'Ish haqini hisoblash' },
+        { id: 'payroll.approve', label: 'Ish haqini tasdiqlash' }
+      ]
+    },
+    {
+      key: 'staff', label: 'Xodimlar', perms: [
+        { id: 'nav.staff', label: 'Bo’limni ko’rish' },
+        { id: 'staff.view', label: 'Ro’yxatni ko’rish' },
+        { id: 'staff.edit', label: 'Qo’shish va tahrirlash' }
+      ]
+    },
+    {
+      key: 'reports', label: 'Hisobotlar', perms: [
+        { id: 'nav.reports', label: 'Bo’limni ko’rish' },
+        { id: 'reports.basic', label: 'Umumiy hisobotlar' },
+        { id: 'reports.finance', label: 'Moliyaviy hisobotlar' }
+      ]
+    },
+    {
+      key: 'team', label: 'Jamoa', perms: [
+        { id: 'nav.chat', label: 'Suhbat bo’limi' },
+        { id: 'chat.use', label: 'Xabar yozish' },
+        { id: 'nav.tasks', label: 'Vazifalar bo’limi' },
+        { id: 'task.view', label: 'Vazifalarni ko’rish' },
+        { id: 'task.assign', label: 'Vazifa berish' }
+      ]
+    },
+    {
+      key: 'bot', label: 'Telegram bot', perms: [
+        { id: 'nav.bot', label: 'Bo’limni ko’rish' },
+        { id: 'bot.broadcast', label: 'O’quvchilarga xabar yuborish' },
+        { id: 'bot.manage', label: 'Bot sozlamalari' }
+      ]
+    },
+    {
+      key: 'system', label: 'Tizim', perms: [
+        { id: 'settings.edit', label: 'Sozlamalar' },
+        { id: 'users.manage', label: 'Foydalanuvchilarni boshqarish' }
+      ]
+    }
+  ];
+
+  function allPermIds() {
+    var out = [];
+    PERM_GROUPS.forEach(function (g) { g.perms.forEach(function (p) { out.push(p.id); }); });
+    out.push('nav.dashboard');
+    return out;
+  }
+
+  /**
+   * Ruxsat tekshiruvi.
+   * user.perms — alohida sozlangan ruxsatlar: {perm: true|false}.
+   * Aniq berilgan qiymat rolning standart ruxsatidan ustun turadi.
+   */
   function can(user, perm) {
     if (!user) return false;
+    if (user.perms && typeof user.perms === 'object' && Object.prototype.hasOwnProperty.call(user.perms, perm)) {
+      return user.perms[perm] === true;
+    }
     var list = PERMS[user.role] || [];
     if (list.indexOf('*') >= 0) return true;
     return list.indexOf(perm) >= 0;
+  }
+
+  /** Rolning standart ruxsatlari (interfeysda ko'rsatish uchun) */
+  function roleHas(role, perm) {
+    var list = PERMS[role] || [];
+    return list.indexOf('*') >= 0 || list.indexOf(perm) >= 0;
   }
   /** O'qituvchi faqat o'z guruhlarini ko'radi */
   function scopeGroups(user, groups) {
@@ -60,6 +179,28 @@
     if (!user || !group) return false;
     if (user.role !== 'oqituvchi') return true;
     return group.teacherId === user.staffId;
+  }
+
+  /* =============== GURUH KODI =============== */
+  /**
+   * Guruh kodi: kurs nomining birinchi harfi + 3 xonali raqam (masalan B020).
+   * Bot va ro'yxatlarda guruhni tez topish uchun ishlatiladi.
+   */
+  function nextGroupCode(courseName, groups) {
+    var letter = String(courseName || 'G').trim().charAt(0).toUpperCase();
+    if (!/[A-Z]/.test(letter)) letter = 'G';
+    var max = 0;
+    (groups || []).forEach(function (g) {
+      var m = String(g.code || '').match(/^([A-Z])(\d+)$/);
+      if (m && m[1] === letter) max = Math.max(max, Number(m[2]));
+    });
+    var n = String(max + 1);
+    while (n.length < 3) n = '0' + n;
+    return letter + n;
+  }
+  function groupLabel(g) {
+    if (!g) return '—';
+    return g.code ? g.code + ' · ' + g.name : g.name;
   }
 
   /* =============== NARX VA CHEGIRMA =============== */
@@ -354,7 +495,9 @@
 
   global.A = global.A || {};
   Object.assign(global.A, {
-    ROLES: ROLES, PERMS: PERMS, can: can, scopeGroups: scopeGroups, canSeeGroup: canSeeGroup,
+    ROLES: ROLES, PERMS: PERMS, PERM_GROUPS: PERM_GROUPS, allPermIds: allPermIds,
+    can: can, roleHas: roleHas, scopeGroups: scopeGroups, canSeeGroup: canSeeGroup,
+    nextGroupCode: nextGroupCode, groupLabel: groupLabel,
     feeForMonth: feeForMonth, discountFor: discountFor, invoiceAmountFor: invoiceAmountFor,
     membershipActiveIn: membershipActiveIn, invoiceId: invoiceId, dueDateFor: dueDateFor,
     allocate: allocate, activePayments: activePayments, paidByInvoice: paidByInvoice,

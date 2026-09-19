@@ -157,6 +157,7 @@
                 id: payId, studentId: sid, amount: amount, date: fDate.input.value,
                 method: fMethod.input.value, note: fNote.input.value, allocations: allocations
               }, App.user);
+              if (A.Bot) { try { await A.Bot.notifyPayment(rec); } catch (e) { console.error('bot', e); } }
               c();
               UI.toast('To’lov qabul qilindi.', 'ok');
               A.receiptModal(rec, App);
@@ -1036,6 +1037,31 @@
           help: 'Shu kundan keyin to’lanmagan hisob "muddati o’tgan" hisoblanadi.'
         }
       ]);
+      var langBtns = h('div', { class: 'rowflex' }, A.I18N.langs.map(function (l) {
+        return h('button', {
+          class: 'btn' + (A.I18N.lang === l.id ? ' primary' : ''),
+          onclick: function () { A.I18N.set(l.id); App.render(); }
+        }, l.label);
+      }));
+      var themeBtns = h('div', { class: 'rowflex' }, [
+        { id: 'light', label: 'Yorug’' }, { id: 'dark', label: 'Qorong’i' }, { id: '', label: 'Tizim bo’yicha' }
+      ].map(function (t) {
+        var cur = document.documentElement.getAttribute('data-theme') || '';
+        return h('button', {
+          class: 'btn' + (cur === t.id ? ' primary' : ''),
+          onclick: function () {
+            if (t.id) document.documentElement.setAttribute('data-theme', t.id);
+            else document.documentElement.removeAttribute('data-theme');
+            try { localStorage.setItem('albyana_theme', t.id); } catch (e) { }
+            App.render();
+          }
+        }, t.label);
+      }));
+      view.appendChild(UI.card('Ko’rinish', [
+        h('div', { class: 'field' }, [h('label', {}, 'Til'), langBtns]),
+        h('div', { class: 'field', style: 'margin-top:12px' }, [h('label', {}, 'Mavzu'), themeBtns])
+      ]));
+      view.appendChild(h('div', { style: 'height:14px' }));
       view.appendChild(UI.card('Markaz ma’lumotlari', [f.node, h('div', { style: 'margin-top:14px' },
         h('button', {
           class: 'btn primary', onclick: function (e) {
@@ -1229,10 +1255,57 @@
         options: [{ value: 'yes', label: 'Faol' }, { value: 'no', label: 'O’chirilgan' }]
       }
     ]);
+
+    /* --- Ruxsatlar --- */
+    var perms = A.clone(u.perms || {});
+    var permBox = h('div', { class: 'perm-grid' });
+    function effective(pid) {
+      if (Object.prototype.hasOwnProperty.call(perms, pid)) return perms[pid];
+      return A.roleHas(f.get('role').input.value, pid);
+    }
+    function paintPerms() {
+      UI.clear(permBox);
+      A.PERM_GROUPS.forEach(function (grp) {
+        permBox.appendChild(h('div', { class: 'perm-row', style: 'background:var(--brand-soft);font-weight:700' },
+          h('div', { class: 'pname' }, grp.label)));
+        grp.perms.forEach(function (p) {
+          var on = effective(p.id);
+          var custom = Object.prototype.hasOwnProperty.call(perms, p.id);
+          var cb = h('input', { type: 'checkbox', checked: on ? true : null });
+          cb.addEventListener('change', function () {
+            perms[p.id] = cb.checked;
+            paintPerms();
+          });
+          permBox.appendChild(h('div', { class: 'perm-row' }, [
+            h('div', { class: 'pname' }, p.label),
+            custom ? UI.pill('Alohida', 'info') : UI.pill('Rol bo’yicha', 'mute'),
+            h('div', { class: 'popts' }, h('label', {}, [cb, h('span', {}, on ? 'Ruxsat bor' : 'Ruxsat yo’q')]))
+          ]));
+        });
+      });
+    }
+    paintPerms();
+    f.get('role').input.addEventListener('change', paintPerms);
+
+    var permSection = h('details', { style: 'margin-top:4px' }, [
+      h('summary', { style: 'cursor:pointer;font-weight:700;padding:10px 0' }, 'Ruxsatlarni sozlash'),
+      h('div', { class: 'rowflex', style: 'margin-bottom:8px' }, [
+        h('button', {
+          class: 'btn sm', type: 'button', onclick: function () {
+            A.allPermIds().forEach(function (pid) { perms[pid] = true; });
+            paintPerms();
+          }
+        }, 'Hammasiga ruxsat berish'),
+        h('button', {
+          class: 'btn sm', type: 'button', onclick: function () { perms = {}; paintPerms(); }
+        }, 'Rol bo’yicha qaytarish')
+      ]),
+      permBox
+    ]);
     UI.modal({
       title: isNew ? 'Yangi foydalanuvchi' : 'Foydalanuvchi: ' + u.name,
       wide: true,
-      body: f.node,
+      body: [f.node, permSection],
       actions: [
         (!isNew && u.id !== App.user.id) ? {
           label: 'O’chirish', cls: 'danger', onClick: async function (c) {
@@ -1254,7 +1327,8 @@
             UI.busy(btn, async function () {
               var rec = Object.assign({}, u, {
                 name: v.name, login: v.login.toLowerCase(), role: v.role,
-                staffId: v.staffId || null, active: v.active === 'yes'
+                staffId: v.staffId || null, active: v.active === 'yes',
+                perms: Object.keys(perms).length ? perms : null
               });
               if (isNew) { rec.id = A.uid('usr'); rec.createdAt = A.nowStamp(); }
               if (v.password) {

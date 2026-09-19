@@ -6,6 +6,7 @@
 *.pem
 
 # Haqiqiy ma'lumotlar va zaxiralar (hech qachon commit qilinmasin)
+data/
 albyana-zaxira-*.json
 backup/
 zaxira/
@@ -28,6 +29,9 @@ coverage/
 npm-debug.log*
 .playwright/
 test-results/
+strings.json
+strings2.json
+logo.b64
 
 # Muhit
 .DS_Store

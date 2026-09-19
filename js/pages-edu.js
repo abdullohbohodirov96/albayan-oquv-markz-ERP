@@ -75,7 +75,10 @@
         onclick: function () { App.go('group', { id: g.id }); }
       }, h('div', { class: 'card-body', style: 'display:flex;flex-direction:column;gap:9px' }, [
         h('div', { class: 'rowflex', style: 'justify-content:space-between' }, [
-          h('h3', { style: 'font-size:15px' }, g.name),
+          h('h3', { style: 'font-size:15px' }, [
+            g.code ? h('span', { class: 'pill info', style: 'margin-inline-end:6px' }, g.code) : null,
+            g.name
+          ]),
           g.status === 'faol' ? UI.pill('Faol', 'ok') : (g.status === 'rejalashtirilgan' ? UI.pill('Rejalashtirilgan', 'info') : UI.pill('Yakunlangan', 'mute'))
         ]),
         h('div', { class: 'small muted' }, Q.courseName(g.courseId) + ' · ' + Q.staffName(g.teacherId)),
@@ -106,7 +109,7 @@
 
     view.appendChild(h('button', { class: 'btn ghost sm', style: 'margin-bottom:8px', onclick: function () { App.go('groups'); } },
       [UI.icon('back'), 'Guruhlar']));
-    view.appendChild(UI.pageHead(g.name,
+    view.appendChild(UI.pageHead(A.groupLabel(g),
       Q.courseName(g.courseId) + ' · ' + Q.staffName(g.teacherId) + ' · ' + Q.roomName(g.roomId) + ' · ' +
       (g.days || []).map(function (d) { return A.WEEKDAYS_SHORT[d - 1]; }).join(', ') + ' ' + g.startTime + '–' + g.endTime,
       [
@@ -265,13 +268,26 @@
     }
 
     var f = UI.form([
-      { name: 'name', label: 'Guruh nomi', required: true, value: g.name, placeholder: 'Ingliz A1 (ertalab)' },
+      { name: 'name', label: 'Guruh nomi', required: true, value: g.name, placeholder: 'Arab tili A1 (ertalab)' },
+      {
+        name: 'code', label: 'Guruh kodi', required: true,
+        value: g.code || A.nextGroupCode((courses[0] || {}).name, D.all('groups')),
+        help: 'O’quvchi botda shu kodni yozadi. Masalan: B020',
+        validate: function (v) {
+          var dup = D.all('groups').filter(function (x) {
+            return x.id !== g.id && String(x.code || '').toUpperCase() === String(v).toUpperCase();
+          });
+          return dup.length ? 'Bu kod boshqa guruhda ishlatilgan.' : null;
+        }
+      },
       {
         name: 'courseId', label: 'Kurs', type: 'select', required: true, value: g.courseId,
         options: courses.map(function (c) { return { value: c.id, label: c.name }; }),
         onchange: function (e) {
           var c = D.one('courses', e.target.value);
-          if (c && !f.get('fee').input.value) f.get('fee').input.value = c.monthlyFee;
+          if (!c) return;
+          if (!f.get('fee').input.value) f.get('fee').input.value = c.monthlyFee;
+          if (isNew) f.get('code').input.value = A.nextGroupCode(c.name, D.all('groups'));
         }
       },
       {
@@ -1033,6 +1049,13 @@
               });
               await A.Ops.audit(App.user, 'Davomat saqlandi', g.name, A.dateLabel(date) +
                 ' · belgilangan: ' + (members.length - unmarkedCount()) + '/' + members.length);
+              if (A.Bot) {
+                try {
+                  await A.Bot.notifyAttendance(g.id, date, members.map(function (m) {
+                    return { studentId: m.studentId, status: state[m.id] };
+                  }), App.user.name);
+                } catch (e) { console.error('bot', e); }
+              }
               UI.toast('Davomat saqlandi.', 'ok');
               App.render();
             });

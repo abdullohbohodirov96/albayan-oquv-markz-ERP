@@ -36,15 +36,14 @@
     },
     async loadAll() {
       var kinds = ['invoices', 'payments', 'expenses', 'payroll'];
-      for (var i = 0; i < kinds.length; i++) {
-        var k = kinds[i];
-        for (var j = 0; j < Fin.index[k].length; j++) {
-          await D.loadMonth(k, Fin.index[k][j]);
-        }
-      }
-      // joriy oy har doim yuklansin
+      var jobs = [];
       var cur = A.thisMonth();
-      for (var q = 0; q < kinds.length; q++) { await D.loadMonth(kinds[q], cur); }
+      kinds.forEach(function (k) {
+        var months = (Fin.index[k] || []).slice();
+        if (months.indexOf(cur) < 0) months.push(cur);
+        months.forEach(function (m) { jobs.push(D.loadMonth(k, m)); });
+      });
+      await Promise.all(jobs);   // barchasi bir vaqtda — kirish tezroq
     },
 
     /* --- to'plangan ro'yxatlar --- */
