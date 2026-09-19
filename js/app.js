@@ -204,6 +204,25 @@
     return await A.sha256(login.toLowerCase() + '::' + pass + '::' + salt);
   }
 
+  /* Markaz nomi: avval serverdagi nom, bo'lmasa brauzerdagi nusxa, oxirida standart.
+     Eski nusxa qolib ketmasin uchun server nomi kelganda yangilanadi. */
+  function centerNameNow() {
+    return (D.settings && D.settings.centerName) || 'AlBayan Cairo';
+  }
+  async function refreshCenterName() {
+    try {
+      var r = await fetch('/api/public', { credentials: 'same-origin' });
+      if (!r.ok) return;
+      var j = await r.json();
+      if (!j || !j.centerName) return;
+      if (D.settings && D.settings.centerName !== j.centerName) {
+        D.settings.centerName = j.centerName;           // eski nusxani tuzatamiz
+      }
+      var el = document.getElementById('login-center');
+      if (el) el.textContent = j.centerName;
+    } catch (e) { /* internet yo'q — shu holicha qoladi */ }
+  }
+
   function renderLogin(msg) {
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
@@ -226,7 +245,7 @@
       h('div', { class: 'brandline' }, [
         h('img', { class: 'logo', src: LOGO, alt: '' }),
         h('div', {}, [
-          h('h1', {}, (D.settings && D.settings.centerName) || 'AlBayan Cairo'),
+          h('h1', { id: 'login-center' }, centerNameNow()),
           h('div', { class: 'sub' }, 'O’quv markazi boshqaruv tizimi')
         ])
       ]),
@@ -239,6 +258,7 @@
           : 'Ma’lumotlar markaz bazasida saqlanadi.')
     ]);
     wrap.appendChild(formEl);
+    refreshCenterName();
 
     function onSubmit(e) {
       e.preventDefault();

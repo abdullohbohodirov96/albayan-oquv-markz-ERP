@@ -565,6 +565,17 @@ async function handleApi(req, res, url) {
 
   if (route === 'health') return send(res, 200, { ok: true, mode: store.kind });
 
+  /* Kirish sahifasi uchun ochiq ma'lumot: faqat markaz nomi.
+     (U kirish sahifasida baribir ko'rinadi — boshqa hech narsa berilmaydi.) */
+  if (route === 'public' && req.method === 'GET') {
+    let name = process.env.APP_NAME || 'AlBayan Cairo';
+    try {
+      const s = await store.get('meta/settings');
+      if (s && s.centerName) name = String(s.centerName);
+    } catch (e) { /* baza javob bermasa standart nom */ }
+    return send(res, 200, { centerName: name });
+  }
+
   /* --- Tashqi murojaat qabul qilish (Instagram, target reklama, sayt formasi) --- */
   if (route.indexOf('intake/') === 0 && req.method === 'POST') {
     const key = route.slice('intake/'.length);

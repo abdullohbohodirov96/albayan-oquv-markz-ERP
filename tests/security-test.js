@@ -313,6 +313,18 @@ async function login(l, p) {
   ok('Tiklash tarixga yozildi',
     Object.values(auditAfter.json.items || {}).some(e => /tiklandi/i.test(e.action || '')));
 
+  section('13. Kirishdan oldingi ochiq ma’lumot (/api/public)');
+  const pub = await req('/api/public');
+  ok('Kirishsiz ham javob beradi', pub.status === 200, String(pub.status));
+  ok('Markaz nomi bor', !!(pub.json && pub.json.centerName), pub.text);
+  const pubKeys = Object.keys(pub.json || {});
+  ok('Faqat markaz nomi beriladi', pubKeys.length === 1 && pubKeys[0] === 'centerName',
+    pubKeys.join(', '));
+  ok('Maxfiy so’z chiqmadi',
+    !/parol|token|hash|salt|DATABASE|secret/i.test(pub.text), pub.text.slice(0, 120));
+  const pubPost = await req('/api/public', { method: 'POST', body: { centerName: 'Boshqa' } });
+  ok('POST bilan o’zgartirib bo’lmaydi', pubPost.status !== 200, String(pubPost.status));
+
   console.log(out.join('\n'));
   console.log('\n' + '─'.repeat(52));
   console.log((fail === 0 ? '✓ HAMMASI O’TDI' : '✗ XATOLAR BOR') + ` — ${pass} ta o'tdi, ${fail} ta xato`);

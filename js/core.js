@@ -260,8 +260,10 @@
       } catch (e) { this.settings = null; }
     },
 
-    _lsKey: 'albyana_local_v1',
+    /* v2: eski nusxada markaz nomi ham eski edi — bir marta tozalanadi */
+    _lsKey: 'albayan_local_v2',
     _loadLocal() {
+      try { global.localStorage.removeItem('albyana_local_v1'); } catch (e) { }
       var raw = null;
       try { raw = global.localStorage.getItem(this._lsKey); } catch (e) { raw = null; }
       var obj = {};
