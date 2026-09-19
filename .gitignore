@@ -1,0 +1,37 @@
+# Maxfiy sozlamalar
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Haqiqiy ma'lumotlar va zaxiralar (hech qachon commit qilinmasin)
+albyana-zaxira-*.json
+backup/
+zaxira/
+*.sqlite
+*.db
+*.dump
+
+# Paketlar va build
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# Test natijalari va vaqtinchalik fayllar
+shots/
+preview.html
+coverage/
+*.log
+npm-debug.log*
+.playwright/
+test-results/
+
+# Muhit
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,14 @@
+{
+  "name": "albyana-oquv-markaz-erp",
+  "version": "1.0.0",
+  "description": "Albyana o'quv markazi uchun ERP tizimi — o'quvchilar, guruhlar, jadval, davomat, to'lovlar, ish haqi va hisobotlar",
+  "private": true,
+  "scripts": {
+    "build": "node build.js",
+    "start": "npx --yes serve .",
+    "test": "node tests/run-tests.js",
+    "test:browser": "node tests/smoke.js"
+  },
+  "keywords": ["erp", "education", "crm", "uzbek", "oquv-markaz"],
+  "license": "UNLICENSED"
+}
