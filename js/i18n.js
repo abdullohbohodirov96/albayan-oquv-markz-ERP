@@ -292,6 +292,92 @@
     'Muhim harakatlar tarixi': ['История важных действий', 'Audit log', 'سجل الإجراءات المهمة'],
     'Zaxira nusxa': ['Резервная копия', 'Backup', 'نسخة احتياطية'],
 
+    /* --- to'liq iboralar (aralash matn chiqmasligi uchun) --- */
+    'Sanani tanlang': ['Выберите дату', 'Choose a date', 'اختر التاريخ'],
+    'Vaqtni tanlang': ['Выберите время', 'Choose a time', 'اختر الوقت'],
+    'Oyni tanlang': ['Выберите месяц', 'Choose a month', 'اختر الشهر'],
+    'Voronka nima?': ['Что такое воронка?', 'What is a funnel?', 'ما هي قِمع المبيعات؟'],
+    'Dars (daq.)': ['Урок (мин.)', 'Lesson (min)', 'الدرس (دقيقة)'],
+    'Faol a’zoliklar': ['Активные участия', 'Active memberships', 'العضويات النشطة'],
+    'Xarajat yo’q.': ['Расходов нет.', 'No expenses.', 'لا توجد مصروفات.'],
+    'Hisoblash': ['Расчёт', 'Calculation', 'الاحتساب'],
+    '"Sof pul oqimi"': ['«Чистый денежный поток»', '“Net cash flow”', '«صافي التدفق النقدي»'],
+    'Faol guruhlar:': ['Активные группы:', 'Active groups:', 'المجموعات النشطة:'],
+    'Telefon:': ['Телефон:', 'Phone:', 'الهاتف:'],
+    'Vazifa yo’q': ['Задач нет', 'No tasks', 'لا توجد مهام'],
+    'Hisoblangan (jami)': ['Начислено (всего)', 'Charged (total)', 'المحتسب (الإجمالي)'],
+    'Karta + bank': ['Карта + банк', 'Card + bank', 'بطاقة + بنك'],
+    'To’langan xarajatlar': ['Оплаченные расходы', 'Paid expenses', 'المصروفات المدفوعة'],
+    'Ish haqi hisoblanmagan.': ['Зарплата не начислена.', 'Payroll not calculated.', 'لم تُحتسب الرواتب.'],
+    'Umumiy suhbat': ['Общий чат', 'General chat', 'المحادثة العامة'],
+    'Yangi suhbat': ['Новый чат', 'New chat', 'محادثة جديدة'],
+    'Familiya, ism': ['Фамилия, имя', 'Surname, first name', 'اللقب والاسم'],
+    'Ota-ona / vasiy': ['Родитель / опекун', 'Parent / guardian', 'ولي الأمر'],
+    'Ota-ona / vasiy ismi (ixtiyoriy)': ['Имя родителя / опекуна (необязательно)', 'Parent / guardian name (optional)', 'اسم ولي الأمر (اختياري)'],
+    'Ota-ona telefoni (ixtiyoriy)': ['Телефон родителя (необязательно)', 'Parent phone (optional)', 'هاتف ولي الأمر (اختياري)'],
+    'Hisoblangan o’quv to’lovlari': ['Начисленная плата за обучение', 'Charged tuition fees', 'الرسوم الدراسية المحتسبة'],
+    'Qarzi yo’q': ['Долга нет', 'No debt', 'لا يوجد دين'],
+    'Chegirma boshlanishi': ['Начало скидки', 'Discount starts', 'بداية الخصم'],
+    'Chegirma tugashi (ixtiyoriy)': ['Окончание скидки (необязательно)', 'Discount ends (optional)', 'نهاية الخصم (اختياري)'],
+    'To’lov muddati (oyning kuni)': ['Срок оплаты (день месяца)', 'Payment due (day of month)', 'موعد السداد (يوم الشهر)'],
+    'Qo’shimcha: sana, to’lov usuli, izoh va taqsimot':
+      ['Дополнительно: дата, способ оплаты, примечание и распределение',
+        'More: date, payment method, note and allocation',
+        'إضافي: التاريخ وطريقة الدفع والملاحظة والتوزيع'],
+    'Parollar va maxfiy ma’lumotlar tarixga yozilmaydi.':
+      ['Пароли и конфиденциальные данные в историю не записываются.',
+        'Passwords and secrets are never written to the log.',
+        'لا تُسجَّل كلمات المرور والبيانات السرية في السجل.'],
+    'Tasdiqlangan davr qayta hisoblanmaydi.':
+      ['Утверждённый период не пересчитывается.', 'An approved period is not recalculated.', 'لا تُعاد المحاسبة للفترة المعتمدة.'],
+    'Xodimga topshiriq bering — muddati va holati kuzatiladi.':
+      ['Поставьте сотруднику задачу — срок и статус отслеживаются.',
+        'Give a staff member a task — the due date and status are tracked.',
+        'كلّف موظفًا بمهمة — يُتابَع موعدها وحالتها.'],
+    'Har bir faol a’zolik uchun oyiga bitta hisob yaratiladi. Tugmani qayta bossangiz ham takroriy hisob paydo bo’lmaydi.':
+      ['Для каждого активного участия создаётся один счёт в месяц. Повторное нажатие кнопки не создаст дубликат.',
+        'One invoice per month is created for each active membership. Pressing the button again creates no duplicate.',
+        'تُنشأ فاتورة واحدة شهريًا لكل عضوية نشطة. الضغط مرة أخرى لا يُنشئ نسخة مكررة.'],
+    'Belgilangan oylik — to’g’ridan-to’g’ri summa. Foiz — o’qituvchining guruhlariga shu oyda haqiqatda tushgan puldan foiz.':
+      ['Фиксированная зарплата — прямая сумма. Процент — от денег, реально поступивших в этом месяце по группам преподавателя.',
+        'Fixed salary is a direct amount. Percentage is taken from the money actually received this month for the teacher’s groups.',
+        'الراتب الثابت مبلغ مباشر. النسبة تُحسب من المال المستلم فعليًا هذا الشهر لمجموعات المعلم.'],
+    'O’qituvchi roli uchun majburiy — u faqat shu xodimning guruhlarini ko’radi.':
+      ['Обязательно для роли преподавателя — он видит только группы этого сотрудника.',
+        'Required for the teacher role — they only see that staff member’s groups.',
+        'إلزامي لدور المعلم — لا يرى سوى مجموعات هذا الموظف.'],
+    'O’quvchi botga /start bosib, ism-familiyasi va guruh kodini yozganda shu yerda paydo bo’ladi.':
+      ['Появится здесь, когда ученик нажмёт /start в боте и введёт имя и код группы.',
+        'It appears here when a student presses /start in the bot and enters their name and group code.',
+        'يظهر هنا عندما يضغط الطالب /start في البوت ويكتب اسمه ورمز مجموعته.'],
+    'O’quvchilar botga /start bosishi kerak.':
+      ['Ученики должны нажать /start в боте.', 'Students need to press /start in the bot.', 'على الطلاب الضغط على /start في البوت.'],
+    'O’quvchi botda shu kodni yozadi. Masalan: B020':
+      ['Ученик вводит этот код в боте. Например: B020', 'The student types this code in the bot. For example: B020', 'يكتب الطالب هذا الرمز في البوت. مثال: B020'],
+    'xlsx, xls, csv, tsv — ustunlar tartibi muhim emas, tizim o’zi taniydi.':
+      ['xlsx, xls, csv, tsv — порядок столбцов не важен, система распознаёт сама.',
+        'xlsx, xls, csv, tsv — the column order does not matter, the system recognises them.',
+        'xlsx و xls و csv و tsv — ترتيب الأعمدة غير مهم، النظام يتعرّف عليها.'],
+    'Tizimda demo o’quvchi, guruh, to’lov va xarajatlar bor. Haqiqiy ish boshlashdan oldin ularni o’chiring — haqiqiy ma’lumotlaringizga tegmaydi.':
+      ['В системе есть демо-ученики, группы, платежи и расходы. Удалите их перед началом реальной работы — ваших настоящих данных это не коснётся.',
+        'The system holds demo students, groups, payments and expenses. Delete them before starting real work — your real data is untouched.',
+        'يحتوي النظام على طلاب ومجموعات ومدفوعات ومصروفات تجريبية. احذفها قبل العمل الحقيقي — لن تُمسّ بياناتك الحقيقية.'],
+    'Avtomatik yaratish faqat server rejimida ishlaydi. Hozir hisoblarni "Moliya → Hisoblangan to’lovlar" bo’limidan qo’lda yarating.':
+      ['Автоматическое создание работает только в серверном режиме. Пока создавайте счета вручную в разделе «Финансы → Начисления».',
+        'Automatic creation works only in server mode. For now create invoices manually in Finance → Invoices.',
+        'الإنشاء التلقائي يعمل في وضع الخادم فقط. أنشئ الفواتير يدويًا الآن من المالية ← الفواتير.'],
+    'iPhone’da: Safari → "Ulashish" → "Bosh ekranga qo’shish". Android’da: Chrome menyusi → "Ilovani o’rnatish". Internet uzilsa, ochilgan ma’lumotlarni ko’rish mumkin, lekin to’lov va boshqa yozuvlar saqlanmaydi — tizim buni ochiq aytadi.':
+      ['На iPhone: Safari → «Поделиться» → «На экран Домой». На Android: меню Chrome → «Установить приложение». При потере интернета открытые данные видны, но платежи и другие записи не сохраняются — система об этом прямо сообщает.',
+        'On iPhone: Safari → Share → Add to Home Screen. On Android: Chrome menu → Install app. With no internet you can view loaded data, but payments and other records are not saved — the system says so plainly.',
+        'على iPhone: Safari ← مشاركة ← إضافة إلى الشاشة الرئيسية. على Android: قائمة Chrome ← تثبيت التطبيق. عند انقطاع الإنترنت يمكن عرض البيانات المحمّلة، لكن المدفوعات والسجلات الأخرى لا تُحفظ — والنظام يوضّح ذلك.'],
+    'Har bir mijoz oqimi uchun alohida yo’l: masalan "Asosiy" (o’zi kelganlar),':
+      ['Отдельный путь для каждого потока клиентов: например «Основной» (пришли сами),',
+        'A separate path for each customer flow: for example “Main” (walk-ins),',
+        'مسار منفصل لكل تدفق عملاء: مثل «الأساسي» (من يأتون بأنفسهم)،'],
+    '"Target reklama" va "Instagram". Har birining bosqichlari boshqacha bo’lishi mumkin.':
+      ['«Таргетированная реклама» и «Instagram». Этапы у каждого могут отличаться.',
+        '“Targeted ads” and “Instagram”. Each can have different stages.',
+        '«الإعلانات المستهدفة» و«Instagram». قد تختلف مراحل كل منها.'],
     /* --- Zaxira, tiklash, o'rnatish va bot (yangi) --- */
     'Barcha ma’lumot bitta faylga yig’iladi. Fayl serverda ham saqlanadi, kompyuteringizga ham yuklab olsangiz bo’ladi.':
       ['Все данные собираются в один файл. Файл хранится и на сервере, и его можно скачать на компьютер.',
@@ -362,6 +448,16 @@
       ['Автоподключения по имени нет — каждую заявку подтверждаете вы.',
         'There is no automatic linking by name — you approve every request.',
         'لا يوجد ربط تلقائي بالاسم — أنت تؤكد كل طلب.'],
+    ' ta ko’rsatilmoqda': [' показано', ' shown', ' معروض'],
+    'To’lov muddati': ['Срок оплаты', 'Payment due date', 'موعد السداد'],
+    'Shu kundan keyin to’lanmagan hisob "muddati o’tgan" bo’ladi.':
+      ['После этой даты неоплаченный счёт считается просроченным.',
+        'After this date an unpaid invoice counts as overdue.',
+        'بعد هذا التاريخ تُعدّ الفاتورة غير المدفوعة متأخرة.'],
+    'Shu oy uchun hisob yaratiladi. Kerak bo’lsa to’lov muddatini o’zgartiring.':
+      ['За этот месяц будет создан счёт. При необходимости измените срок оплаты.',
+        'An invoice will be created for this month. Change the due date if needed.',
+        'ستُنشأ فاتورة لهذا الشهر. غيّر موعد السداد عند الحاجة.'],
     'Qo’ng’iroq qilish': ['Позвонить', 'Call', 'اتصال'],
     'Oylik hisoblarni avtomatik yaratish': ['Автоматическое создание месячных счетов', 'Create monthly invoices automatically', 'إنشاء الفواتير الشهرية تلقائيًا'],
     'Avtomatik yaratish': ['Автоматическое создание', 'Automatic creation', 'الإنشاء التلقائي'],
@@ -859,6 +955,44 @@
     ' ta murojaat': [' обращений', ' leads', ' طلبات'],
     ' ta yangi hisob yaratildi.': [' новых начислений создано.', ' new invoices created.', ' فاتورة جديدة أُنشئت.'],
     'Yangi hisob yo’q — hammasi allaqachon yaratilgan.': ['Новых начислений нет — всё уже создано.', 'No new invoices — everything already exists.', 'لا فواتير جديدة — كلها موجودة.'],
+    'Birinchi hisob (': ['Первый счёт (', 'First invoice (', 'الفاتورة الأولى ('],
+    ' ta yangi hisob': [' новых начислений', ' new invoices', ' فواتير جديدة'],
+    'Asosiy': ['Основной', 'Main', 'الأساسي'],
+    'Yangi (': ['Новые (', 'New (', 'جديد ('],
+    'Target reklama': ['Таргетированная реклама', 'Targeted ads', 'الإعلانات المستهدفة'],
+    'Barchasi': ['Все', 'All', 'الكل'],
+    'Bog’lanildi': ['Связались', 'Contacted', 'تم التواصل'],
+    'O’quvchi bo’ldi': ['Стал учеником', 'Became a student', 'أصبح طالبًا'],
+    'Rad etdi': ['Отказался', 'Declined', 'رفض'],
+    'Menga berilgan': ['Назначено мне', 'Assigned to me', 'المسندة إليّ'],
+    'Men berganlarim': ['Назначено мной', 'Assigned by me', 'التي أسندتُها'],
+    'Direktor': ['Директор', 'Director', 'المدير'],
+    'Administrator': ['Администратор', 'Administrator', 'الإداري'],
+    'Buxgalter': ['Бухгалтер', 'Accountant', 'المحاسب'],
+    'O’qituvchi': ['Преподаватель', 'Teacher', 'المعلم'],
+    'Qolgan qarz: ': ['Остаток долга: ', 'Remaining debt: ', 'الدين المتبقي: '],
+    'To’liq oylik narx — ': ['Полная месячная цена — ', 'Full monthly fee — ', 'السعر الشهري الكامل — '],
+    'Barcha ulangan o’quvchilar': ['Все подключённые ученики', 'All linked students', 'كل الطلاب المرتبطين'],
+    'Sinov darsiga yozildi': ['Записан на пробный урок', 'Booked a trial lesson', 'مسجَّل في درس تجريبي'],
+    'O’quvchi oy o’rtasida qo’shilyapti (': ['Ученик добавляется в середине месяца (', 'The student is joining mid-month (', 'يُضاف الطالب في منتصف الشهر ('],
+    '). Summani va to’lov muddatini tekshiring.': ['). Проверьте сумму и срок оплаты.', '). Check the amount and the due date.', '). تحقق من المبلغ وموعد السداد.'],
+    'Sana: ': ['Дата: ', 'Date: ', 'التاريخ: '],
+    'O’quvchi: ': ['Ученик: ', 'Student: ', 'الطالب: '],
+    'Turi: ': ['Тип: ', 'Type: ', 'النوع: '],
+    'Usul: ': ['Способ: ', 'Method: ', 'الطريقة: '],
+    'Izoh: ': ['Примечание: ', 'Note: ', 'ملاحظة: '],
+    'Avansga: ': ['В аванс: ', 'To advance: ', 'إلى الرصيد المقدَّم: '],
+    'Tel: ': ['Тел: ', 'Tel: ', 'هاتف: '],
+    ' o’quv markazi': [' учебный центр', ' learning centre', ' مركز تعليمي'],
+    'Bu markazning ichki to’lov tasdig’i.': ['Это внутреннее подтверждение оплаты центра.', 'This is the centre’s internal payment confirmation.', 'هذا تأكيد دفع داخلي للمركز.'],
+    'Fiskal chek emas.': ['Не фискальный чек.', 'Not a fiscal receipt.', 'ليس إيصالاً ضريبياً.'],
+    'Chek raqami: ': ['Номер чека: ', 'Receipt number: ', 'رقم الإيصال: '],
+    'Qabul qildi: ': ['Принял: ', 'Received by: ', 'استلمها: '],
+    'JAMI: ': ['ИТОГО: ', 'TOTAL: ', 'الإجمالي: '],
+    ' ta darsda davomat olinmagan': [' занятий без отметки посещаемости', ' lessons without attendance', ' دروس بلا تسجيل حضور'],
+    ' ta guruhga o’qituvchi biriktirilmagan': [' групп без преподавателя', ' groups without a teacher', ' مجموعات بلا معلم'],
+    ' ta murojaatga bugun bog’lanish kerak': [' обращений требуют звонка сегодня', ' leads to contact today', ' طلبات يجب الاتصال بها اليوم'],
+    'Muddati o’tgan qarz: ': ['Просроченный долг: ', 'Overdue debt: ', 'دين متأخر: '],
     'Davomiyligi: ': ['Длительность: ', 'Duration: ', 'المدة: '],
     ' soat': [' ч', ' h', ' ساعة'],
     ' daqiqa': [' мин', ' min', ' دقيقة'],
@@ -891,6 +1025,32 @@
     ' hisoblarini yaratish': [' — создать начисления', ' — create invoices', ' — إنشاء الفواتير'],
     'Oylik hisoblarni yaratish': ['Создать ежемесячные начисления', 'Create monthly invoices', 'إنشاء الفواتير الشهرية'],
     'Hisobotni Excel’ga yuklash': ['Выгрузить отчёт в Excel', 'Export report to Excel', 'تصدير التقرير إلى Excel'],
+    'Tizim ishlashini ko’rsatish uchun demo o’quvchi, guruh va to’lovlar kiritilgan. Haqiqiy ish boshlashdan oldin ularni o’chiring.':
+      ['Для демонстрации добавлены демо-ученики, группы и платежи. Удалите их перед началом реальной работы.',
+        'Demo students, groups and payments were added to show how the system works. Delete them before starting real work.',
+        'أُضيف طلاب ومجموعات ومدفوعات تجريبية لعرض عمل النظام. احذفها قبل بدء العمل الحقيقي.'],
+    'Standart parollar (1234) hali o’zgartirilmagan. Sozlamalar → Foydalanuvchilar bo’limida yangi parol qo’ying.':
+      ['Стандартные пароли (1234) ещё не изменены. Задайте новый пароль в разделе Настройки → Пользователи.',
+        'The default passwords (1234) have not been changed yet. Set a new password in Settings → Users.',
+        'لم تُغيَّر كلمات المرور الافتراضية (1234) بعد. عيّن كلمة مرور جديدة في الإعدادات ← المستخدمون.'],
+    '. Sozlamalar bo’limida parolni albatta o’zgartiring.':
+      ['. Обязательно смените пароль в разделе «Настройки».',
+        '. Be sure to change the password in Settings.',
+        '. غيّر كلمة المرور في الإعدادات بكل تأكيد.'],
+    'Sozlamalarga o’tish': ['Перейти в настройки', 'Go to settings', 'الانتقال إلى الإعدادات'],
+    'Namuna ma’lumotlar. ': ['Демо-данные. ', 'Demo data. ', 'بيانات تجريبية. '],
+    'Xavfsizlik. ': ['Безопасность. ', 'Security. ', 'الأمان. '],
+    'Muddati o’tgan qarz': ['Просроченный долг', 'Overdue debt', 'دين متأخر'],
+    'Shu oydagi xarajat': ['Расходы за этот месяц', 'This month’s expenses', 'مصروفات هذا الشهر'],
+    'Bugungi darslar': ['Сегодняшние занятия', 'Today’s lessons', 'دروس اليوم'],
+    'E’tibor talab qiladi': ['Требует внимания', 'Needs attention', 'يتطلب انتباهاً'],
+    'Hammasi joyida': ['Всё в порядке', 'All good', 'كل شيء على ما يرام'],
+    'Hozircha kechiktirilgan ish yo’q.': ['Просроченных дел пока нет.', 'Nothing overdue for now.', 'لا توجد أعمال متأخرة حالياً.'],
+    'Bugun dars yo’q': ['Сегодня занятий нет', 'No lessons today', 'لا توجد دروس اليوم'],
+    'Jadvalga qarang yoki yangi guruh oching.':
+      ['Посмотрите расписание или создайте новую группу.',
+        'Check the schedule or open a new group.',
+        'راجع الجدول أو افتح مجموعة جديدة.'],
     'Ism yoki telefon bo’yicha qidirish': ['Поиск по имени или телефону', 'Search by name or phone', 'ابحث بالاسم أو الهاتف'],
     'Ism yoki telefon': ['Имя или телефон', 'Name or phone', 'الاسم أو الهاتف'],
     'O’quvchini qidirish': ['Поиск ученика', 'Find a student', 'ابحث عن طالب'],
@@ -921,8 +1081,7 @@
     ' joy)': [' мест)', ' seats)', ' مقعد)'],
     '% tushumdan': ['% от выручки', '% of revenue', '% من الإيراد'],
     ' ta o’quvchiga yuboriladi': [' ученикам будет отправлено', ' students will receive it', ' طالباً سيستلمها'],
-    'Keyin guruh kodini so’raydi': ['Затем спросит код группы', 'Then it asks for the group code', 'ثم يسأل عن رمز المجموعة'],
-    ' ta': ['', '', '']
+    'Keyin guruh kodini so’raydi': ['Затем спросит код группы', 'Then it asks for the group code', 'ثم يسأل عن رمز المجموعة']
   };
 
   /* Sana, hafta kunlari va valyuta — har bir til uchun */
@@ -1017,6 +1176,17 @@
         var loc = LOCALE[lang] || LOCALE.uz;
         loc.months.concat(loc.monthsIn || [], loc.weekdays, loc.wshort, [loc.som]).forEach(addWords);
         this.knownWords = known;
+
+        // o'zbekcha (asl) so'zlar — aralash matnni aniqlash uchun
+        var uz = {};
+        function addUz(str) {
+          (String(str).toLowerCase().match(/[a-z’']+/g) || []).forEach(function (w) {
+            if (w.length >= 3) uz[w] = 1;
+          });
+        }
+        Object.keys(T).forEach(addUz);
+        Object.keys(FRAG).forEach(addUz);
+        this.uzWords = uz;
       }
       this.applyLocale();
       if (!silent) this.apply(document.body);
@@ -1041,7 +1211,20 @@
       return false;
     },
 
-    /** Bitta matnni tarjima qilish */
+    /**
+     * Almashtirish natijasida so'z buzildimi?
+     * (lotin harfi arab/kirill harfiga yopishib qolgan bo'lsa — buzuq)
+     */
+    _broken: function (out) {
+      return /[A-Za-z][\u0600-\u06FF\u0400-\u04FF]|[\u0600-\u06FF\u0400-\u04FF][A-Za-z]/.test(String(out));
+    },
+
+    /**
+     * Bitta matnni tarjima qilish.
+     * Muhim qoida: ARALASH matn chiqmasligi kerak — agar bo'laklarni
+     * almashtirgandan keyin ham o'zbekcha so'z qolsa, matn o'zgartirilmaydi
+     * va "tarjimasiz" ro'yxatiga yoziladi.
+     */
     text: function (s) {
       if (this.lang === 'uz' || !s) return s;
       var trimmed = s.trim();
@@ -1049,16 +1232,21 @@
       var hit = this.map[trimmed];
       if (hit != null) return s.replace(trimmed, hit);
 
+      // Faqat maxsus tayyorlangan bo'laklar (FRAG) almashtiriladi.
+      // Lug'atdagi to'liq iboralarni boshqa matn ichiga qo'yib yubormaymiz —
+      // aks holda "Sanani tanlang" → "التاريخni tanlang" kabi buzuq so'z chiqadi.
       var out = s, changed = false;
-      // 1) ibora bo'laklari
       for (var i = 0; i < this.fragList.length; i++) {
         var f = this.fragList[i];
         if (out.indexOf(f[0]) >= 0) { out = out.split(f[0]).join(f[1]); changed = true; }
       }
-      // 2) lug'atdagi so'z va iboralar (uzunidan qisqasiga)
-      for (var j = 0; j < this.subList.length; j++) {
-        var p = this.subList[j];
-        if (out.indexOf(p[0]) >= 0) { out = out.split(p[0]).join(p[1]); changed = true; }
+      // "5 ta" kabi sanoq so'zi — faqat raqamdan keyin turgani olib tashlanadi
+      var counted = out.replace(/(\d)\s+ta\b/g, '$1');
+      if (counted !== out) { out = counted; changed = true; }
+
+      if (changed && this._broken(out)) {
+        this.misses[trimmed] = (this.misses[trimmed] || 0) + 1;
+        return s;
       }
       if (!changed && !this.isData(trimmed)) {
         this.misses[trimmed] = (this.misses[trimmed] || 0) + 1;
@@ -1068,7 +1256,7 @@
 
     /** Daraxtdagi barcha matnlarni tarjima qilish */
     apply: function (root) {
-      if (this.lang === 'uz' || !root) return;
+      if (!root) return;
       var self = this;
       if (root.nodeType === 3) { self._node(root); return; }
       var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
@@ -1078,29 +1266,51 @@
       var attrs = ['placeholder', 'title', 'aria-label'];
       var els = root.querySelectorAll ? root.querySelectorAll('[placeholder],[title],[aria-label]') : [];
       Array.prototype.forEach.call(els, function (el) {
-        attrs.forEach(function (a) {
-          var v = el.getAttribute(a);
-          if (!v) return;
-          var t = self.text(v);
-          if (t !== v) el.setAttribute(a, t);
-        });
+        attrs.forEach(function (a) { self._attr(el, a); });
       });
       if (root.matches && root.matches('[placeholder],[title],[aria-label]')) {
-        attrs.forEach(function (a) {
-          var v = root.getAttribute(a);
-          if (!v) return;
-          var t = self.text(v);
-          if (t !== v) root.setAttribute(a, t);
-        });
+        attrs.forEach(function (a) { self._attr(root, a); });
       }
     },
 
+    /**
+     * Matn tugunini tarjima qilish.
+     * ASL o'zbekcha matn eslab qolinadi — shuning uchun tilni qayta
+     * almashtirganda tarjima ustiga tarjima tushmaydi va o'zbekchaga
+     * qaytganda hamma joy o'zbekcha bo'ladi.
+     */
     _node: function (n) {
-      if (!n.nodeValue || !n.nodeValue.trim()) return;
+      if (!n.nodeValue) return;
       if (n.parentNode && (n.parentNode.tagName === 'SCRIPT' || n.parentNode.tagName === 'STYLE')) return;
-      if (n.__albTr === n.nodeValue) return;
-      var t = this.text(n.nodeValue);
-      if (t !== n.nodeValue) { n.nodeValue = t; n.__albTr = t; }
+      var src = (n.__albOut != null && n.nodeValue === n.__albOut && n.__albSrc != null)
+        ? n.__albSrc : n.nodeValue;
+      if (this.lang === 'uz') {
+        if (src !== n.nodeValue) n.nodeValue = src;
+        n.__albSrc = null; n.__albOut = null;
+        return;
+      }
+      if (!src.trim()) return;
+      var t = this.text(src);
+      if (t !== n.nodeValue) n.nodeValue = t;
+      n.__albSrc = src; n.__albOut = t;
+    },
+
+    /** Atributlar uchun ham xuddi shunday (placeholder, title, aria-label) */
+    _attr: function (el, a) {
+      var cur = el.getAttribute(a);
+      if (cur == null) return;
+      el.__albAttr = el.__albAttr || {};
+      var mem = el.__albAttr[a];
+      var src = (mem && mem.out === cur) ? mem.src : cur;
+      if (this.lang === 'uz') {
+        if (src !== cur) el.setAttribute(a, src);
+        delete el.__albAttr[a];
+        return;
+      }
+      if (!String(src).trim()) return;
+      var t = this.text(src);
+      if (t !== cur) el.setAttribute(a, t);
+      el.__albAttr[a] = { src: src, out: t };
     },
 
     /** Yangi qo'shilgan tugunlarni avtomatik tarjima qilish */

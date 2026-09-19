@@ -290,9 +290,25 @@ davom ettirsangiz ro'yxat torayadi. Strelkalar va Enter bilan tanlash mumkin.
 ## 10. Testlar
 
 ```bash
-npm test                 # 122 ta tekshiruv: moliya, huquqlar, jadval, import, bot
-npm run test:browser     # brauzerda 1320 / 390 / 360 px da asosiy jarayonlar
-npm run test:server      # serverli versiya: kirish, ruxsatlar, saqlanish
+npm test                 # 121 ta: moliya, huquqlar, jadval, import, bot kodlari
+npm run test:browser     # brauzerda asosiy jarayonlar
+npm run test:perf        # 2000 o'quvchi bilan tezlik (sekin bo'lsa yiqiladi)
+npm run test:bot         # bot mantiqi — soxta qabul qiluvchi bilan
+npm run test:backup      # zaxira va tiklash, vaqtinchalik bazada
+node tests/mobile-test.js       # 360 / 390 / 430 px
+node tests/export-test.js       # Excel va CSV fayli haqiqatan yuklanadimi
+node tests/ui-backup-test.js    # zaxira oynasi
+node tests/lang-switch-test.js  # 4 til: aralash matn chiqmasligi
+node tests/i18n-audit.js        # tarjima qamrovi
+
+# Server ishlab turganda (alohida baza bilan):
+node tests/security-test.js  <port> <parol>    # maxfiy fayllar, huquqlar, pul
+node tests/advance-test.js   <port> <parol>    # avansdan qoplash
+node tests/autoinvoice-test.js <port> <parol>  # avtomatik oylik hisoblar
+node tests/pwa-test.js       <port> <parol>    # o'rnatish, kesh, internetsiz holat
+
+# PostgreSQL (Neon) bilan:
+DATABASE_URL="postgresql://..." node tests/db-test.js
 ```
 
 `npm test` tekshiradi: takrorlanmaydigan oylik hisob, chegirma chegaralari,
@@ -300,7 +316,11 @@ qisman to'lov, avans, taqsimlash tartibi, bekor qilish, pul qaytarish,
 narx o'zgarishi, jadval to'qnashuvi, rollar va shaxsiy ruxsatlar, guruh kodi,
 ish haqi (foiz/belgilangan, yopilgan davr, xarajatda bir marta),
 sof pul oqimi, davomat, Excel import (turli tildagi va tartibdagi ustunlar),
-bot ismni moslashtirishi.
+botning bir martalik ulash kodi.
+
+Testlar **haqiqiy bazaga tegmaydi**: har biri vaqtinchalik papkada yoki alohida
+bazada ishlaydi. Bot sinovi haqiqiy Telegramga ulanmaydi — xabarlar soxta
+qabul qiluvchiga boradi.
 
 ---
 

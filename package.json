@@ -4,13 +4,19 @@
   "description": "Albyana o'quv markazi uchun ERP tizimi: o'quvchilar, guruhlar, jadval, davomat, to'lovlar, ish haqi, hisobotlar, ichki chat, vazifalar va Telegram bot",
   "private": true,
   "main": "server/index.js",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server/index.js",
     "build": "node build.js",
     "test": "node tests/run-tests.js",
     "test:browser": "node tests/smoke.js",
-    "test:server": "node tests/server-test.js"
+    "test:server": "node tests/server-test.js",
+    "test:perf": "node tests/perf-test.js",
+    "test:db": "node tests/db-test.js",
+    "test:bot": "node tests/bot-test.js",
+    "test:backup": "node tests/backup-test.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5"
@@ -19,6 +25,13 @@
     "better-sqlite3": "^11.3.0",
     "pg": "^8.12.0"
   },
-  "keywords": ["erp", "education", "crm", "telegram-bot", "uzbek", "oquv-markaz"],
+  "keywords": [
+    "erp",
+    "education",
+    "crm",
+    "telegram-bot",
+    "uzbek",
+    "oquv-markaz"
+  ],
   "license": "UNLICENSED"
 }

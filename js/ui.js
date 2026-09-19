@@ -625,13 +625,21 @@
 
   /* ---------- Jadval ---------- */
   /** cols: [{key, label, right, cls, render(row)}] */
+  /**
+   * Jadval. Ro'yxat katta bo'lsa (opts.page) — bo'lib chiziladi:
+   * birinchi N ta qator ko'rinadi, qolganini "Yana ko'rsatish" bilan qo'shamiz.
+   * Shunda 5000 ta o'quvchi bo'lsa ham sahifa tez ochiladi.
+   */
   function table(cols, rows, opts) {
     opts = opts || {};
+    var pageSize = opts.page || 0;
     var thead = h('thead', {}, h('tr', {}, cols.map(function (c) {
       return h('th', { class: c.right ? 'r' : '' }, c.label);
     })));
     var tbody = h('tbody');
-    rows.forEach(function (r, i) {
+    var shown = pageSize && rows.length > pageSize ? rows.slice(0, pageSize) : rows;
+    var rest = rows.length - shown.length;
+    shown.forEach(function (r, i) {
       var tr = h('tr', opts.onRow ? { class: 'row-link', tabindex: '0' } : {});
       cols.forEach(function (c) {
         var cell = c.render ? c.render(r, i) : (r[c.key] == null ? '—' : String(r[c.key]));
@@ -651,7 +659,49 @@
       }
       tbody.appendChild(tr);
     });
-    return h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, [thead, tbody]));
+
+    var wrap = h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, [thead, tbody]));
+    if (!rest) return wrap;
+
+    var more = h('div', { class: 'tbl-more' }, [
+      h('span', { class: 'small muted' }, shown.length + ' / ' + rows.length + ' ta ko’rsatilmoqda'),
+      h('button', {
+        class: 'btn', type: 'button',
+        onclick: function (e) {
+          var btn = e.currentTarget;
+          var from = tbody.children.length;
+          var next = rows.slice(from, from + pageSize);
+          next.forEach(function (r, i) { tbody.appendChild(buildRow(r, from + i)); });
+          var left = rows.length - tbody.children.length;
+          more.querySelector('span').textContent = tbody.children.length + ' / ' + rows.length + ' ta ko’rsatilmoqda';
+          if (left <= 0) more.remove();
+          else btn.textContent = 'Yana ' + Math.min(pageSize, left) + ' ta ko’rsatish';
+        }
+      }, 'Yana ' + Math.min(pageSize, rest) + ' ta ko’rsatish')
+    ]);
+
+    function buildRow(r, i) {
+      var tr = h('tr', opts.onRow ? { class: 'row-link', tabindex: '0' } : {});
+      cols.forEach(function (c) {
+        var cell = c.render ? c.render(r, i) : (r[c.key] == null ? '—' : String(r[c.key]));
+        var td = h('td', { class: (c.right ? 'r ' : '') + (c.cls || '') },
+          typeof cell === 'string' || typeof cell === 'number' ? String(cell) : cell);
+        if (c.label) td.setAttribute('data-label', c.label);
+        tr.appendChild(td);
+      });
+      if (opts.onRow) {
+        tr.addEventListener('click', function (e) {
+          if (e.target.closest('button,a,input,select')) return;
+          opts.onRow(r);
+        });
+        tr.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); opts.onRow(r); }
+        });
+      }
+      return tr;
+    }
+
+    return h('div', {}, [wrap, more]);
   }
 
   function empty(o) {

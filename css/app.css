@@ -641,3 +641,9 @@ details.more[open]>summary::before{content:'−'}
 .tp-input{font-size:24px;letter-spacing:.06em;margin-bottom:0}
 .dp-input:focus,.tp-input:focus{outline:2px solid var(--brand);outline-offset:1px;border-color:var(--brand)}
 .dp-input.bad,.tp-input.bad{border-color:var(--bad);color:var(--bad)}
+
+/* Katta ro'yxatlarni bo'lib ko'rsatish */
+.tbl-more{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  padding:12px 2px 2px;border-top:1px solid var(--line);margin-top:8px}
+.tbl-more .btn{min-height:40px}
+@media (max-width:760px){.tbl-more .btn{flex:1;min-height:44px}}

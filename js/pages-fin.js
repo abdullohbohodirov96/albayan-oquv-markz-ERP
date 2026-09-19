@@ -448,6 +448,10 @@
     lines.push('Bu markazning ichki to’lov tasdig’i.');
     lines.push('Fiskal chek emas.');
 
+    // Har bir satrni alohida tarjima qilamiz: aks holda butun chek bitta
+    // matn bo'lib qoladi va tarjima qilinmaydi.
+    if (A.t) lines = lines.map(function (l) { return A.t(l); });
+
     var bal = s ? Q.balance(s.id) : null;
     UI.modal({
       title: 'To’lov cheki',
@@ -553,7 +557,7 @@
           ]);
         }
       }
-    ], pays, { onRow: function (p) { App.go('student', { id: p.studentId, tab: 'tolovlar' }); } })
+    ], pays, { onRow: function (p) { App.go('student', { id: p.studentId, tab: 'tolovlar' }); }, page: 100 })
       : UI.empty({
         title: 'Bu oyda to’lov yo’q',
         text: 'To’lov qabul qilganingizda shu yerda ko’rinadi.',
@@ -677,7 +681,7 @@
           }, 'To’lov') : '';
         }
       }
-    ], debtors, { onRow: function (d) { App.go('student', { id: d.studentId, tab: 'hisoblar' }); } })
+    ], debtors, { onRow: function (d) { App.go('student', { id: d.studentId, tab: 'hisoblar' }); }, page: 100 })
       : UI.empty({ title: 'Qarzdorlik yo’q', text: 'Barcha hisoblar to’langan.' }), [
       h('button', {
         class: 'btn sm', onclick: function () {
@@ -760,7 +764,7 @@
           ]);
         }
       }
-    ], invs, { onRow: function (i) { App.go('student', { id: i.studentId, tab: 'hisoblar' }); } })
+    ], invs, { onRow: function (i) { App.go('student', { id: i.studentId, tab: 'hisoblar' }); }, page: 100 })
       : UI.empty({ title: 'Hisob yaratilmagan', text: 'Yuqoridagi tugma bilan shu oy hisoblarini yarating.' }), [
       h('button', {
         class: 'btn sm', onclick: function () {
@@ -821,7 +825,7 @@
           ]);
         }
       }
-    ], items) : UI.empty({
+    ], items, { page: 100 }) : UI.empty({
       title: 'Xarajat yo’q', text: 'Ijara, kommunal, reklama kabi xarajatlarni shu yerga kiriting.',
       action: App.can('expense.edit') ? { label: 'Xarajat qo’shish', onClick: function () { expenseForm(null, App, ym); } } : null
     }), [
@@ -1422,7 +1426,7 @@
         { label: 'Nima qildi', render: function (e) { return e.action; } },
         { label: 'Obyekt', render: function (e) { return e.entity || '—'; } },
         { label: 'Tafsilot', render: function (e) { return h('span', { class: 'small muted' }, e.details || '—'); } }
-      ], entries) : h('p', { class: 'muted' }, 'Hozircha yozuv yo’q.'), null, null, true));
+      ], entries, { page: 50 }) : h('p', { class: 'muted' }, 'Hozircha yozuv yo’q.'), null, null, true));
       view.appendChild(h('p', { class: 'small muted', style: 'margin-top:10px' },
         'Parollar va maxfiy ma’lumotlar tarixga yozilmaydi.'));
     }

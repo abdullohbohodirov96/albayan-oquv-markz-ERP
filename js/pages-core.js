@@ -59,6 +59,37 @@
       var gs = Q.activeGroups(user);
       for (var i = 0; i < gs.length; i++) { await D.loadLessons(gs[i].id, ym); }
     },
+    /**
+     * Hamma o'quvchining hisobini BITTA o'tishda hisoblash.
+     * Har bir qator uchun alohida hisoblasak, 1000 o'quvchida sahifa sekinlashadi.
+     */
+    balanceMap: function () {
+      var map = {};
+      function rec(id) {
+        return map[id] || (map[id] = { charged: 0, received: 0, allocated: 0, debt: 0, advance: 0, overdue: 0 });
+      }
+      var today = A.today();
+      var paid = A.paidByInvoice(A.Fin.allPayments());
+      A.Fin.allInvoices().forEach(function (i) {
+        var r = rec(i.studentId);
+        r.charged += Math.round(i.final);
+        if (i.dueDate && i.dueDate < today) r.overdue += A.invoiceRemaining(i, paid);
+      });
+      A.activePayments(A.Fin.allPayments()).forEach(function (p) {
+        var r = rec(p.studentId);
+        var sign = p.type === 'refund' ? -1 : 1;
+        r.received += sign * Math.round(p.amount);
+        (p.allocations || []).forEach(function (a) { r.allocated += sign * Math.round(a.amount); });
+      });
+      Object.keys(map).forEach(function (id) {
+        var r = map[id];
+        r.debt = Math.max(0, r.charged - r.allocated);
+        r.advance = Math.max(0, r.received - r.allocated);
+        r.overdue = Math.max(0, Math.min(r.overdue, r.debt));
+      });
+      return map;
+    },
+
     debtors: function () {
       var invoices = A.Fin.allInvoices(), payments = A.Fin.allPayments();
       var paid = A.paidByInvoice(payments);
@@ -386,7 +417,7 @@
           ]);
         }
       }
-    ], leads, { onRow: function (l) { if (App.can('lead.edit')) leadForm(l, App); } }), null, null, true));
+    ], leads, { onRow: function (l) { if (App.can('lead.edit')) leadForm(l, App); }, page: 100 }), null, null, true));
   };
 
   function isClosed(funnel, stageId) {
@@ -557,9 +588,10 @@
         [UI.icon('upload'), 'Excel’dan import']) : null,
       h('button', {
         class: 'btn', onclick: function () {
-          UI.exportCsv('oquvchilar.csv', [['Familiya', 'Ism', 'Telefon', 'Ota-ona', 'Ota-ona telefoni', 'Guruhlar', 'Holat', 'Qarz', 'Avans']].concat(
+          var bmap = Q.balanceMap();
+          UI.exportRows('oquvchilar', [['Familiya', 'Ism', 'Telefon', 'Ota-ona', 'Ota-ona telefoni', 'Guruhlar', 'Holat', 'Qarz', 'Avans']].concat(
             list.map(function (s) {
-              var b = Q.balance(s.id);
+              var b = bmap[s.id] || { debt: 0, advance: 0 };
               return [s.lastName, s.firstName, s.phone, s.parentName || '', s.parentPhone || '',
               Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; }).map(function (m) { return Q.groupName(m.groupId); }).join(', '),
               s.status, b.debt, b.advance];
@@ -620,6 +652,8 @@
     }
 
     var showMoney = App.can('finance.debts') || App.can('payment.create');
+    var balances = showMoney ? Q.balanceMap() : {};
+    var empty0 = { charged: 0, received: 0, allocated: 0, debt: 0, advance: 0, overdue: 0 };
     var cols = [
       {
         label: 'O’quvchi', render: function (s) {
@@ -643,12 +677,14 @@
     if (showMoney) {
       cols.push({
         label: 'Hisob', right: true, render: function (s) {
-          return balancePill(Q.balance(s.id), Q.overdue(s.id));
+          var b = balances[s.id] || empty0;
+          return balancePill(b, b.overdue);
         }
       });
     }
     view.appendChild(UI.card(null, UI.table(cols, list, {
-      onRow: function (s) { App.go('student', { id: s.id }); }
+      onRow: function (s) { App.go('student', { id: s.id }); },
+      page: 100
     }), null, null, true));
   };
 

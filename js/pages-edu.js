@@ -532,39 +532,62 @@
     ]);
 
     var firstMonthBox = h('div', { class: 'field full' });
-    var fmMode, fmAmount, fmNote;
+    var fmMode, fmAmount, fmNote, fmDue;
+    /** Standart to'lov muddati: sozlamadagi kun, lekin kirgan sanadan oldin bo'lmasin */
+    function defaultDue(joined, ym) {
+      var due = A.dueDateFor(ym, (D.settings && D.settings.dueDay) || 5);
+      if (joined && joined > due) due = A.addDays(joined, 7);
+      return due;
+    }
+
     function refreshFirstMonth() {
       UI.clear(firstMonthBox);
-      if (!isNew) return;
+      fmMode = fmAmount = fmNote = fmDue = null;
+      if (!isNew || !App.can('invoice.create')) return;
       var joined = f.get('joinedAt').input.value;
       var gid = f.get('groupId').input.value;
       var g = D.one('groups', gid);
       if (!joined || !g) return;
       var ym = A.ymOf(joined);
-      if (ym !== A.thisMonth()) return;
-      var day = Number(joined.split('-')[2]);
-      if (day <= 1) return;
+      if (ym < A.thisMonth() || g.status !== 'faol') return;
+
       var fee = A.feeForMonth(g, ym);
+      var day = Number(joined.split('-')[2]);
+      var midMonth = day > 1;
+
       var fs = h('fieldset', {}, [
-        h('legend', {}, 'Birinchi oy to’lovi'),
-        h('p', { class: 'small muted', style: 'margin:0 0 8px' },
-          'O’quvchi oy o’rtasida qo’shilyapti (' + A.dateLabel(joined) + '). Qaysi summani hisoblaymiz?')
+        h('legend', {}, 'Birinchi hisob (' + A.monthLabel(ym) + ')'),
+        h('p', { class: 'small muted', style: 'margin:0 0 8px' }, midMonth
+          ? 'O’quvchi oy o’rtasida qo’shilyapti (' + A.dateLabel(joined) + '). Summani va to’lov muddatini tekshiring.'
+          : 'Shu oy uchun hisob yaratiladi. Kerak bo’lsa to’lov muddatini o’zgartiring.')
       ]);
-      fmMode = UI.field({
-        label: 'Hisoblash', type: 'select', options: [
-          { value: 'full', label: 'To’liq oylik narx — ' + A.som(fee) + ' so’m' },
-          { value: 'custom', label: 'Kelishilgan summa' }
-        ]
+
+      var fields = [];
+      if (midMonth) {
+        fmMode = UI.field({
+          label: 'Hisoblash', type: 'select', options: [
+            { value: 'full', label: 'To’liq oylik narx — ' + A.som(fee) + ' so’m' },
+            { value: 'custom', label: 'Kelishilgan summa' }
+          ]
+        });
+        fmAmount = UI.field({ label: 'Kelishilgan summa (so’m)', type: 'number', value: fee });
+        fmNote = UI.field({ label: 'Izoh', value: 'Oy o’rtasida qo’shildi' });
+        fmAmount.wrap.hidden = true; fmNote.wrap.hidden = true;
+        fmMode.input.addEventListener('change', function () {
+          var custom = fmMode.input.value === 'custom';
+          fmAmount.wrap.hidden = !custom;
+          fmNote.wrap.hidden = !custom;
+        });
+        fields.push(fmMode.wrap, fmAmount.wrap, fmNote.wrap);
+      }
+
+      fmDue = UI.field({
+        label: 'To’lov muddati', type: 'date', value: defaultDue(joined, ym), min: joined,
+        help: 'Shu kundan keyin to’lanmagan hisob "muddati o’tgan" bo’ladi.'
       });
-      fmAmount = UI.field({ label: 'Kelishilgan summa (so’m)', type: 'number', value: fee });
-      fmNote = UI.field({ label: 'Izoh', value: 'Oy o’rtasida qo’shildi' });
-      fmAmount.wrap.hidden = true; fmNote.wrap.hidden = true;
-      fmMode.input.addEventListener('change', function () {
-        var custom = fmMode.input.value === 'custom';
-        fmAmount.wrap.hidden = !custom;
-        fmNote.wrap.hidden = !custom;
-      });
-      fs.appendChild(h('div', { class: 'form-grid' }, [fmMode.wrap, fmAmount.wrap, fmNote.wrap]));
+      fields.push(fmDue.wrap);
+
+      fs.appendChild(h('div', { class: 'form-grid' }, fields));
       firstMonthBox.appendChild(fs);
     }
     f.get('joinedAt').input.addEventListener('change', refreshFirstMonth);
@@ -618,10 +641,13 @@
 
               if (isNew && App.can('invoice.create')) {
                 var ym = A.ymOf(v.joinedAt);
-                var opts = null;
+                var opts = {};
                 if (fmMode && fmMode.input.value === 'custom') {
-                  opts = { amount: A.parseSom(fmAmount.input.value), note: fmNote.input.value };
+                  opts.amount = A.parseSom(fmAmount.input.value);
+                  opts.note = fmNote.input.value;
                 }
+                if (fmDue && fmDue.input.value) opts.dueDate = fmDue.input.value;
+                if (!Object.keys(opts).length) opts = null;
                 if (ym >= A.thisMonth() && g && g.status === 'faol') {
                   await A.Ops.createSingleInvoice(rec, ym, opts, App.user);
                 }

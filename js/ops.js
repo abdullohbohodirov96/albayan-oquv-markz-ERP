@@ -130,9 +130,10 @@
     var dueDay = (settings && settings.dueDay) || 5;
     var amt = A.invoiceAmountFor(group, membership, ym);
     var finalAmt = opts && opts.amount != null ? Math.max(0, Math.round(opts.amount)) : amt.final;
+    // Muddat qo'lda tanlangan bo'lsa — o'sha qoladi
     var due = (opts && opts.dueDate) || A.dueDateFor(ym, dueDay);
-    // oy o'rtasida qo'shilgan o'quvchi o'tmishdagi sanadan qarzdor bo'lib qolmasin
-    if (membership.joinedAt && membership.joinedAt > due) {
+    // Aks holda: oy o'rtasida qo'shilgan o'quvchi o'tmishdagi sanadan qarzdor bo'lib qolmasin
+    if (!(opts && opts.dueDate) && membership.joinedAt && membership.joinedAt > due) {
       due = A.addDays(membership.joinedAt, 7);
     }
     return {
