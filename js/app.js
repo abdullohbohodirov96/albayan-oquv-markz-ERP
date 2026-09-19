@@ -19,10 +19,29 @@
       return true;
     },
 
+    history: [],
+
     go: function (name, params) {
+      var prev = App.route;
+      if (prev && prev.name && prev.name !== name) {
+        App.history.push(prev);
+        if (App.history.length > 20) App.history.shift();
+      }
       App.route = Object.assign({ name: name }, params || {});
       App.render();
       try { document.getElementById('view').scrollIntoView({ block: 'start' }); } catch (e) { }
+      window.scrollTo(0, 0);
+    },
+
+    /** Oldingi sahifaga qaytish (saqlagandan keyin shu yerda qolib ketmasin) */
+    back: function (fallback) {
+      var prev = App.history.pop();
+      if (!prev) {
+        App.route = { name: fallback || 'dashboard' };
+      } else {
+        App.route = prev;
+      }
+      App.render();
       window.scrollTo(0, 0);
     },
 
@@ -238,18 +257,100 @@
   }
 
   /* ---------- Tezkor qidiruv ---------- */
+  function searchAll(q) {
+    if (!q) return [];
+    var needle = q.toLowerCase();
+    var digits = A.phoneDigits(q);
+    var out = [];
+
+    function hit(hay) {
+      return String(hay || '').toLowerCase().indexOf(needle) >= 0;
+    }
+    function phoneHit(p) {
+      return digits.length >= 3 && A.phoneDigits(p).indexOf(digits) >= 0;
+    }
+
+    if (App.can('student.view')) {
+      var students = D.all('students');
+      if (App.user.role === 'oqituvchi') {
+        var mine = {};
+        A.scopeGroups(App.user, D.all('groups')).forEach(function (g) {
+          A.Q.membersOf(g.id).forEach(function (m) { mine[m.studentId] = 1; });
+        });
+        students = students.filter(function (s) { return mine[s.id]; });
+      }
+      students.forEach(function (s) {
+        var full = s.lastName + ' ' + s.firstName;
+        if (hit(full) || hit(s.firstName) || hit(s.lastName) || hit(s.parentName) ||
+          phoneHit(s.phone) || phoneHit(s.parentPhone)) {
+          var groups = A.Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; })
+            .map(function (m) { return A.groupLabel(D.one('groups', m.groupId)); }).join(', ');
+          out.push({
+            group: 'O’quvchilar', title: full,
+            sub: (s.phone || s.parentPhone || '') + (groups ? ' · ' + groups : ''),
+            icon: UI.avatar(full),
+            badge: s.status !== 'faol' ? UI.pill(s.status === 'arxiv' ? 'Arxiv' : 'To’xtatgan', 'mute') : null,
+            onPick: function () { App.go('student', { id: s.id }); }
+          });
+        }
+      });
+    }
+
+    if (App.can('group.view')) {
+      A.scopeGroups(App.user, D.all('groups')).forEach(function (g) {
+        if (hit(g.name) || hit(g.code) || hit(A.Q.courseName(g.courseId)) || hit(A.Q.staffName(g.teacherId))) {
+          out.push({
+            group: 'Guruhlar', title: A.groupLabel(g),
+            sub: A.Q.courseName(g.courseId) + ' · ' + A.Q.staffName(g.teacherId) +
+              ' · ' + A.Q.membersOf(g.id).length + ' o’quvchi',
+            onPick: function () { App.go('group', { id: g.id }); }
+          });
+        }
+      });
+    }
+
+    if (App.can('nav.leads')) {
+      D.all('leads').forEach(function (l) {
+        if (hit(l.name) || phoneHit(l.phone)) {
+          out.push({
+            group: 'Murojaatlar', title: l.name, sub: (l.phone || '') + ' · ' + A.stageLabel(l.stage),
+            onPick: function () { App.go('leads', { q: l.name }); A.leadForm(l, App); }
+          });
+        }
+      });
+    }
+
+    if (App.can('staff.view') || App.can('nav.staff')) {
+      D.all('staff').forEach(function (s) {
+        if (hit(s.name) || phoneHit(s.phone)) {
+          out.push({
+            group: 'Xodimlar', title: s.name, sub: (s.position || '') + ' · ' + (s.phone || ''),
+            onPick: function () { App.go('staff'); }
+          });
+        }
+      });
+    }
+
+    // eng mos keladiganlar yuqorida: nom boshidan mos kelganlar oldin
+    out.sort(function (a, b) {
+      var ai = a.title.toLowerCase().indexOf(needle), bi = b.title.toLowerCase().indexOf(needle);
+      if (ai < 0) ai = 99; if (bi < 0) bi = 99;
+      return ai - bi;
+    });
+    return out;
+  }
+  App.searchAll = searchAll;
+
   function wireSearch() {
     var input = document.getElementById('global-search');
+    UI.suggest(input, searchAll, {
+      limit: 20,
+      emptyText: 'Hech narsa topilmadi'
+    });
     input.addEventListener('keydown', function (e) {
       if (e.key === 'Enter') {
         var q = input.value.trim();
-        if (!q) return;
-        App.go('students', { q: q });
-      }
-    });
-    input.addEventListener('input', function () {
-      if (input.value.trim() === '' && App.route.name === 'students' && App.route.q) {
-        App.go('students', {});
+        if (q && App.can('student.view')) App.go('students', { q: q });
       }
     });
   }

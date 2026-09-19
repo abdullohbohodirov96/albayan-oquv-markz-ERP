@@ -50,7 +50,11 @@
     if (!iso) return '—';
     var p = String(iso).split('-');
     if (p.length < 3) return iso;
-    return p[2] + ' ' + MONTHS[Number(p[1]) - 1].toLowerCase() + ' ' + p[0];
+    var list = global.A && global.A.MONTHS_IN ? global.A.MONTHS_IN : MONTHS;
+    var name = list[Number(p[1]) - 1] || '';
+    var lang = global.A && global.A.I18N ? global.A.I18N.lang : 'uz';
+    if (lang === 'uz') name = name.toLowerCase();
+    return p[2] + ' ' + name + ' ' + p[0];
   }
   function monthStart(ym) { return ym + '-01'; }
   function monthEnd(ym) { return ym + '-' + pad(daysInMonth(ym)); }
@@ -62,7 +66,10 @@
     var s = String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     return (neg ? '−' : '') + s;
   }
-  function somFull(n) { return som(n) + ' so’m'; }
+  function somFull(n) {
+    var cur = (global.A && global.A.CURRENCY) || 'so’m';
+    return som(n) + ' ' + cur;
+  }
   function parseSom(str) {
     var v = String(str == null ? '' : str).replace(/[^0-9-]/g, '');
     if (v === '' || v === '-') return 0;
@@ -113,7 +120,7 @@
 
   /* ---------------- Ma'lumotlar qatlami ---------------- */
   var COLLECTIONS = ['users', 'staff', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads',
-    'tasks', 'chats', 'botreq', 'botout'];
+    'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin'];
   var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 

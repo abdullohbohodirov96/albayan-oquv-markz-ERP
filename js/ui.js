@@ -358,6 +358,99 @@
     return h('div', { class: 'avatar' }, s.toUpperCase());
   }
 
+  /* ---------- Tezkor qidiruv (takliflar) ---------- */
+  /**
+   * input — matn maydoni; provider(q) -> [{group, title, sub, onPick}]
+   * Har harf kiritilganda ro'yxat yangilanadi; strelka va Enter ishlaydi.
+   */
+  function suggest(input, provider, opts) {
+    opts = opts || {};
+    var wrap = input.closest('.sg-wrap');
+    if (!wrap) {
+      wrap = h('div', { class: 'sg-wrap' });
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+    }
+    var box = h('div', { class: 'sg-box', role: 'listbox' });
+    wrap.appendChild(box);
+    var items = [], active = -1, timer = null;
+
+    function close() { UI_clear(box); items = []; active = -1; }
+    function UI_clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+
+    function mark(text, q) {
+      var s = String(text == null ? '' : text);
+      if (!q) return document.createTextNode(s);
+      var i = s.toLowerCase().indexOf(q.toLowerCase());
+      if (i < 0) return document.createTextNode(s);
+      var frag = document.createDocumentFragment();
+      frag.appendChild(document.createTextNode(s.slice(0, i)));
+      frag.appendChild(h('mark', {}, s.slice(i, i + q.length)));
+      frag.appendChild(document.createTextNode(s.slice(i + q.length)));
+      return frag;
+    }
+
+    function paint(q) {
+      UI_clear(box);
+      items = []; active = -1;
+      var res = provider(q) || [];
+      if (!res.length) {
+        if (q && q.length >= (opts.min || 1)) {
+          box.appendChild(h('div', { class: 'sg-empty' }, opts.emptyText || 'Hech narsa topilmadi'));
+        }
+        return;
+      }
+      var lastGroup = null;
+      res.slice(0, opts.limit || 24).forEach(function (r) {
+        if (r.group && r.group !== lastGroup) {
+          box.appendChild(h('div', { class: 'sg-group' }, r.group));
+          lastGroup = r.group;
+        }
+        var b = h('button', { type: 'button', class: 'sg-item', role: 'option' }, [
+          r.icon || null,
+          h('div', { class: 'sg-main' }, [
+            (function () { var el = h('b'); el.appendChild(mark(r.title, q)); return el; })(),
+            r.sub ? (function () { var el = h('span'); el.appendChild(mark(r.sub, q)); return el; })() : null
+          ]),
+          r.badge || null
+        ]);
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        b.addEventListener('click', function () { close(); r.onPick(); });
+        items.push(b);
+        box.appendChild(b);
+      });
+    }
+
+    function setActive(i) {
+      if (active >= 0 && items[active]) items[active].setAttribute('aria-selected', 'false');
+      active = i;
+      if (active >= 0 && items[active]) {
+        items[active].setAttribute('aria-selected', 'true');
+        items[active].scrollIntoView({ block: 'nearest' });
+      }
+    }
+
+    input.setAttribute('autocomplete', 'off');
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      var q = input.value.trim();
+      timer = setTimeout(function () { paint(q); }, 90);
+      if (opts.onType) opts.onType(q);
+    });
+    input.addEventListener('focus', function () {
+      if (input.value.trim() || opts.showOnFocus) paint(input.value.trim());
+    });
+    input.addEventListener('blur', function () { setTimeout(close, 140); });
+    input.addEventListener('keydown', function (e) {
+      if (!items.length) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(Math.min(active + 1, items.length - 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(active - 1, 0)); }
+      else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); items[active].click(); }
+      else if (e.key === 'Escape') { close(); }
+    });
+    return { close: close, refresh: function () { paint(input.value.trim()); } };
+  }
+
   /* ---------- Eksport ---------- */
   async function exportCsv(filename, rows) {
     var csv = rows.map(function (r) {
@@ -400,6 +493,6 @@
     h: h, clear: clear, icon: icon, ICONS: ICONS, toast: toast, modal: modal, confirm: confirm,
     askReason: askReason, field: field, form: form, busy: busy, table: table, empty: empty,
     pill: pill, tile: tile, pageHead: pageHead, card: card, tabs: tabs, avatar: avatar,
-    exportCsv: exportCsv
+    suggest: suggest, exportCsv: exportCsv
   };
 })(typeof window !== 'undefined' ? window : globalThis);

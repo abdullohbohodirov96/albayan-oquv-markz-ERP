@@ -51,6 +51,19 @@ function readBody(req) {
   });
 }
 
+/* ---------------- So'rov cheklovi (webhook uchun) ---------------- */
+const intakeHits = new Map();
+function intakeAllowed(req) {
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const now = Date.now();
+  const rec = intakeHits.get(ip) || { n: 0, t: now };
+  if (now - rec.t > 60000) { rec.n = 0; rec.t = now; }
+  rec.n++;
+  intakeHits.set(ip, rec);
+  if (intakeHits.size > 5000) intakeHits.clear();
+  return rec.n <= 60;                 // daqiqasiga 60 ta so'rov
+}
+
 /* ---------------- Sessiyalar ---------------- */
 const sessions = new Map();               // token -> {userId, at}
 const SESSION_MS = Number(process.env.SESSION_MAX_AGE_DAYS || 7) * 864e5;
@@ -91,6 +104,16 @@ async function ensureSeed() {
       createdAt: stamp()
     });
   }
+  const funnels = await store.list('funnels/');
+  if (!funnels.length) {
+    for (const f of A.DEFAULT_FUNNELS) {
+      const rec = JSON.parse(JSON.stringify(f));
+      rec.intakeKey = crypto.randomBytes(10).toString('hex');
+      await store.set('funnels/' + rec.id, rec);
+    }
+    console.log('  Sotuv voronkalari yaratildi (Asosiy, Target reklama, Instagram)');
+  }
+
   const users = await store.list('users/');
   if (!users.length) {
     const login = (process.env.SEED_DIRECTOR_LOGIN || 'admin').toLowerCase();
@@ -111,7 +134,7 @@ async function ensureSeed() {
 
 /* ---------------- API ---------------- */
 const COLLECTIONS = ['users', 'staff', 'courses', 'rooms', 'students', 'groups', 'memberships',
-  'leads', 'tasks', 'chats', 'botreq', 'botout', 'botin'];
+  'leads', 'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin'];
 
 async function apiBootstrap(user) {
   const all = await store.all();
@@ -147,6 +170,45 @@ async function handleApi(req, res, url) {
   const route = url.pathname.replace(/^\/api\//, '');
 
   if (route === 'health') return send(res, 200, { ok: true, mode: store.kind });
+
+  /* --- Tashqi murojaat qabul qilish (Instagram, target reklama, sayt formasi) --- */
+  if (route.indexOf('intake/') === 0 && req.method === 'POST') {
+    const key = route.slice('intake/'.length);
+    if (!key || key.length < 8) return send(res, 400, { error: 'Kalit noto’g’ri.' });
+    if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov.' });
+
+    const funnels = (await store.list('funnels/')).map(x => x.data);
+    const funnel = funnels.filter(f => f.intakeKey === key)[0];
+    if (!funnel) return send(res, 404, { error: 'Voronka topilmadi.' });
+
+    const body = await readBody(req);
+    const text = String(body.text || body.message || body.comment || '');
+    const phone = A.normPhone(String(body.phone || body.telefon || '')) || A.extractPhone(text);
+    const name = String(body.name || body.full_name || body.ism || '').trim() ||
+      (body.username ? '@' + body.username : '') || 'Noma’lum';
+    if (!phone && !text && name === 'Noma’lum') {
+      return send(res, 400, { error: 'Ism yoki telefon kerak.' });
+    }
+
+    // takroriy raqamni qayta yaratmaymiz
+    const leads = (await store.list('leads/')).map(x => x.data);
+    const digits = A.phoneDigits(phone);
+    const dup = digits ? leads.filter(l => A.phoneDigits(l.phone) === digits && l.funnelId === funnel.id)[0] : null;
+    if (dup) return send(res, 200, { ok: true, duplicate: true, id: dup.id });
+
+    const stages = A.funnelStages(funnel);
+    const id = 'led_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    await store.set('leads/' + id, {
+      id, funnelId: funnel.id,
+      name, phone,
+      courseId: '', source: String(body.source || funnel.autoSource || 'Webhook'),
+      ownerStaffId: '', stage: stages[0] ? stages[0].id : 'yangi',
+      note: text.slice(0, 500),
+      nextContact: new Date(Date.now() + 5 * 3600 * 1000).toISOString().slice(0, 10),
+      createdAt: stamp(), viaIntake: true
+    });
+    return send(res, 200, { ok: true, id });
+  }
 
   if (route === 'login' && req.method === 'POST') {
     const body = await readBody(req);

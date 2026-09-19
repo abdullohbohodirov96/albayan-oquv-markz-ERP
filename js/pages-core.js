@@ -294,43 +294,61 @@
   A.Pages.leads = function (view, route, App) {
     App.guard('nav.leads');
     var today = A.today();
+    var funnels = A.sortBy(D.all('funnels'), 'order');
+    if (!funnels.length) funnels = A.DEFAULT_FUNNELS;
+    var funnelId = route.funnelId || (funnels[0] && funnels[0].id);
+    var funnel = funnels.filter(function (f) { return f.id === funnelId; })[0] || funnels[0];
+    var stages = A.funnelStages(funnel);
     var stageFilter = route.stage || 'all';
-    var leads = D.all('leads');
+
+    var allLeads = D.all('leads');
+    function inFunnel(l) {
+      return (l.funnelId || 'fnl_asosiy') === funnel.id;
+    }
+    var leads = allLeads.filter(inFunnel);
     if (route.due) leads = leads.filter(function (l) {
-      return l.stage !== 'oquvchi' && l.stage !== 'rad' && l.nextContact && l.nextContact <= today;
+      return !isClosed(funnel, l.stage) && l.nextContact && l.nextContact <= today;
     });
     if (stageFilter !== 'all') leads = leads.filter(function (l) { return l.stage === stageFilter; });
     leads = A.sortBy(leads, 'createdAt', 'desc');
 
     view.appendChild(UI.pageHead('Murojaatlar', 'Yangi mijozlarni bog’lanishdan o’quvchiga aylanguncha kuzating', [
-      App.can('lead.edit') ? h('button', { class: 'btn primary', onclick: function () { leadForm(null, App); } },
+      App.can('lead.edit') ? h('button', { class: 'btn primary', onclick: function () { leadForm(null, App, funnel.id); } },
         [UI.icon('plus'), 'Murojaat qo’shish']) : null,
-      App.can('lead.import') ? h('button', { class: 'btn', onclick: function () { A.importModal('leads', App); } },
+      App.can('lead.import') ? h('button', { class: 'btn', onclick: function () { A.importModal('leads', App, funnel.id); } },
         [UI.icon('upload'), 'Excel’dan import']) : null,
       h('button', {
         class: 'btn', onclick: function () {
-          UI.exportCsv('murojaatlar.csv', [['Ism', 'Telefon', 'Kurs', 'Manba', 'Holat', 'Keyingi aloqa', 'Izoh']].concat(
-            leads.map(function (l) {
-              return [l.name, l.phone, Q.courseName(l.courseId), l.source, stageLabel(l.stage), l.nextContact || '', l.note || ''];
-            })));
+          UI.exportCsv('murojaatlar-' + funnel.name + '.csv',
+            [['Ism', 'Telefon', 'Kurs', 'Manba', 'Voronka', 'Holat', 'Keyingi aloqa', 'Izoh']].concat(
+              leads.map(function (l) {
+                return [l.name, l.phone, Q.courseName(l.courseId), l.source, funnel.name,
+                A.stageOf(funnel, l.stage).label, l.nextContact || '', l.note || ''];
+              })));
         }
       }, [UI.icon('down'), 'Excel'])
     ]));
 
+    // Voronkalar
+    view.appendChild(UI.tabs(funnels.map(function (f) {
+      var n = allLeads.filter(function (l) { return (l.funnelId || 'fnl_asosiy') === f.id; }).length;
+      return { id: f.id, label: f.name + ' (' + n + ')' };
+    }), funnel.id, function (id) { App.go('leads', { funnelId: id }); }));
+
     var counts = {};
-    A.LEAD_STAGES.forEach(function (s) {
-      counts[s.id] = D.all('leads').filter(function (l) { return l.stage === s.id; }).length;
+    stages.forEach(function (s) {
+      counts[s.id] = allLeads.filter(function (l) { return inFunnel(l) && l.stage === s.id; }).length;
     });
     var segs = h('div', { class: 'filters' }, [
-      h('div', { class: 'seg' }, [{ id: 'all', label: 'Barchasi (' + D.all('leads').length + ')' }]
-        .concat(A.LEAD_STAGES.map(function (s) { return { id: s.id, label: s.label + ' (' + counts[s.id] + ')' }; }))
+      h('div', { class: 'seg' }, [{ id: 'all', label: 'Barchasi (' + allLeads.filter(inFunnel).length + ')' }]
+        .concat(stages.map(function (s) { return { id: s.id, label: s.label + ' (' + counts[s.id] + ')' }; }))
         .map(function (s) {
           return h('button', {
             type: 'button', 'aria-pressed': stageFilter === s.id ? 'true' : 'false',
-            onclick: function () { App.go('leads', { stage: s.id }); }
+            onclick: function () { App.go('leads', { funnelId: funnel.id, stage: s.id }); }
           }, s.label);
         })),
-      route.due ? h('button', { class: 'btn sm', onclick: function () { App.go('leads', {}); } }, 'Filtrni olib tashlash') : null
+      route.due ? h('button', { class: 'btn sm', onclick: function () { App.go('leads', { funnelId: funnel.id }); } }, 'Filtrni olib tashlash') : null
     ]);
     view.appendChild(segs);
 
@@ -338,7 +356,7 @@
       view.appendChild(UI.card(null, UI.empty({
         title: 'Murojaat yo’q',
         text: 'Telefon qilgan yoki yozgan har bir mijozni shu yerga qo’shing — keyin uni bir bosishda o’quvchiga aylantirasiz.',
-        action: App.can('lead.edit') ? { label: 'Murojaat qo’shish', onClick: function () { leadForm(null, App); } } : null
+        action: App.can('lead.edit') ? { label: 'Murojaat qo’shish', onClick: function () { leadForm(null, App, funnel.id); } } : null
       })));
       return;
     }
@@ -352,16 +370,16 @@
       {
         label: 'Keyingi aloqa', render: function (l) {
           if (!l.nextContact) return h('span', { class: 'muted' }, '—');
-          var late = l.nextContact <= today && l.stage !== 'oquvchi' && l.stage !== 'rad';
+          var late = l.nextContact <= today && !isClosed(funnel, l.stage);
           return h('span', { class: late ? 'pill bad' : 'mono' }, A.dateLabel(l.nextContact));
         }
       },
-      { label: 'Holat', render: function (l) { return stagePill(l.stage); } },
+      { label: 'Holat', render: function (l) { return stagePill(l.stage, funnel); } },
       {
         label: '', right: true, render: function (l) {
           if (!App.can('lead.edit')) return '';
           return h('div', { class: 'rowflex', style: 'justify-content:flex-end;gap:6px' }, [
-            l.stage !== 'oquvchi' ? h('button', {
+            A.stageOf(funnel, l.stage).type !== 'won' ? h('button', {
               class: 'btn sm primary', onclick: function (e) { e.stopPropagation(); convertLead(l, App); }
             }, 'O’quvchiga') : null,
             h('button', { class: 'btn sm', onclick: function (e) { e.stopPropagation(); leadForm(l, App); } }, 'Ochish')
@@ -371,20 +389,46 @@
     ], leads, { onRow: function (l) { if (App.can('lead.edit')) leadForm(l, App); } }), null, null, true));
   };
 
-  function stageLabel(id) {
+  function isClosed(funnel, stageId) {
+    var t = A.stageOf(funnel, stageId).type;
+    return t === 'won' || t === 'lost';
+  }
+
+  function stageLabel(id, funnel) {
+    if (funnel) return A.stageOf(funnel, id).label;
     var s = A.LEAD_STAGES.filter(function (x) { return x.id === id; })[0];
     return s ? s.label : id;
   }
-  function stagePill(id) {
-    var cls = { yangi: 'info', boglanildi: 'warn', sinov: 'warn', oquvchi: 'ok', rad: 'mute' }[id] || 'mute';
-    return UI.pill(stageLabel(id), cls);
+  function stagePill(id, funnel) {
+    var st = funnel ? A.stageOf(funnel, id) : { id: id };
+    var cls = st.type === 'won' ? 'ok' : (st.type === 'lost' ? 'mute'
+      : ({ yangi: 'info', boglanildi: 'warn', sinov: 'warn', qiziqdi: 'warn', oquvchi: 'ok', rad: 'mute' }[id] || 'info'));
+    return UI.pill(stageLabel(id, funnel), cls);
   }
 
-  function leadForm(lead, App) {
+  function leadForm(lead, App, defFunnelId) {
     App.guard('lead.edit');
     var isNew = !lead;
-    lead = lead || { stage: 'yangi', createdAt: A.nowStamp(), nextContact: A.today() };
+    var funnels = A.sortBy(D.all('funnels'), 'order');
+    if (!funnels.length) funnels = A.DEFAULT_FUNNELS;
+    lead = lead || {
+      stage: 'yangi', createdAt: A.nowStamp(), nextContact: A.today(),
+      funnelId: defFunnelId || funnels[0].id
+    };
+    var curFunnel = funnels.filter(function (x) { return x.id === (lead.funnelId || funnels[0].id); })[0] || funnels[0];
     var f = UI.form([
+      {
+        name: 'funnelId', label: 'Sotuv voronkasi', type: 'select', value: lead.funnelId || curFunnel.id,
+        options: funnels.map(function (x) { return { value: x.id, label: x.name }; }),
+        onchange: function (e) {
+          var fn = funnels.filter(function (x) { return x.id === e.target.value; })[0];
+          var sel = f.get('stage').input;
+          UI.clear(sel);
+          A.funnelStages(fn).forEach(function (s) {
+            sel.appendChild(h('option', { value: s.id }, s.label));
+          });
+        }
+      },
       { name: 'name', label: 'Ism', required: true, value: lead.name },
       {
         name: 'phone', label: 'Telefon', required: true, value: lead.phone, placeholder: '+998 90 123 45 67',
@@ -406,7 +450,7 @@
       { name: 'nextContact', label: 'Keyingi bog’lanish sanasi', type: 'date', value: lead.nextContact },
       {
         name: 'stage', label: 'Holat', type: 'select', value: lead.stage,
-        options: A.LEAD_STAGES.map(function (s) { return { value: s.id, label: s.label }; })
+        options: A.funnelStages(curFunnel).map(function (s) { return { value: s.id, label: s.label }; })
       },
       { name: 'note', label: 'Izoh', type: 'textarea', value: lead.note, full: true }
     ]);
@@ -454,7 +498,9 @@
               var rec = Object.assign({}, lead, v, { phone: A.normPhone(v.phone) });
               if (isNew) { rec.id = A.uid('led'); rec.createdAt = A.nowStamp(); }
               await D.save('leads', rec);
-              await A.Ops.audit(App.user, isNew ? 'Murojaat qo’shildi' : 'Murojaat o’zgartirildi', rec.name, stageLabel(rec.stage));
+              var fn = funnels.filter(function (x) { return x.id === rec.funnelId; })[0];
+              await A.Ops.audit(App.user, isNew ? 'Murojaat qo’shildi' : 'Murojaat o’zgartirildi',
+                rec.name, stageLabel(rec.stage, fn));
               c(); UI.toast('Saqlandi.', 'ok'); App.render();
             });
           }
@@ -465,6 +511,7 @@
   }
 
   async function convertLead(lead, App) {
+    // murojaatni o'quvchiga aylantirish
     App.guard('student.edit');
     A.studentForm({
       firstName: (lead.name || '').split(' ')[1] || lead.name,
@@ -532,14 +579,36 @@
       options: [{ value: '', label: 'Barchasi' }].concat(A.scopeGroups(user, D.all('groups')).map(function (g) { return { value: g.id, label: g.name }; }))
     });
     function apply() {
-      App.go('students', { q: fq.input.value, status: fst.input.value, groupId: fg.input.value });
+      App.go('students', { q: fq.input.value, status: fst.input.value, groupId: fg.input.value, live: true });
     }
-    fq.input.addEventListener('change', apply);
+    var typeTimer = null;
+    fq.input.addEventListener('input', function () {
+      clearTimeout(typeTimer);
+      typeTimer = setTimeout(apply, 220);      // har harfda ro'yxat filtrlanadi
+    });
     fst.input.addEventListener('change', apply);
     fg.input.addEventListener('change', apply);
     view.appendChild(h('div', { class: 'filters' }, [fq.wrap, fst.wrap, fg.wrap,
       h('div', { class: 'spacer' }),
       h('button', { class: 'btn sm', onclick: function () { App.go('students', {}); } }, 'Tozalash')]));
+
+    // yozayotganda maydon fokusda qolsin
+    if (route.live) {
+      setTimeout(function () {
+        try {
+          fq.input.focus();
+          var v = fq.input.value;
+          fq.input.setSelectionRange(v.length, v.length);
+        } catch (e) { }
+      }, 0);
+    }
+    // takliflar ro'yxati
+    UI.suggest(fq.input, function (q) {
+      if (!q) return [];
+      return (App.searchAll ? App.searchAll(q) : []).filter(function (r) {
+        return r.group === 'O’quvchilar' || r.group === 'Guruhlar';
+      });
+    }, { limit: 12 });
 
     if (!list.length) {
       view.appendChild(UI.card(null, UI.empty({
@@ -794,13 +863,13 @@
       { name: 'lastName', label: 'Familiya', required: true, value: draft.lastName },
       { name: 'firstName', label: 'Ism', required: true, value: draft.firstName },
       {
-        name: 'phone', label: 'O’quvchi telefoni', value: draft.phone, placeholder: '+998 90 123 45 67',
-        validate: function (v) { return v && A.phoneDigits(v).length < 7 ? 'Raqam to’liq emas.' : null; }
-      },
-      { name: 'parentName', label: 'Ota-ona / vasiy ismi', value: draft.parentName },
-      {
-        name: 'parentPhone', label: 'Ota-ona telefoni', required: true, value: draft.parentPhone, placeholder: '+998 90 123 45 67',
+        name: 'phone', label: 'Telefon', required: true, value: draft.phone, placeholder: '+998 90 123 45 67',
         validate: function (v) { return A.phoneDigits(v).length < 7 ? 'Raqam to’liq emas.' : null; }
+      },
+      { name: 'parentName', label: 'Ota-ona / vasiy ismi (ixtiyoriy)', value: draft.parentName },
+      {
+        name: 'parentPhone', label: 'Ota-ona telefoni (ixtiyoriy)', value: draft.parentPhone, placeholder: '+998 90 123 45 67',
+        validate: function (v) { return v && A.phoneDigits(v).length < 7 ? 'Raqam to’liq emas.' : null; }
       },
       { name: 'birthDate', label: 'Tug’ilgan sana (ixtiyoriy)', type: 'date', value: draft.birthDate },
       {
@@ -828,7 +897,7 @@
     var dup = h('div');
     function checkDup() {
       UI.clear(dup);
-      var d = A.phoneDigits(f.get('parentPhone').input.value);
+      var d = A.phoneDigits(f.get('phone').input.value) || A.phoneDigits(f.get('parentPhone').input.value);
       if (d.length < 7) return;
       var same = D.all('students').filter(function (x) {
         return x.id !== (student && student.id) && (A.phoneDigits(x.parentPhone) === d || A.phoneDigits(x.phone) === d);
@@ -842,6 +911,7 @@
       }
     }
     f.get('parentPhone').input.addEventListener('blur', checkDup);
+    f.get('phone').input.addEventListener('blur', checkDup);
 
     UI.modal({
       title: isNew ? 'Yangi o’quvchi' : 'O’quvchini tahrirlash',

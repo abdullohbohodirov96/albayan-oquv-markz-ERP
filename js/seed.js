@@ -27,8 +27,20 @@
     createdAt: A.nowStamp()
   };
 
+  function randKey() {
+    return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+  }
+
   async function bootstrap() {
     if (!D.settings) await D.saveSettings(A.clone(DEFAULT_SETTINGS));
+    // Sotuv voronkalari
+    if (D.all('funnels').length === 0) {
+      for (var fi = 0; fi < A.DEFAULT_FUNNELS.length; fi++) {
+        var f = A.clone(A.DEFAULT_FUNNELS[fi]);
+        f.intakeKey = randKey();
+        await D.save('funnels', f);
+      }
+    }
     if (D.all('users').length === 0) {
       var s = salt();
       await D.save('users', {
@@ -177,10 +189,10 @@
 
     // Murojaatlar
     var leads = [
-      { id: 'led_1', name: 'Zilola Karimova', phone: '+998935551122', courseId: 'crs_ar1', source: 'Instagram', ownerStaffId: 'stf_adm', stage: 'yangi', note: 'Kechki guruh qiziqtiradi', nextContact: today, createdAt: A.addDays(today, -1) + ' 10:00', demo: true },
-      { id: 'led_2', name: 'Sardor Ubaydullayev', phone: '+998935551133', courseId: 'crs_nahv', source: 'Tanish orqali', ownerStaffId: 'stf_adm', stage: 'boglanildi', note: 'Narxni o’yladi', nextContact: A.addDays(today, 1), createdAt: A.addDays(today, -3) + ' 15:20', demo: true },
-      { id: 'led_3', name: 'Nargiza Toirova', phone: '+998935551144', courseId: 'crs_quron', source: 'Telegram', ownerStaffId: 'stf_adm', stage: 'sinov', note: 'Shanba sinov darsi', nextContact: A.addDays(today, 2), createdAt: A.addDays(today, -5) + ' 12:00', demo: true },
-      { id: 'led_4', name: 'Oybek Ergashev', phone: '+998935551155', courseId: 'crs_suhbat', source: 'Banner', ownerStaffId: 'stf_adm', stage: 'rad', note: 'Uzoq', nextContact: '', createdAt: A.addDays(today, -7) + ' 09:30', demo: true }
+      { funnelId: 'fnl_asosiy', id: 'led_1', name: 'Zilola Karimova', phone: '+998935551122', courseId: 'crs_ar1', source: 'Instagram', ownerStaffId: 'stf_adm', stage: 'yangi', note: 'Kechki guruh qiziqtiradi', nextContact: today, createdAt: A.addDays(today, -1) + ' 10:00', demo: true },
+      { funnelId: 'fnl_target', id: 'led_2', name: 'Sardor Ubaydullayev', phone: '+998935551133', courseId: 'crs_nahv', source: 'Tanish orqali', ownerStaffId: 'stf_adm', stage: 'boglanildi', note: 'Narxni o’yladi', nextContact: A.addDays(today, 1), createdAt: A.addDays(today, -3) + ' 15:20', demo: true },
+      { funnelId: 'fnl_instagram', id: 'led_3', name: 'Nargiza Toirova', phone: '+998935551144', courseId: 'crs_quron', source: 'Telegram', ownerStaffId: 'stf_adm', stage: 'sinov', note: 'Shanba sinov darsi', nextContact: A.addDays(today, 2), createdAt: A.addDays(today, -5) + ' 12:00', demo: true },
+      { funnelId: 'fnl_target', id: 'led_4', name: 'Oybek Ergashev', phone: '+998935551155', courseId: 'crs_suhbat', source: 'Banner', ownerStaffId: 'stf_adm', stage: 'rad', note: 'Uzoq', nextContact: '', createdAt: A.addDays(today, -7) + ' 09:30', demo: true }
     ];
     for (i = 0; i < leads.length; i++) await D.save('leads', leads[i]);
 
@@ -274,5 +286,8 @@
     }
   }
 
-  global.A.Seed = { bootstrap: bootstrap, demo: demo, clearDemo: clearDemo, DEFAULT_SETTINGS: DEFAULT_SETTINGS, mkHash: mkHash, salt: salt };
+  global.A.Seed = {
+    bootstrap: bootstrap, demo: demo, clearDemo: clearDemo,
+    DEFAULT_SETTINGS: DEFAULT_SETTINGS, mkHash: mkHash, salt: salt, randKey: randKey
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

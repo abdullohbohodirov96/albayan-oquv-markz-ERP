@@ -23,6 +23,7 @@ function writePermFor(docPath) {
     courses: 'group.edit',
     rooms: 'group.edit',
     leads: 'lead.edit',
+    funnels: 'settings.edit',
     staff: 'staff.edit',
     users: 'users.manage',
     invoices: 'invoice.create',

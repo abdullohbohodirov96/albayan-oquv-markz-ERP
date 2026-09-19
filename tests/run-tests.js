@@ -363,6 +363,23 @@ function section(t) { results.push('\n' + t); }
   ok('Bo’sh matn hech kimga mos kelmaydi', !bot.nameMatches('', 'Valiyev Ali'));
   eq('Ism normallashtirish', bot.normName('  Valiyev   ALI '), 'ali valiyev');
 
+  /* ---------------- 20. Voronkalar va Instagram lidlari ---------------- */
+  section('20. Sotuv voronkalari');
+  eq('Standart voronkalar soni', A.DEFAULT_FUNNELS.length, 3);
+  const target = A.DEFAULT_FUNNELS.find(f => f.id === 'fnl_target');
+  eq('Target voronkasida 6 bosqich', A.funnelStages(target).length, 6);
+  eq('Bosqich nomi voronkadan olinadi', A.stageOf(target, 'yangi').label, 'Yangi lid');
+  eq('Yakuniy bosqich belgilangan', A.stageOf(target, 'oquvchi').type, 'won');
+  eq('Rad etish bosqichi belgilangan', A.stageOf(target, 'rad').type, 'lost');
+  eq('Voronkasiz standart bosqichlar', A.funnelStages(null).length, 5);
+
+  section('21. Izohdan telefon ajratish (Instagram)');
+  eq('Bo’sh joyli raqam', A.extractPhone('narxi qancha? 90 123 45 67 yozing'), '+998901234567');
+  eq('To’liq raqam', A.extractPhone('mening raqamim +998 90 123 45 67'), '+998901234567');
+  eq('Qavs va chiziqcha bilan', A.extractPhone('tel: (90) 123-45-67'), '+998901234567');
+  eq('Raqamsiz matndan hech nima', A.extractPhone('salom, narxini ayting'), '');
+  eq('Juda qisqa raqam olinmaydi', A.extractPhone('12345'), '');
+
   /* ---------------- Natija ---------------- */
   console.log(results.join('\n'));
   console.log('\n' + '─'.repeat(48));

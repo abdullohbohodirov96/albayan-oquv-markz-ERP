@@ -176,7 +176,7 @@
     ]
   };
 
-  A.importModal = function (kind, App) {
+  A.importModal = function (kind, App, funnelId) {
     App.guard(kind === 'leads' ? 'lead.import' : 'student.import');
     var state = { rows: [], map: {}, header: null, colCount: 0, fileName: '' };
 
@@ -330,7 +330,7 @@
             var recs = buildRecords();
             if (!recs.length) { UI.toast('Import qilinadigan yozuv topilmadi.', 'bad'); return; }
             UI.busy(btn, async function () {
-              var res = await doImport(kind, recs, skipDup.input.value === 'skip', App);
+              var res = await doImport(kind, recs, skipDup.input.value === 'skip', App, funnelId);
               c();
               showResult(res, App);
             });
@@ -340,7 +340,7 @@
     });
   };
 
-  async function doImport(kind, recs, skipDup, App) {
+  async function doImport(kind, recs, skipDup, App, funnelId) {
     var added = 0, skipped = 0, enrolled = 0, problems = [];
     var existingPhones = {};
     if (kind === 'students') {

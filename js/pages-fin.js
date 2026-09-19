@@ -1018,11 +1018,14 @@
     view.appendChild(UI.pageHead('Sozlamalar', 'Markaz ma’lumotlari, foydalanuvchilar va tizim tarixi'));
     view.appendChild(UI.tabs([
       { id: 'general', label: 'Markaz' },
+      { id: 'funnels', label: 'Sotuv voronkalari' },
       { id: 'users', label: 'Foydalanuvchilar' },
       { id: 'cats', label: 'Xarajat kategoriyalari' },
       { id: 'data', label: 'Ma’lumotlar' },
       { id: 'log', label: 'O’zgarishlar tarixi' }
     ], tab, function (id) { App.go('settings', { tab: id }); }));
+
+    if (tab === 'funnels') renderFunnels(view, App);
 
     if (tab === 'general') {
       var s = D.settings || A.Seed.DEFAULT_SETTINGS;
@@ -1224,6 +1227,196 @@
         'Parollar va maxfiy ma’lumotlar tarixga yozilmaydi.'));
     }
   };
+
+  /* ================= SOTUV VORONKALARI ================= */
+  function intakeUrl(funnel) {
+    var base = location.origin + location.pathname.replace(/[^/]*$/, '');
+    return base + 'api/intake/' + (funnel.intakeKey || '');
+  }
+
+  function renderFunnels(view, App) {
+    var funnels = A.sortBy(D.all('funnels'), 'order');
+    var leads = D.all('leads');
+
+    view.appendChild(h('div', { class: 'banner info' }, h('div', {}, [
+      h('b', {}, 'Voronka nima? '),
+      'Har bir mijoz oqimi uchun alohida yo’l: masalan "Asosiy" (o’zi kelganlar), ',
+      '"Target reklama" va "Instagram". Har birining bosqichlari boshqacha bo’lishi mumkin.'
+    ])));
+
+    view.appendChild(UI.card(null, funnels.length ? UI.table([
+      { label: 'Voronka', render: function (f) { return h('b', {}, f.name); } },
+      {
+        label: 'Bosqichlar', render: function (f) {
+          return h('div', { class: 'rowflex', style: 'gap:4px' },
+            A.funnelStages(f).map(function (s) { return UI.pill(s.label, 'mute'); }));
+        }
+      },
+      {
+        label: 'Murojaatlar', right: true, render: function (f) {
+          return leads.filter(function (l) { return (l.funnelId || 'fnl_asosiy') === f.id; }).length;
+        }
+      },
+      {
+        label: 'Qabul havolasi', render: function (f) {
+          return h('button', {
+            class: 'btn sm', onclick: function () { intakeModal(f, App); }
+          }, 'Ko’rsatish');
+        }
+      },
+      {
+        label: '', right: true, render: function (f) {
+          return h('button', { class: 'btn sm', onclick: function () { funnelForm(f, App); } }, 'Tahrirlash');
+        }
+      }
+    ], funnels) : UI.empty({ title: 'Voronka yo’q', text: 'Birinchi voronkani yarating.' }),
+      [h('button', { class: 'btn sm primary', onclick: function () { funnelForm(null, App); } }, 'Voronka qo’shish')],
+      true));
+  }
+
+  function funnelForm(funnel, App) {
+    var isNew = !funnel;
+    var f0 = funnel || { name: '', order: D.all('funnels').length + 1, stages: A.clone(A.LEAD_STAGES) };
+    var stages = A.clone(A.funnelStages(f0));
+
+    var nameF = UI.field({ label: 'Voronka nomi', required: true, value: f0.name, placeholder: 'Target reklama' });
+    var srcF = UI.field({
+      label: 'Avtomatik manba belgisi', value: f0.autoSource || '',
+      help: 'Shu voronkaga tushgan murojaatlarga avtomatik yoziladi (masalan: Instagram).'
+    });
+    var box = h('div', { class: 'perm-grid' });
+
+    function paint() {
+      UI.clear(box);
+      stages.forEach(function (s, i) {
+        var lab = h('input', { type: 'text', value: s.label, style: 'flex:1;min-width:140px;padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface)' });
+        lab.addEventListener('input', function () { s.label = lab.value; });
+        var typeSel = h('select', { style: 'padding:8px 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface)' }, [
+          h('option', { value: '' }, 'Oddiy bosqich'),
+          h('option', { value: 'won' }, 'Yakun: o’quvchi bo’ldi'),
+          h('option', { value: 'lost' }, 'Yakun: rad etdi')
+        ]);
+        typeSel.value = s.type || '';
+        typeSel.addEventListener('change', function () {
+          s.type = typeSel.value || undefined;
+        });
+        box.appendChild(h('div', { class: 'perm-row' }, [
+          h('span', { class: 'muted mono', style: 'min-width:22px' }, String(i + 1)),
+          lab, typeSel,
+          h('button', {
+            class: 'btn sm', type: 'button', disabled: i === 0,
+            onclick: function () { var t = stages[i - 1]; stages[i - 1] = stages[i]; stages[i] = t; paint(); }
+          }, '↑'),
+          h('button', {
+            class: 'btn sm danger', type: 'button', disabled: stages.length <= 2,
+            onclick: function () { stages.splice(i, 1); paint(); }
+          }, '×')
+        ]));
+      });
+    }
+    paint();
+
+    UI.modal({
+      title: isNew ? 'Yangi voronka' : 'Voronka: ' + f0.name,
+      wide: true,
+      body: [
+        h('div', { class: 'form-grid' }, [nameF.wrap, srcF.wrap]),
+        h('h3', { style: 'font-size:14px;margin:12px 0 6px' }, 'Bosqichlar'),
+        box,
+        h('button', {
+          class: 'btn sm', type: 'button', style: 'margin-top:8px',
+          onclick: function () {
+            stages.splice(Math.max(0, stages.length - 2), 0,
+              { id: 'st_' + Math.random().toString(36).slice(2, 7), label: 'Yangi bosqich' });
+            paint();
+          }
+        }, 'Bosqich qo’shish')
+      ],
+      actions: [
+        (!isNew && !f0.isDefault) ? {
+          label: 'O’chirish', cls: 'danger', onClick: async function (c) {
+            var used = D.all('leads').filter(function (l) { return l.funnelId === f0.id; }).length;
+            if (used) { UI.toast('Bu voronkada ' + used + ' ta murojaat bor.', 'bad'); return; }
+            if (await UI.confirm('Voronkani o’chirish', 'Voronka o’chiriladi.', 'O’chirish', true)) {
+              await D.remove('funnels', f0.id);
+              c(); UI.toast('O’chirildi.', 'ok'); App.render();
+            }
+          }
+        } : null,
+        { label: 'Bekor qilish' },
+        {
+          label: 'Saqlash', cls: 'primary', onClick: function (c, btn) {
+            var nm = nameF.input.value.trim();
+            if (!nm) { UI.toast('Voronka nomini yozing.', 'bad'); return; }
+            UI.busy(btn, async function () {
+              var rec = Object.assign({}, f0, {
+                name: nm, autoSource: srcF.input.value.trim(),
+                stages: stages.map(function (s, i) {
+                  return { id: s.id || ('st' + i), label: s.label || ('Bosqich ' + (i + 1)), type: s.type };
+                })
+              });
+              if (isNew) {
+                rec.id = A.uid('fnl');
+                rec.intakeKey = A.Seed.randKey();
+              }
+              if (!rec.intakeKey) rec.intakeKey = A.Seed.randKey();
+              await D.save('funnels', rec);
+              await A.Ops.audit(App.user, isNew ? 'Voronka yaratildi' : 'Voronka o’zgartirildi', rec.name, '');
+              c(); UI.toast('Saqlandi.', 'ok'); App.render();
+            });
+          }
+        }
+      ]
+    });
+  }
+
+  function intakeModal(funnel, App) {
+    var url = intakeUrl(funnel);
+    var ta = h('textarea', { readonly: true, style: 'width:100%;min-height:60px;font-family:var(--mono);font-size:12px' });
+    ta.value = url;
+    var example = h('pre', {
+      class: 'receipt', style: 'white-space:pre-wrap;font-size:11.5px'
+    }, 'POST ' + url + '\nContent-Type: application/json\n\n{\n  "name": "Zilola Karimova",\n  "phone": "+998901234567",\n  "text": "Instagram izohi: narxi qancha? 90 123 45 67",\n  "source": "Instagram"\n}');
+
+    UI.modal({
+      title: funnel.name + ' — murojaat qabul qilish',
+      wide: true,
+      body: [
+        h('p', { style: 'margin:0' },
+          'Shu havolaga yuborilgan har bir so’rov avtomatik ravishda "' + funnel.name +
+          '" voronkasiga yangi murojaat bo’lib tushadi.'),
+        ta,
+        h('div', { class: 'banner info', style: 'margin:0' }, h('div', {}, [
+          h('b', {}, 'Instagram va reklama bilan ulash. '),
+          'Meta Lead Ads, Zapier, Make yoki n8n’da "Webhook" amalini tanlang va shu havolani qo’ying. ',
+          'Izoh yoki xabar matnini ', h('b', {}, '"text"'), ' maydoniga yuboring — ichida telefon raqam bo’lsa, ',
+          'tizim uni o’zi ajratib oladi va murojaat yaratadi.'
+        ])),
+        example,
+        h('p', { class: 'small muted', style: 'margin:0' },
+          'Havola faqat serverli versiyada ishlaydi. Kalitni hech kimga bermang — u orqali murojaat yozish mumkin.')
+      ],
+      actions: [
+        {
+          label: 'Yangi kalit yaratish', onClick: function (c, btn) {
+            UI.busy(btn, async function () {
+              var rec = A.clone(funnel);
+              rec.intakeKey = A.Seed.randKey();
+              await D.save('funnels', rec);
+              c(); UI.toast('Yangi kalit yaratildi.', 'ok'); App.render();
+            });
+          }
+        },
+        {
+          label: 'Nusxalash', cls: 'primary', onClick: function (c) {
+            ta.select();
+            try { document.execCommand('copy'); UI.toast('Nusxalandi.', 'ok'); } catch (e) { }
+            c();
+          }
+        }
+      ]
+    });
+  }
 
   function userForm(user, App) {
     App.guard('users.manage');

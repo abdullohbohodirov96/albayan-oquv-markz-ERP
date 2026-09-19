@@ -156,7 +156,48 @@ Serverli versiyada har bir yozuv serverda ham tekshiriladi.
 
 ---
 
-## 5. Excel'dan import
+## 5. Sotuv voronkalari va Instagram lidlari
+
+Murojaatlar bir nechta **voronkaga** bo'linadi — har birining o'z bosqichlari bor.
+Tayyor holda uchtasi keladi: **Asosiy**, **Target reklama**, **Instagram**.
+Yangi voronka qo'shish va bosqichlarini o'zgartirish:
+**Sozlamalar → Sotuv voronkalari**.
+
+Har bir voronkaning **qabul havolasi** (webhook) bor:
+
+```
+POST https://<sizning-manzil>/api/intake/<kalit>
+Content-Type: application/json
+
+{
+  "name": "Zilola Karimova",
+  "phone": "+998901234567",
+  "text": "Instagram izohi: narxi qancha? 90 123 45 67",
+  "source": "Instagram"
+}
+```
+
+- `phone` bo'lmasa, tizim `text` ichidan telefon raqamni **o'zi ajratib oladi** —
+  shuning uchun Instagram izohi yoki DM matnini to'g'ridan-to'g'ri yuborsangiz kifoya.
+- Bir xil raqam shu voronkada allaqachon bo'lsa, takroriy murojaat yaratilmaydi.
+- Havolani Meta Lead Ads, Zapier, Make yoki n8n'dagi "Webhook" amaliga qo'yasiz.
+- Kalitni **Sozlamalar → Sotuv voronkalari → Qabul havolasi** dan olasiz,
+  kerak bo'lsa bir bosishda yangilaysiz.
+
+Bu nuqta faqat serverli versiyada ishlaydi va daqiqasiga 60 ta so'rov bilan cheklangan.
+
+---
+
+## 6. Tezkor qidiruv
+
+Yuqoridagi qidiruv maydoniga yozishni boshlashingiz bilan takliflar chiqadi:
+o'quvchi ismi, familiyasi, telefoni, ota-onasining ismi yoki raqami, guruh nomi
+va kodi, murojaat, xodim — hammasi bir joyda. Bir harf yozsangiz ham filtrlanadi,
+davom ettirsangiz ro'yxat torayadi. Strelkalar va Enter bilan tanlash mumkin.
+
+---
+
+## 7. Excel'dan import
 
 **O'quvchilar** va **Murojaatlar** bo'limlarida "Excel'dan import" tugmasi bor.
 
@@ -172,7 +213,7 @@ Serverli versiyada har bir yozuv serverda ham tekshiriladi.
 
 ---
 
-## 6. Asosiy qoidalar (moliyaviy mantiq)
+## 8. Asosiy qoidalar (moliyaviy mantiq)
 
 - **Oylik hisob** har bir faol a'zolik uchun oyiga **bitta** yaratiladi
   (`inv_<a'zolik>_<oy>`). Tugmani necha marta bossangiz ham takrorlanmaydi.
@@ -196,10 +237,10 @@ Serverli versiyada har bir yozuv serverda ham tekshiriladi.
 
 ---
 
-## 7. Testlar
+## 9. Testlar
 
 ```bash
-npm test                 # 111 ta tekshiruv: moliya, huquqlar, jadval, import, bot
+npm test                 # 122 ta tekshiruv: moliya, huquqlar, jadval, import, bot
 npm run test:browser     # brauzerda 1320 / 390 / 360 px da asosiy jarayonlar
 npm run test:server      # serverli versiya: kirish, ruxsatlar, saqlanish
 ```
@@ -213,7 +254,7 @@ bot ismni moslashtirishi.
 
 ---
 
-## 8. Loyiha tuzilishi
+## 10. Loyiha tuzilishi
 
 ```
 index.html          # to'liq hujjat (build.js hosil qiladi)
@@ -244,7 +285,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 ---
 
-## 9. Zaxira va tiklash
+## 11. Zaxira va tiklash
 
 - **Sozlamalar → Ma'lumotlar → Zaxira nusxa olish** — hamma narsa bitta JSON faylda.
 - Serverli versiyada baza fayli `DATA_DIR` ichida (`albyana.json` yoki
@@ -256,7 +297,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 ---
 
-## 10. Xavfsizlik
+## 12. Xavfsizlik
 
 - `.env`, `data/` va zaxira fayllari `.gitignore` orqali chiqarib tashlangan.
 - Parollar tasodifiy "tuz" bilan SHA-256 hash ko'rinishida saqlanadi va
@@ -267,7 +308,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 ---
 
-## 11. Nimalar hali yo'q
+## 13. Nimalar hali yo'q
 
 - SMS xabarnomalar, onlayn to'lov, fiskal chek
 - O'quvchi va ota-ona uchun alohida veb-kabinet (bot buning o'rnini bosadi)
@@ -275,7 +316,7 @@ Frontend fayllarni o'zgartirgandan keyin `node build.js`.
 
 Tizimda bular bor deb ko'rsatuvchi ishlamaydigan tugmalar yo'q.
 
-## 12. Brauzer mosligi
+## 14. Brauzer mosligi
 
 Chromium asosidagi brauzerlarda 360, 390 va 1320 px o'lchamlarda avtomatik
 sinovdan o'tkazilgan. iPhone Safari va Android Chrome **haqiqiy qurilmada

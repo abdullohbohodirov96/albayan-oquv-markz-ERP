@@ -473,14 +473,61 @@
     return { amount: Math.round(base * rate / 100), base: base, rate: rate, lines: lines, type: 'percent' };
   }
 
-  /* =============== MUROJAATLAR =============== */
+  /* =============== MUROJAATLAR VA VORONKALAR =============== */
   var LEAD_STAGES = [
     { id: 'yangi', label: 'Yangi' },
     { id: 'boglanildi', label: 'Bog’lanildi' },
     { id: 'sinov', label: 'Sinov darsiga yozildi' },
-    { id: 'oquvchi', label: 'O’quvchi bo’ldi' },
-    { id: 'rad', label: 'Rad etdi' }
+    { id: 'oquvchi', label: 'O’quvchi bo’ldi', type: 'won' },
+    { id: 'rad', label: 'Rad etdi', type: 'lost' }
   ];
+
+  /** Tizim bilan keladigan voronkalar */
+  var DEFAULT_FUNNELS = [
+    {
+      id: 'fnl_asosiy', name: 'Asosiy', isDefault: true, order: 1,
+      stages: LEAD_STAGES.map(function (s) { return Object.assign({}, s); })
+    },
+    {
+      id: 'fnl_target', name: 'Target reklama', order: 2, autoSource: 'Target',
+      stages: [
+        { id: 'yangi', label: 'Yangi lid' },
+        { id: 'boglanildi', label: 'Bog’lanildi' },
+        { id: 'qiziqdi', label: 'Qiziqdi' },
+        { id: 'sinov', label: 'Sinov darsiga yozildi' },
+        { id: 'oquvchi', label: 'O’quvchi bo’ldi', type: 'won' },
+        { id: 'rad', label: 'Rad etdi', type: 'lost' }
+      ]
+    },
+    {
+      id: 'fnl_instagram', name: 'Instagram', order: 3, autoSource: 'Instagram',
+      stages: [
+        { id: 'yangi', label: 'Yangi yozuv' },
+        { id: 'boglanildi', label: 'Bog’lanildi' },
+        { id: 'sinov', label: 'Sinov darsiga yozildi' },
+        { id: 'oquvchi', label: 'O’quvchi bo’ldi', type: 'won' },
+        { id: 'rad', label: 'Rad etdi', type: 'lost' }
+      ]
+    }
+  ];
+
+  function funnelStages(funnel) {
+    if (funnel && Array.isArray(funnel.stages) && funnel.stages.length) return funnel.stages;
+    return LEAD_STAGES;
+  }
+  function stageOf(funnel, stageId) {
+    return funnelStages(funnel).filter(function (s) { return s.id === stageId; })[0] || { id: stageId, label: stageId };
+  }
+  /** Matndan telefon raqamini ajratib olish (Instagram izohlari uchun) */
+  function extractPhone(text) {
+    var s = String(text || '').replace(/[^\d+]/g, ' ');
+    var m = s.match(/\+?\d[\d\s]{6,}/);
+    if (!m) return '';
+    var d = m[0].replace(/\D/g, '');
+    if (d.length < 7) return '';
+    if (d.length === 9) d = '998' + d;
+    return '+' + d;
+  }
 
   /* =============== HISOBOTLAR =============== */
   function cashFlow(payments, expenses) {
@@ -505,6 +552,8 @@
     timeToMin: timeToMin, overlaps: overlaps, scheduleConflicts: scheduleConflicts,
     lessonConflicts: lessonConflicts, monthLessons: monthLessons,
     ATT: ATT, attendanceStats: attendanceStats, payrollFor: payrollFor,
-    LEAD_STAGES: LEAD_STAGES, cashFlow: cashFlow
+    LEAD_STAGES: LEAD_STAGES, DEFAULT_FUNNELS: DEFAULT_FUNNELS,
+    funnelStages: funnelStages, stageOf: stageOf, extractPhone: extractPhone,
+    cashFlow: cashFlow
   });
 })(typeof window !== 'undefined' ? window : globalThis);

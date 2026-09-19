@@ -1057,7 +1057,7 @@
                 } catch (e) { console.error('bot', e); }
               }
               UI.toast('Davomat saqlandi.', 'ok');
-              App.render();
+              App.back('dashboard');   // saqlagandan keyin oldingi sahifaga qaytadi
             });
           }
         }, 'Saqlash')
