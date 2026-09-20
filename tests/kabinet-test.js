@@ -35,8 +35,9 @@ async function req(path, opts = {}) {
 const put = (path, data, cookie, extra) => req('/api/doc?path=' + encodeURIComponent(path),
   { method: 'PUT', cookie, body: Object.assign({ data }, extra || {}) });
 const get = (path, cookie) => req('/api/doc?path=' + encodeURIComponent(path), { cookie });
-/* Kabinet endi kod bilan emas, bir martalik havola bilan ochiladi:
-   administrator havola yaratadi → havola sessiyaga almashadi → ma'lumot. */
+/* Kabinetga ikki yo'l bilan kiriladi:
+   1) o'quvchi 4 xonali shaxsiy kodini yozadi (asosiy yo'l);
+   2) administrator bergan bir martalik havola sessiyaga almashadi. */
 let DIRC = null;
 async function kabLink(studentId) {
   return req('/api/student/link', { method: 'POST', cookie: DIRC, body: { studentId } });
@@ -48,7 +49,7 @@ async function kab(studentId, ip) {
   if (ses.status !== 200) return ses;
   return req('/api/kabinet/me', { cookie: ses.cookie, ip });
 }
-/* Eski usul: kod bilan ochishga urinish (endi ishlamasligi kerak) */
+/* 4 xonali kod bilan kirish */
 const kabByCode = (code, ip) => req('/api/kabinet', { method: 'POST', body: { code }, ip });
 async function login(l, p) {
   const r = await req('/api/login', { method: 'POST', body: { login: l, password: p } });
@@ -101,12 +102,27 @@ const ID = n => R + '_' + n;
 
   /* ---------- 2. Kabinet ---------- */
   DIRC = dir;
-  section('2. Kabinet faqat bir martalik havola bilan ochiladi');
-  const byCode = await kabByCode(st1.code);
-  ok('4 xonali kod bilan ochilmaydi', byCode.status === 410 || byCode.status === 403, String(byCode.status));
-  ok('Javobda ism yo’q', !/Bahodirov/.test(byCode.text), byCode.text.slice(0, 120));
+  section('2. Kabinet 4 xonali kod bilan ham, havola bilan ham ochiladi');
   const noSes = await req('/api/kabinet/me');
   eq('Sessiyasiz ma’lumot berilmaydi', noSes.status, 401);
+
+  /* Markaz rahbari tanlagan yo'l: faqat kod. Kod maxfiy emas — shuning uchun
+     pastda taxmin qilishga qarshi cheklov va begona kodni ko'rmaslik sinaladi. */
+  const byCode = await kabByCode(st1.code, '203.0.113.41');
+  eq('To’g’ri kod bilan ochildi', byCode.status, 200);
+  eq('O’z ismi chiqdi', (byCode.json.student || {}).name, 'Bahodirov Abdulloh');
+  ok('Begona o’quvchi ko’rinmadi', !/Zuhra|Karimova/.test(byCode.text));
+  ok('Telefon chiqmadi', !/998901112233/.test(byCode.text), byCode.text.slice(0, 160));
+  ok('Kirgandan keyin sessiya berildi', /alb_kab=/.test(byCode.cookie || ''), byCode.cookie);
+  const mine = await req('/api/kabinet/me', { cookie: (byCode.cookie || '').split(';')[0] });
+  eq('Sessiya bilan qayta ochildi (kod so’ralmaydi)', mine.status, 200);
+  eq('Sessiyadagi ism o’sha', (mine.json.student || {}).name, 'Bahodirov Abdulloh');
+
+  const wrong = await kabByCode('0000' === String(st1.code) ? '0001' : '0000', '203.0.113.42');
+  ok('Noto’g’ri kod rad etildi', wrong.status === 404, String(wrong.status));
+  ok('Noto’g’ri kodda ism chiqmadi', !/Bahodirov|Karimova/.test(wrong.text), wrong.text.slice(0, 120));
+  const short = await kabByCode('12', '203.0.113.43');
+  eq('Qisqa kod rad etildi', short.status, 400);
 
   const r1 = await kab(ID('s1'));
   eq('Havola bilan ochildi', r1.status, 200);
@@ -237,6 +253,16 @@ const ID = n => R + '_' + n;
     ok('Ko’p noto’g’ri havoladan keyin qulflandi (' + lockAt + '-urinish)', locked);
     const st2 = await tryToken('lt000000000099.AAAAAAAAAAAAAAAAAAAAAA');
     eq('Qulf paytida ham kutadi', st2, 429);
+
+    /* 4 xonali kodni ketma-ket taxmin qilish ham shu qulfga tushadi.
+       (Qulf yuqorida allaqachon yopilgan — demak kod yo'li ham yopiq.) */
+    const tryCode = (c) => fetch(B2 + '/api/kabinet', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: c })
+    }).then(async r => ({ st: r.status, t: await r.text() })).catch(() => ({ st: 0, t: '' }));
+    const guess = await tryCode('4077');
+    eq('Qulflangan IP kod bilan ham kira olmaydi', guess.st, 429);
+    ok('Qulflanganda ma’lumot chiqmaydi', !/"student"/.test(guess.t), guess.t.slice(0, 120));
     try { srv.kill(); } catch (e) { }
     try { fs2.rmSync(dir2, { recursive: true, force: true }); } catch (e) { }
   }
