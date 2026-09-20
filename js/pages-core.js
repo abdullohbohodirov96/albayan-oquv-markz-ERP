@@ -854,26 +854,79 @@
 
   /** Shaxsiy kod oynasi: ko'rsatish, nusxalash, kabinet havolasi, yangilash */
   function codeCard(s, App) {
-    var link = location.origin + location.pathname + '#kabinet?kod=' + s.code;
+    var tg = s.telegram && s.telegram.id ? s.telegram : null;
+    var linkBox = h('div', { class: 'kv-row small', hidden: true });
+
     var body = [
       h('p', { class: 'small muted', style: 'margin:0' },
-        'O’quvchi shu kodni botga yozadi yoki kabinet sahifasiga kiritadi — ' +
-        'guruhi, jadvali, to’lovi va davomati chiqadi.'),
+        'Shaxsiy kod — o’quvchini ro’yxatda topish uchun. ' +
+        'U MAXFIY EMAS: kod bilan kabinet ochilmaydi va bot hisobi bog’lanmaydi.'),
       h('div', { style: 'text-align:center;padding:10px 0' },
         h('span', { class: 'code-chip', style: 'font-size:28px;letter-spacing:.18em;padding:10px 18px' },
           String(s.code || '—'))),
-      h('div', { class: 'kv-row small' }, [
-        h('b', {}, 'Kabinet havolasi: '),
-        h('span', { class: 'muted', style: 'word-break:break-all' }, link)
-      ])
+      h('div', { class: 'tg-link-box' }, [
+        h('b', {}, 'Telegram va kabinet'),
+        h('div', { class: 'small' }, tg
+          ? ['Bog’langan', tg.username ? ' (@' + tg.username + ')' : '', tg.linkedAt ? ' · ' + tg.linkedAt : ''].join('')
+          : 'Hali bog’lanmagan'),
+        h('p', { class: 'small muted', style: 'margin:6px 0 0' },
+          'Bir martalik havola yarating va o’quvchiga bering. Havola 24 soat amal qiladi, ' +
+          'bir marta ishlaydi va kabinetni ham ochadi.')
+      ]),
+      linkBox
     ];
+
+    function makeLink(btn) {
+      UI.busy(btn, async function () {
+        try {
+          var r = await D.api('POST', 'api/student/link', { studentId: s.id });
+          var url = r.url || (location.origin + location.pathname + '#kabinet?t=' + r.token);
+          linkBox.hidden = false;
+          UI.clear(linkBox);
+          linkBox.appendChild(h('div', {}, [
+            h('b', {}, 'Havola (bir marta ishlaydi): '),
+            h('span', { class: 'muted', style: 'word-break:break-all' }, url),
+            h('div', { style: 'margin-top:6px' },
+              h('button', {
+                class: 'btn sm', type: 'button', onclick: function () { UI.copy(url); }
+              }, 'Nusxalash'))
+          ]));
+          UI.toast('Havola tayyor. Uni faqat o’quvchiga bering.', 'ok');
+        } catch (e) { UI.toast(e.message || 'Havola yaratilmadi.', 'bad'); }
+      });
+    }
+
+    function unlink(close, btn) {
+      UI.confirm('Bog’lanishni bekor qilish',
+        'O’quvchining Telegram hisobi uziladi va kabinet sessiyalari yopiladi. Davom etamizmi?',
+        'Ha, bekor qilinsin', true).then(function (yes) {
+          if (!yes) return;
+          UI.busy(btn, async function () {
+            try {
+              await D.api('POST', 'api/student/unlink', { studentId: s.id });
+              var cur = A.clone(D.one('students', s.id) || s);
+              delete cur.telegram;
+              D.putLocal('students', cur);
+              close(true);
+              UI.toast('Bog’lanish bekor qilindi.', 'ok');
+              App.render();
+            } catch (e) { UI.toast(e.message || 'Bekor qilinmadi.', 'bad'); }
+          });
+        });
+    }
+
     var m = UI.modal({
-      title: s.lastName + ' ' + s.firstName + ' — shaxsiy kod',
+      title: s.lastName + ' ' + s.firstName + ' — kod va ulanish',
       body: body,
       actions: [
-        { label: 'Nusxalash', onClick: function () { UI.copy(String(s.code)); } },
         App.can('student.edit') ? {
-          label: 'Yangi kod berish', cls: 'danger', onClick: function (close, btn) {
+          label: 'Bog’lash havolasi', cls: 'primary', onClick: function (close, btn) { makeLink(btn); }
+        } : null,
+        (App.can('student.edit') && tg) ? {
+          label: 'Bog’lanishni bekor qilish', cls: 'danger', onClick: unlink
+        } : null,
+        App.can('student.edit') ? {
+          label: 'Yangi kod berish', onClick: function (close, btn) {
             UI.confirm('Kodni yangilash',
               'Eski kod ishlamay qoladi. O’quvchiga yangi kodni aytishingiz kerak. Davom etamizmi?',
               'Ha, yangilansin', true).then(function (yes) {
