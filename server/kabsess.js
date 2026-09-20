@@ -1,9 +1,12 @@
 /* O'quvchi/ota-ona kabineti uchun sessiya.
 
-   Nega kerak: ilgari kabinet 4 xonali kod bilan ochilardi — kodni bilgan
-   har kim ism, guruh, qarz va davomatni ko'rar edi. Endi kabinet faqat
-   TASDIQLANGAN sessiya bilan ochiladi:
-     — sessiya bir martalik havola (server/link.js) evaziga beriladi;
+   Nega kerak: kabinetga kirgandan keyin kod (yoki havola) har safar
+   qayta so'ralmasin. Sessiya ikki yo'l bilan beriladi:
+     — 4 xonali shaxsiy kod bilan kirganda (markaz rahbari tanlagan yo'l);
+     — yoki bir martalik havola (server/link.js) evaziga.
+   Kod maxfiy emasligini unutmang: kodni bilgan odam ham kira oladi.
+   Shuning uchun urinishlar cheklangan va sessiya bekor qilinishi mumkin.
+     — sessiya berilgandan keyin:
      — cookie ichida "<id>.<sir>" turadi, bazada faqat sirning SHA-256 xeshi;
      — bazada saqlanadi, shuning uchun server qayta ishga tushsa ham yo'qolmaydi;
      — muddati bor va bekor qilinishi mumkin (bog'lanish uzilganda ham);
