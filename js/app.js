@@ -351,8 +351,8 @@
 
     /* Kirish tartibi:
        1) manzilda bir martalik havola (?t=...) bo'lsa — uni sessiyaga almashtiramiz;
-       2) sessiya bo'lsa — ma'lumot chiqadi;
-       3) bo'lmasa — qanday kirishni tushuntiramiz (kod bilan kirish yo'q). */
+       2) sessiya bo'lsa — ma'lumot darhol chiqadi (kod qayta so'ralmaydi);
+       3) bo'lmasa — 4 xonali kod so'raladi. */
     async function start() {
       var token = tokenFromHash();
       if (token) {
@@ -363,7 +363,7 @@
           info.hidden = true;
           err.hidden = false;
           err.textContent = ex.message || 'Havola yaroqsiz.';
-          showHowTo();
+          showForm();
           return;
         }
       }
@@ -373,7 +373,7 @@
         showInfo(d);
       } catch (ex) {
         info.hidden = true;
-        showHowTo();
+        showForm();
       }
     }
 
@@ -385,18 +385,56 @@
       try { history.replaceState(null, '', location.pathname + '#kabinet'); } catch (e) { }
     }
 
-    function showHowTo() {
+    /* 4 xonali shaxsiy kod bilan kirish.
+       Kod yozilgandan keyin 30 kunlik sessiya beriladi — shu qurilmada
+       qayta yozish shart emas. Umumiy kompyuterda “Chiqish” tugmasi bor. */
+    function showForm() {
       UI.clear(result);
+      var input = h('input', {
+        id: 'kab-code', class: 'kab-code', type: 'text', inputmode: 'numeric',
+        autocomplete: 'off', maxlength: '4', placeholder: '····',
+        'aria-label': 'Shaxsiy kod'
+      });
+      var btn = h('button', { class: 'btn primary', type: 'submit' }, 'Kirish');
+      var form = h('form', {
+        class: 'kab-form',
+        onsubmit: function (e) { e.preventDefault(); go(); }
+      }, [
+        h('label', { class: 'small', for: 'kab-code' }, 'Shaxsiy kodingiz (4 ta raqam)'),
+        h('div', { class: 'kab-row' }, [input, btn])
+      ]);
+
+      input.addEventListener('input', function () {
+        input.value = input.value.replace(/\D/g, '').slice(0, 4);
+        err.hidden = true;
+        if (input.value.length === 4) go();
+      });
+
+      async function go() {
+        var code = String(input.value || '').replace(/\D/g, '');
+        if (code.length !== 4) {
+          err.hidden = false; err.textContent = 'Kod 4 ta raqamdan iborat.';
+          return;
+        }
+        btn.disabled = true; btn.textContent = 'Tekshirilmoqda…'; err.hidden = true;
+        try {
+          var d = await D.api('POST', 'api/kabinet', { code: code });
+          showInfo(d);
+        } catch (ex) {
+          btn.disabled = false; btn.textContent = 'Kirish';
+          input.value = ''; input.focus();
+          err.hidden = false;
+          err.textContent = ex.message || 'Kod topilmadi.';
+        }
+      }
+
       result.appendChild(h('div', { class: 'kab-howto' }, [
-        h('b', {}, 'Kabinetga qanday kiriladi?'),
-        h('p', { class: 'small' },
-          'Xavfsizlik uchun 4 xonali kod bilan kirish o’chirilgan — u maxfiy emas edi.'),
-        h('ol', { class: 'small' }, [
-          h('li', {}, 'Telegram botga kiring va “Kabinet (veb)” tugmasini bosing — bot shaxsiy havola yuboradi.'),
-          h('li', {}, 'Botga ulanmagan bo’lsangiz, markaz administratoridan bir martalik havola so’rang.')
-        ]),
-        h('p', { class: 'small muted' }, 'Havola bir marta ishlaydi va muddati cheklangan.')
+        form,
+        h('p', { class: 'small muted' },
+          'Kodni bilmasangiz markaz administratoridan so’rang. ' +
+          'Telegram botdagi “Kabinet (veb)” tugmasi ham shu sahifani ochadi.')
       ]));
+      try { input.focus(); } catch (e) { }
     }
 
     function showInfo(d) {
@@ -464,7 +502,19 @@
         ]) : h('p', { class: 'muted small' }, 'Hozircha davomat yozuvi yo’q.'),
 
         h('div', { class: 'small muted', style: 'margin-top:10px' },
-          'Savol bo’lsa markazga murojaat qiling' + (d.center.phone ? ': ' + d.center.phone : '.'))
+          'Savol bo’lsa markazga murojaat qiling' + (d.center.phone ? ': ' + d.center.phone : '.')),
+
+        /* Umumiy (birovning) kompyuterida kabinetni yopish uchun. */
+        h('div', { class: 'kab-out' }, [
+          h('button', {
+            class: 'btn sm', type: 'button',
+            onclick: async function () {
+              try { await D.api('POST', 'api/kabinet/logout', {}); } catch (e) { }
+              err.hidden = true;
+              showForm();
+            }
+          }, 'Chiqish')
+        ])
       ]));
       A.I18N.apply(result);
     }
