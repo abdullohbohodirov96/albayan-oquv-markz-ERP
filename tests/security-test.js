@@ -49,6 +49,20 @@ async function login(l, p) {
   const envProbe = await req('/.env');
   ok('Javobda maxfiy qiymat yo’q', !/SEED_DIRECTOR_PASSWORD|TELEGRAM_BOT_TOKEN/.test(envProbe.text));
 
+  section('   Kod fayllari keshda eskirib qolmaydi');
+  for (const f of ['/index.html', '/js/app.js', '/css/app.css', '/sw.js', '/manifest.webmanifest']) {
+    const r = await fetch(BASE + f);
+    const cc = r.headers.get('cache-control') || '';
+    ok(f + ' — no-cache', /no-cache/.test(cc), cc);
+    ok(f + ' — ETag bor', !!r.headers.get('etag'));
+  }
+  const png = await fetch(BASE + '/assets/icon-192.png');
+  ok('Rasm esa keshlanadi', /max-age=\d+/.test(png.headers.get('cache-control') || ''),
+    png.headers.get('cache-control'));
+  const et = (await fetch(BASE + '/js/app.js')).headers.get('etag');
+  const again = await fetch(BASE + '/js/app.js', { headers: { 'If-None-Match': et } });
+  eq('O’zgarmagan fayl 304 qaytadi', again.status, 304);
+
   /* ---------- 2. Kirish ---------- */
   section('2. Kirish va parol');
   const dirCookie = await login('admin', PASS);
