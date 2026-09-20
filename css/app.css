@@ -523,6 +523,46 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   padding-top:10px;border-top:1px solid var(--line);margin-top:2px}
 .login.kabinet{max-width:520px}
 .kab-result:empty{display:none}
+/* Daraja aniqlash testi (A1…C2) */
+.login.test-box{max-width:620px}
+.test-body{display:flex;flex-direction:column;gap:10px}
+.test-bar{height:5px;border-radius:999px;background:var(--line);overflow:hidden}
+.test-bar span{display:block;height:100%;background:var(--accent);
+  transition:width .25s ease}
+.test-meta{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin:9px 0 3px}
+.test-kind{font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--accent);font-weight:600}
+.test-count{font-variant-numeric:tabular-nums}
+.test-q{font-size:17px;line-height:1.5;margin:0 0 12px;text-wrap:balance}
+.test-opts{display:flex;flex-direction:column;gap:8px}
+.test-opt{text-align:start;padding:11px 14px;border:1px solid var(--line);
+  border-radius:var(--r-lg);background:var(--surface-2);color:var(--text);
+  font:inherit;font-size:16px;line-height:1.5;cursor:pointer}
+.test-opt:hover{border-color:var(--accent);background:var(--surface)}
+.test-opt:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.test-nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.test-end{display:flex;flex-direction:column;gap:10px}
+.test-end input{padding:10px 12px;border:1px solid var(--line);
+  border-radius:var(--r-lg);background:var(--surface);color:var(--text);font:inherit}
+.test-res{display:flex;flex-direction:column;gap:10px}
+.test-level{display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:16px;border:1px solid var(--line);border-radius:var(--r-lg);
+  background:var(--surface-2)}
+.test-level b{font-size:40px;line-height:1.1;letter-spacing:.04em}
+.test-rows{display:flex;flex-direction:column;gap:4px}
+.test-row{display:flex;align-items:center;gap:10px;padding:7px 12px;
+  border:1px solid var(--line);border-radius:var(--r-lg)}
+.test-row b{min-width:28px}
+.test-row span:nth-child(2){flex:1;min-width:0}
+.test-row.ok{border-color:var(--ok, #2e7d52)}
+.test-row span:last-child{font-variant-numeric:tabular-nums}
+@media (max-width:560px){
+  .test-q{font-size:16px}
+  .test-opt{font-size:15px;padding:10px 12px}
+  .test-level b{font-size:34px}
+}
+
 /* Kabinetga kirish: 4 xonali kod */
 .kab-howto{display:flex;flex-direction:column;gap:10px}
 .kab-form{display:flex;flex-direction:column;gap:6px}
