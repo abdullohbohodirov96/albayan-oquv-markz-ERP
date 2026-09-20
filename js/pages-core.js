@@ -859,8 +859,10 @@
 
     var body = [
       h('p', { class: 'small muted', style: 'margin:0' },
-        'Shaxsiy kod — o’quvchini ro’yxatda topish uchun. ' +
-        'U MAXFIY EMAS: kod bilan kabinet ochilmaydi va bot hisobi bog’lanmaydi.'),
+        'Shaxsiy kod bilan o’quvchi veb-kabinetiga kiradi. ' +
+        'Kodni faqat o’quvchining o’ziga ayting — kodni bilgan odam uning guruhi, ' +
+        'qarzi va davomatini ko’radi. Telegram hisobini bog’lash uchun kod yetmaydi: ' +
+        'buning uchun pastdagi bir martalik havoladan foydalaning.'),
       h('div', { style: 'text-align:center;padding:10px 0' },
         h('span', { class: 'code-chip', style: 'font-size:28px;letter-spacing:.18em;padding:10px 18px' },
           String(s.code || '—'))),
