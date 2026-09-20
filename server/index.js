@@ -204,14 +204,19 @@ async function ensureSeed() {
   await migrateMonthDocs();
   const settings = await store.get('meta/settings');
   // Eski bazada telefon bo'sh bo'lsa — markaz raqamini qo'yamiz (sayt uchun kerak)
-  if (settings && !settings.phone) {
-    settings.phone = '+998 (55) 588-20-28';
-    await store.set('meta/settings', settings);
+  if (settings) {
+    let touched = false;
+    if (!settings.phone) { settings.phone = '+998 (55) 588-20-28'; touched = true; }
+    // Darslar 08:00–22:00, har biri 90 daqiqa (eski standart 20:00 edi)
+    if (!settings.workEnd || settings.workEnd === '20:00') { settings.workEnd = '22:00'; touched = true; }
+    if (!settings.workStart) { settings.workStart = '08:00'; touched = true; }
+    if (!settings.lessonMinutes) { settings.lessonMinutes = 90; touched = true; }
+    if (touched) await store.set('meta/settings', settings);
   }
   if (!settings) {
     await store.set('meta/settings', {
       centerName: process.env.APP_NAME || 'AlBayan Cairo',
-      address: '', phone: '+998 (55) 588-20-28', workStart: '08:00', workEnd: '20:00', dueDay: 5,
+      address: '', phone: '+998 (55) 588-20-28', workStart: '08:00', workEnd: '22:00', lessonMinutes: 90, dueDay: 5,
       expenseCategories: ['Ijara', 'Kommunal', 'Reklama', 'Jihozlar', 'Xo’jalik', 'Ish haqi', 'Boshqa'],
       bot: {
         username: process.env.TELEGRAM_BOT_USERNAME || '',
@@ -231,6 +236,35 @@ async function ensureSeed() {
     console.log('  Sotuv voronkalari yaratildi (Asosiy, Target reklama, Instagram)');
   }
 
+  /* Saytdagi ustozlar. Rasm keyin ERP orqali qo'yiladi — bu yerda
+     faqat ism va o'rni turadi, shuning uchun sayt bo'sh ko'rinmaydi. */
+  const teachers = await store.list('teachers/');
+  if (!teachers.length) {
+    const seedT = [
+      { id: 'tch_asmaa', name: 'Ustoz Asmaa', audience: 'ayollar', order: 1 },
+      { id: 'tch_kholid', name: 'Ustoz Kholid', audience: 'erkaklar', order: 2 },
+      { id: 'tch_ahmad', name: 'Ustoz Ahmad', audience: 'erkaklar', order: 3 },
+      { id: 'tch_muhammad', name: 'Ustoz Muhammad', audience: 'erkaklar', order: 4 },
+      { id: 'tch_islam', name: 'Ustoz Islam', audience: 'erkaklar', order: 5 }
+    ];
+    for (const t of seedT) {
+      await store.set('teachers/' + t.id, Object.assign({
+        tag: 'Misrlik ustoz', country: 'Misr', levels: '', bio: '', years: 0,
+        active: true, createdAt: stamp()
+      }, t));
+    }
+    console.log('  Sayt uchun ustoz profillari yaratildi (' + seedT.length + ' ta)');
+  }
+
+  // Eski guruhlarga kod berish (Telegram guruhiga ulash uchun kerak)
+  for (const r of await store.list('groups/')) {
+    if (r.path.split('/').length !== 2) continue;
+    const g = r.data;
+    if (!g || /^\d{4}$/.test(String(g.code || ''))) continue;
+    g.code = await freeGroupCode(g.id);
+    await store.set('groups/' + g.id, g);
+  }
+
   const users = await store.list('users/');
   if (!users.length) {
     const login = (process.env.SEED_DIRECTOR_LOGIN || 'admin').toLowerCase();
@@ -245,6 +279,21 @@ async function ensureSeed() {
     console.log('  Direktor hisobi yaratildi: ' + login +
       (envPass ? '' : ' (parol: 1234 — kirgandan keyin almashtiring!)'));
   }
+}
+
+/** Guruh uchun band bo'lmagan 4 xonali kod. Kod Telegram guruh nomiga yoziladi. */
+async function freeGroupCode(exceptId) {
+  const rows = await store.list('groups/');
+  const busy = {};
+  rows.filter(r => r.path.split('/').length === 2).forEach(r => {
+    const d = r.data;
+    if (d && d.id !== exceptId && /^\d{4}$/.test(String(d.code || ''))) busy[d.code] = 1;
+  });
+  for (let i = 0; i < 400; i++) {
+    const c = String(1000 + crypto.randomInt(9000));
+    if (!busy[c]) return c;
+  }
+  return String(1000 + crypto.randomInt(9000));
 }
 
 /* ---------------- Yozuv navbati (bir vaqtda bitta amal) ---------------- */
@@ -600,6 +649,21 @@ async function guardWrite(user, p, method, next) {
     return { data };
   }
 
+  /* --- Guruh: kod va Telegram bog'lanishini server boshqaradi --- */
+  if (col === 'groups' && method === 'PUT') {
+    const data = Object.assign({}, next);
+    if (old) {
+      data.tgChat = old.tgChat;               // botga ulanishni mijoz o'zgartira olmaydi
+      data.tgTitle = old.tgTitle;
+      data.tgAt = old.tgAt;
+    } else {
+      delete data.tgChat; delete data.tgTitle; delete data.tgAt;
+    }
+    if (old && /^\d{4}$/.test(String(old.code || ''))) data.code = old.code;
+    else data.code = await freeGroupCode(seg[1]);
+    return { data };
+  }
+
   /* --- Davomat: o'qituvchi faqat o'ziga biriktirilgan guruhga --- */
   if (col === 'lessons' && user.role === 'oqituvchi') {
     const gid = String(seg[1] || '').split('__')[0];
@@ -676,6 +740,18 @@ async function guardWrite(user, p, method, next) {
     return { data };
   }
 
+  /* --- Ustoz rasmi: faqat rasm, o'lchami cheklangan --- */
+  if (col === 'photos' && method === 'PUT') {
+    const d = String((next && next.data) || '');
+    if (!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(d)) {
+      return { code: 400, error: 'Faqat rasm yuklash mumkin (JPEG, PNG yoki WebP).' };
+    }
+    if (d.length > 700000) {                     // ~500 KB rasm
+      return { code: 400, error: 'Rasm juda katta. Kichikroq rasm tanlang.' };
+    }
+    return { data: { id: seg[1], data: d, at: stamp() } };
+  }
+
   /* --- Vazifalar: begona vazifani ID orqali o'zgartirib bo'lmaydi --- */
   if (col === 'tasks') {
     if (old && !canSeeTask(user, old)) return no('Bu vazifa sizga tegishli emas.');
@@ -742,7 +818,7 @@ async function filterReadDoc(user, p, data) {
 }
 
 /* ---------------- API ---------------- */
-const COLLECTIONS = ['users', 'staff', 'courses', 'rooms', 'students', 'groups', 'memberships',
+const COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students', 'groups', 'memberships',
   'leads', 'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin',
   'invoices', 'payments', 'expenses', 'payroll', 'audit'];
 
@@ -822,8 +898,54 @@ async function handleApi(req, res, url) {
         fee: (c.publicPrice === false || s.publicPrices === false) ? null : Math.round(c.monthlyFee || 0),
         note: String(c.note || '').slice(0, 120)
       }));
+      /* Ustozlar: faqat ochiq profil ma'lumoti. Telefon, oylik va
+         boshqa ichki ma'lumot bu yerga umuman chiqmaydi. */
+      out.teachers = (await store.list('teachers/'))
+        .filter(r => r.path.split('/').length === 2)
+        .map(r => r.data).filter(t => t && t.active !== false)
+        .sort((a, b) => (a.order || 0) - (b.order || 0) ||
+          String(a.name || '').localeCompare(String(b.name || '')))
+        .slice(0, 24)
+        .map(t => ({
+          id: String(t.id),
+          name: String(t.name || ''),
+          tag: String(t.tag || ''),
+          bio: String(t.bio || '').slice(0, 600),
+          levels: String(t.levels || ''),
+          audience: String(t.audience || ''),
+          country: String(t.country || ''),
+          years: Number(t.years) || 0
+        }));
+      out.lessonMinutes = Number(s.lessonMinutes) || 90;
     } catch (e) { /* baza javob bermasa standart ma'lumot */ }
     return send(res, 200, out);
+  }
+
+  /* ---------- Ustoz rasmi ----------
+     Kirishsiz ochiladi, lekin FAQAT saytda ko'rsatiladigan ustoz uchun.
+     Boshqa hujjat rasmi bu yo'l bilan olinmaydi.                        */
+  if (route === 'photo' && req.method === 'GET') {
+    const id = String(url.searchParams.get('id') || '').slice(0, 60);
+    if (!/^[A-Za-z0-9_-]+$/.test(id)) return send(res, 404, 'Topilmadi');
+    const t = await store.get('teachers/' + id);
+    if (!t || t.active === false) return send(res, 404, 'Topilmadi');
+    const ph = await store.get('photos/' + id);
+    const m = ph && /^data:(image\/[a-z]+);base64,(.+)$/.exec(String(ph.data || ''));
+    if (!m) return send(res, 404, 'Topilmadi');
+    const buf = Buffer.from(m[2], 'base64');
+    const tag = '"' + buf.length.toString(16) + '-' + String(ph.at || '').replace(/\D/g, '') + '"';
+    if (req.headers['if-none-match'] === tag) {
+      res.writeHead(304, { ETag: tag, 'Cache-Control': 'public, max-age=3600' });
+      return res.end();
+    }
+    res.writeHead(200, {
+      'Content-Type': m[1],
+      'Content-Length': buf.length,
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'public, max-age=3600',
+      ETag: tag
+    });
+    return res.end(buf);
   }
 
   /* ---------- Saytdagi forma: yangi murojaat ----------
@@ -971,6 +1093,30 @@ async function handleApi(req, res, url) {
     await writeAudit(user, 'O’quvchi kodi yangilandi',
       (st.lastName || '') + ' ' + (st.firstName || ''), oldCode + ' → ' + code);
     return send(res, 200, { ok: true, code });
+  }
+
+  /* ---------- Telegram guruhiga xabar ----------
+     Faqat ERP’dan, ruxsati borlar uchun. Matn guruhning o'z suhbatiga boradi. */
+  if (route === 'group/message' && req.method === 'POST') {
+    if (!A.can(user, 'group.edit') && !A.can(user, 'bot.broadcast')) {
+      return send(res, 403, { error: 'Sizda bu amal uchun ruxsat yo’q.' });
+    }
+    const body = await readBody(req);
+    const gid = String(body.groupId || '');
+    const text = String(body.text == null ? '' : body.text).trim();
+    if (!/^[A-Za-z0-9_\-.]+$/.test(gid)) return send(res, 400, { error: 'Guruh noto’g’ri.' });
+    if (!text) return send(res, 400, { error: 'Xabar bo’sh.' });
+    const g = await store.get('groups/' + gid);
+    if (!g) return send(res, 404, { error: 'Guruh topilmadi.' });
+    if (!g.tgChat) return send(res, 400, { error: 'Bu guruh Telegramga ulanmagan.' });
+    try {
+      const r = await require('./bot').sendToGroup(g, text);
+      if (!r.ok) return send(res, 400, { error: r.error });
+    } catch (e) {
+      return send(res, 502, { error: 'Telegram javob bermadi: ' + (e.message || e) });
+    }
+    await writeAudit(user, 'Guruhga Telegram xabari', g.name || gid, text.slice(0, 80));
+    return send(res, 200, { ok: true });
   }
 
   /* ---------- Suhbat: xabar qo'shish faqat shu yerda ----------
