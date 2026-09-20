@@ -66,17 +66,41 @@ const ID = n => R + '_' + n;
   page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi: ' + e.message); });
 
   /* ---------- 1. Kirish sahifasidan kabinetga ---------- */
-  section('1. Kabinet sahifasi kod so’ramaydi');
+  section('1. Kabinet sahifasi 4 xonali kod so’raydi');
   await page.goto(BASE + '#kabinet');
-  await page.waitForSelector('.kabinet', { timeout: 20000 });
-  await page.waitForTimeout(600);
-  const noCode = await page.evaluate(() => ({
-    codeInput: !!document.getElementById('kab-code'),
-    text: document.body.innerText
-  }));
-  ok('Kod maydoni yo’q', !noCode.codeInput);
-  ok('Qanday kirish tushuntirilgan', /havola/i.test(noCode.text), noCode.text.slice(0, 200));
+  await page.waitForSelector('#kab-code', { timeout: 20000 });
+  await page.waitForTimeout(400);
+  const first = await page.evaluate(() => {
+    const i = document.getElementById('kab-code');
+    return { max: i.getAttribute('maxlength'), mode: i.getAttribute('inputmode'), text: document.body.innerText };
+  });
+  eq('Kod maydoni 4 belgilik', first.max, '4');
+  eq('Telefonda raqam klaviaturasi ochiladi', first.mode, 'numeric');
   ok('Parol maydoni yo’q', !(await page.evaluate(() => !!document.getElementById('login-pass'))));
+
+  section('   Noto’g’ri kod bilan ma’lumot chiqmaydi');
+  await page.fill('#kab-code', '0000');
+  await page.waitForTimeout(1600);
+  const badCode = await page.evaluate(() => document.body.innerText);
+  ok('Ism chiqmadi', !/Bahodirov/.test(badCode), badCode.slice(0, 200));
+  ok('Xato aytildi', /topilmad|urinish|kod/i.test(badCode), badCode.slice(0, 200));
+
+  section('   To’g’ri kod bilan o’z ma’lumoti chiqadi');
+  const myCode = await fetch('http://localhost:' + PORT + '/api/doc?path=' +
+    encodeURIComponent('students/' + ID('s')), { headers: { Cookie: dir } })
+    .then(r => r.json()).then(j => String(j.data.code));
+  ok('O’quvchida kod bor: ' + myCode, /^\d{4}$/.test(myCode));
+  await page.fill('#kab-code', myCode);
+  await page.waitForSelector('.kab-card', { timeout: 15000 });
+  const byCodeTxt = await page.evaluate(() => document.querySelector('.kab-card').innerText);
+  ok('Kod bilan ism ko’rindi', /Bahodirov Abdulloh/.test(byCodeTxt), byCodeTxt.slice(0, 120));
+  ok('Chiqish tugmasi bor', /Chiqish/.test(byCodeTxt), byCodeTxt.slice(-120));
+
+  section('   Chiqishdan keyin qayta kod so’raladi');
+  await page.click('.kab-out .btn');
+  await page.waitForSelector('#kab-code', { timeout: 15000 });
+  const afterOut = await page.evaluate(() => document.body.innerText);
+  ok('Chiqqandan keyin ism ko’rinmaydi', !/Bahodirov Abdulloh/.test(afterOut), afterOut.slice(0, 200));
 
   /* ---------- 2. Soxta havola ---------- */
   section('2. Soxta havola bilan ochilmaydi');
