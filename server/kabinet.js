@@ -85,6 +85,18 @@ async function byCode(store, code) {
   return students.filter(s => String(s.code || '') === c && s.status !== 'o’chirilgan')[0] || null;
 }
 
+/** O'quvchining (yoki ota-onasining) telefon raqami oxirgi 4 raqami mos keladimi.
+    KABINET_STRICT=1 rejimida kodga qo'shimcha tekshiruv sifatida ishlatiladi. */
+function phoneTailOk(student, tail) {
+  if (!student) return false;
+  const t = String(tail || '').replace(/\D/g, '');
+  if (t.length !== 4) return false;
+  const nums = [student.phone, student.phone2, student.parentPhone, student.motherPhone, student.fatherPhone]
+    .map(p => String(p || '').replace(/\D/g, ''))
+    .filter(p => p.length >= 4);
+  return nums.some(p => p.slice(-4) === t);
+}
+
 /* ---------------- Ma'lumot ---------------- */
 
 async function listCol(store, name) {
@@ -273,5 +285,5 @@ function summaryText(sum) {
 
 module.exports = {
   CODE_LEN, normCode, validCode, ensureCode, ensureAllCodes, byCode,
-  summary, summaryText, studentsOf, codeMap, esc
+  summary, summaryText, studentsOf, codeMap, esc, phoneTailOk
 };
