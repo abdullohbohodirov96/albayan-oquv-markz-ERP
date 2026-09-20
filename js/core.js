@@ -127,7 +127,7 @@
   /* ---------------- Ma'lumotlar qatlami ---------------- */
   var COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads',
     'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin',
-    'invoices', 'payments', 'expenses', 'payroll', 'audit'];
+    'invoices', 'payments', 'expenses', 'payroll', 'audit', 'placements'];
   var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 
