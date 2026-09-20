@@ -14,6 +14,7 @@ const backup = require('./backup');
 const kabinet = require('./kabinet');
 const link = require('./link');
 const kabsess = require('./kabsess');
+const levels = require('./levels');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
 function backupReadSafe(name) {
@@ -178,6 +179,26 @@ const KAB_NOTIFY_AT = 20;
 /* KABINET_STRICT=1 bo'lsa kod yetarli emas: o'quvchi o'z telefon raqamining
    oxirgi 4 raqamini ham yozadi. Standart holatda o'chiq (faqat kod).        */
 const STRICT_KAB = String(process.env.KABINET_STRICT || '') === '1';
+
+/* Daraja testi: bitta IP soatiga ko'pi bilan TEST_MAX marta test boshlashi mumkin.
+   Bu savol bazasini ko'chirib olishga urinishni sekinlashtiradi.            */
+const testTries = new Map();
+const TEST_MAX = Number(process.env.TEST_MAX_STARTS || 30);
+const TEST_WINDOW_MS = Number(process.env.TEST_WINDOW_MS || 60 * 60 * 1000);
+function testGate(ip) {
+  const rec = testTries.get(ip);
+  if (!rec) return { ok: true };
+  if (Date.now() - rec.first > TEST_WINDOW_MS) { testTries.delete(ip); return { ok: true }; }
+  if (rec.n < TEST_MAX) return { ok: true };
+  return { ok: false, wait: Math.max(1, Math.ceil((TEST_WINDOW_MS - (Date.now() - rec.first)) / 60000)) };
+}
+function testFail(ip) {
+  const rec = testTries.get(ip);
+  if (!rec || Date.now() - rec.first > TEST_WINDOW_MS) { testTries.set(ip, { n: 1, first: Date.now() }); return; }
+  rec.n++;
+  if (testTries.size > 5000) testTries.clear();
+}
+
 function kabinetGate(ip) {
   const rec = kabinetTries.get(ip);
   if (!rec) return { ok: true };
@@ -316,6 +337,10 @@ async function ensureSeed() {
     }
     console.log('  Sayt uchun ustoz profillari yaratildi (' + seedT.length + ' ta)');
   }
+
+  // Daraja aniqlash testi uchun savollar (A1…C2)
+  const nq = await levels.ensureBank(store, { stamp });
+  if (nq) console.log('  Daraja testi savollari yaratildi (' + nq + ' ta)');
 
   // Eski guruhlarga kod berish (Telegram guruhiga ulash uchun kerak)
   for (const r of await store.list('groups/')) {
@@ -748,6 +773,12 @@ async function guardWrite(user, p, method, next) {
   const old = await store.get(p);
   const no = (msg) => ({ code: 403, error: msg || 'Sizda bu amal uchun ruxsat yo’q.' });
 
+  /* --- Daraja testi: savollar, sessiyalar va natijalarni FAQAT server yozadi.
+     Aks holda o'quvchi o'ziga "C2" yozib qo'yardi yoki javoblarni ko'rardi. --- */
+  if (col === 'testq' || col === 'testsess' || col === 'placements') {
+    return no('Daraja testi yozuvlarini faqat tizim o’zgartiradi.');
+  }
+
   /* --- O'quvchi: shaxsiy kodni server beradi va u o'zgarmaydi --- */
   if (col === 'students' && method === 'PUT') {
     const data = Object.assign({}, next);
@@ -940,7 +971,7 @@ async function filterReadDoc(user, p, data) {
 /* ---------------- API ---------------- */
 const COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students', 'groups', 'memberships',
   'leads', 'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin',
-  'invoices', 'payments', 'expenses', 'payroll', 'audit'];
+  'invoices', 'payments', 'expenses', 'payroll', 'audit', 'placements'];
 
 async function apiBootstrap(user) {
   const all = await store.all();
@@ -1065,6 +1096,53 @@ async function handleApi(req, res, url) {
     const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
     if (ses) await kabsess.revoke(store, ses.id, { stamp });
     return send(res, 200, { ok: true }, { 'Set-Cookie': kabsess.clearHeader() });
+  }
+
+  /* ---------- Daraja aniqlash testi (A1…C2) ----------
+     Kirishsiz ishlaydi: sayt mehmoni ham, o'quvchi ham topshira oladi.
+     TO'G'RI JAVOB BRAUZERGA YUBORILMAYDI — baholash faqat shu yerda.
+     Bir IP dan ketma-ket ko'p test boshlash cheklanadi.                  */
+  if (route === 'test/start' && req.method === 'POST') {
+    const ip = clientIp(req);
+    const gate = testGate(ip);
+    if (!gate.ok) return send(res, 429, { error: 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin urinib ko’ring.' });
+    const t = await levels.start(store, { stamp, ip });
+    if (!t) return send(res, 503, { error: 'Savollar hali tayyor emas.' });
+    testFail(ip);
+    return send(res, 200, { id: t.id, total: t.total, questions: t.questions, levels: levels.LEVELS });
+  }
+
+  if (route === 'test/submit' && req.method === 'POST') {
+    const ip = clientIp(req);
+    const body = await readBody(req);
+    const r = await levels.submit(store, {
+      stamp, sessionId: body.sessionId, answers: body.answers,
+      name: body.name, phone: body.phone
+    });
+    if (!r.ok) {
+      return send(res, r.reason === 'ishlatilgan' ? 409 : 400, {
+        error: r.reason === 'ishlatilgan' ? 'Bu test allaqachon topshirilgan.'
+          : r.reason === 'muddati' ? 'Test muddati tugadi, qaytadan boshlang.'
+            : 'Test topilmadi yoki so’rov noto’g’ri.'
+      });
+    }
+    /* Ismi va telefoni yozilgan bo'lsa — murojaat (lead) ochamiz. */
+    if (r.name || r.phone) {
+      try {
+        const lid = 'ld_test_' + r.resultId;
+        await store.set('leads/' + lid, {
+          id: lid, name: r.name || 'Daraja testi', phone: r.phone || '',
+          source: 'Daraja testi', stage: 'yangi',
+          note: 'Daraja: ' + r.level + ' (' + r.score + '/' + r.total + ')',
+          level: r.level, createdAt: stamp()
+        });
+      } catch (e) { /* murojaat yozilmasa ham natija qoladi */ }
+    }
+    await writeAudit(null, 'Daraja testi topshirildi', r.level, r.score + '/' + r.total);
+    return send(res, 200, {
+      level: r.level, info: levels.levelInfo(r.level),
+      score: r.score, total: r.total, perLevel: r.perLevel, resultId: r.resultId
+    });
   }
 
   /* Kirish sahifasi uchun ochiq ma'lumot: faqat markaz nomi.
