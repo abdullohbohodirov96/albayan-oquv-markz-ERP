@@ -457,6 +457,125 @@
     return PUBLIC;
   }
 
+
+  /** Fon bezagi: oq fon ustida mayda gulli sakura shoxlari va sekin
+      tushayotgan gulbarglar. Faqat ko'rinish uchun — bosishga xalaqit bermaydi,
+      harakat kamaytirilgan rejimda (prefers-reduced-motion) to'xtab turadi. */
+  function siteBackdrop() {
+    var NS = 'http://www.w3.org/2000/svg';
+    function svg(tag, attrs) {
+      var el = document.createElementNS(NS, tag);
+      Object.keys(attrs || {}).forEach(function (k) { el.setAttribute(k, attrs[k]); });
+      return el;
+    }
+    /** Takrorlanadigan "tasodif": har safar bir xil chiqadi, shuning uchun
+        sinovlar ham barqaror bo'ladi. */
+    function rnd(seed) {
+      var x = Math.sin(seed * 12.9898) * 43758.5453;
+      return x - Math.floor(x);
+    }
+    var LEAF = ['lf', 'lf2', 'lf3'];
+
+    /** Mayda sakura guli: besh kichkina gulbarg va sarg'ish markaz. */
+    function bloom(g, x, y, ang, r, seed) {
+      var turn = ang + rnd(seed) * 72;
+      var cx = x + Math.cos(ang * Math.PI / 180) * r * 1.1;
+      var cy = y + Math.sin(ang * Math.PI / 180) * r * 1.1;
+      var cls = LEAF[Math.floor(rnd(seed + 5) * 3)];
+      for (var k = 0; k < 5; k++) {
+        var a = (turn + k * 72) * Math.PI / 180;
+        var px = cx + Math.cos(a) * r * 0.62;
+        var py = cy + Math.sin(a) * r * 0.62;
+        g.appendChild(svg('ellipse', {
+          cx: px.toFixed(1), cy: py.toFixed(1),
+          rx: (r * 0.5).toFixed(1), ry: (r * 0.38).toFixed(1),
+          transform: 'rotate(' + (a * 180 / Math.PI).toFixed(1) + ' ' + px.toFixed(1) + ' ' + py.toFixed(1) + ')',
+          class: cls
+        }));
+      }
+      g.appendChild(svg('circle', {
+        cx: cx.toFixed(1), cy: cy.toFixed(1), r: (r * 0.22).toFixed(1), class: 'core'
+      }));
+    }
+    /** Ochilmagan kurtak — shoxni jonlantiradi. */
+    function bud(g, x, y, ang, r, seed) {
+      var cx = x + Math.cos(ang * Math.PI / 180) * r * 1.4;
+      var cy = y + Math.sin(ang * Math.PI / 180) * r * 1.4;
+      g.appendChild(svg('circle', {
+        cx: cx.toFixed(1), cy: cy.toFixed(1), r: (r * 0.5).toFixed(1),
+        class: LEAF[Math.floor(rnd(seed) * 3)]
+      }));
+    }
+
+    /** Bir shox: egilgan poya, ikkita yon shox va ular bo'ylab mayda barglar. */
+    function branch(cls, seed) {
+      var g = svg('svg', { viewBox: '0 0 400 260', class: 'branch ' + cls, 'aria-hidden': 'true' });
+      function curve(P0, P1, P2, w) {
+        g.appendChild(svg('path', {
+          d: 'M' + P0[0] + ' ' + P0[1] + ' Q' + P1[0] + ' ' + P1[1] + ' ' + P2[0] + ' ' + P2[1],
+          fill: 'none', stroke: 'currentColor', 'stroke-width': w, 'stroke-linecap': 'round'
+        }));
+        return function (t) {
+          var u = 1 - t;
+          return [u * u * P0[0] + 2 * u * t * P1[0] + t * t * P2[0],
+          u * u * P0[1] + 2 * u * t * P1[1] + t * t * P2[1]];
+        };
+      }
+      function angleOf(f, t) {
+        var a = f(Math.max(0, t - 0.02)), b = f(Math.min(1, t + 0.02));
+        return Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+      }
+      // asosiy poya va ikkita yon shox
+      var main = curve([4, 244], [150, 232], [388, 34], 5.5);
+      var arm1 = curve(main(0.34), [190, 96], [252, 42], 3.2);
+      var arm2 = curve(main(0.6), [286, 188], [366, 176], 2.8);
+      var arms = [
+        { f: main, n: 26, from: 0.08, step: 0.035, len: 7.5 },
+        { f: arm1, n: 13, from: 0.1, step: 0.07, len: 6.5 },
+        { f: arm2, n: 12, from: 0.1, step: 0.075, len: 6 }
+      ];
+      arms.forEach(function (arm, ai) {
+        for (var i = 0; i < arm.n; i++) {
+          var t = arm.from + i * arm.step;
+          var p = arm.f(t), ang = angleOf(arm.f, t);
+          var s = ai * 29 + i * 5 + seed;
+          // har nuqtada ikki tomonga bittadan mayda barg
+          [-1, 1].forEach(function (side, si) {
+            var sd = s + si * 3;
+            var r = arm.len * (0.66 + rnd(sd) * 0.5);
+            var a = ang + side * (40 + rnd(sd + 1) * 36);
+            if (rnd(sd + 2) < 0.24) bud(g, p[0], p[1], a, r, sd);
+            else bloom(g, p[0], p[1], a, r, sd);
+          });
+        }
+      });
+      return g;
+    }
+
+    /* --- Tushayotgan gulbarglar --- */
+    var petals = h('div', { class: 'petals' });
+    for (var i = 0; i < 14; i++) {
+      var size = 7 + rnd(i + 1) * 6;                 // 7–13 px
+      var dur = 13 + rnd(i + 20) * 12;               // 13–25 s
+      var sp = h('span', { class: 'petal' }, h('i'));
+      sp.style.left = (rnd(i + 40) * 96).toFixed(1) + '%';
+      sp.style.width = size.toFixed(1) + 'px';
+      sp.style.height = (size * 0.82).toFixed(1) + 'px';
+      sp.style.animationDuration = dur.toFixed(1) + 's';
+      sp.style.animationDelay = '-' + (rnd(i + 60) * dur).toFixed(1) + 's';
+      sp.firstChild.style.animationDuration = (3.5 + rnd(i + 80) * 4).toFixed(1) + 's';
+      petals.appendChild(sp);
+    }
+
+    return h('div', { class: 'site-bg', 'aria-hidden': 'true' }, [
+      h('div', { class: 'tree tl' }, branch('sway-a', 1)),
+      h('div', { class: 'tree tr' }, branch('sway-b', 7)),
+      h('div', { class: 'tree bl' }, branch('sway-c', 13)),
+      h('div', { class: 'tree br' }, branch('sway-b', 21)),
+      petals
+    ]);
+  }
+
   function renderLanding() {
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
@@ -606,6 +725,7 @@
       ])
     ]);
 
+    wrap.appendChild(siteBackdrop());
     wrap.appendChild(h('div', { class: 'site-wrap' }, [top, hero, feats, courses, apply, foot]));
     A.I18N.apply(wrap);
     fillPublic();
