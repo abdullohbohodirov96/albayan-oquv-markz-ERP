@@ -1270,17 +1270,34 @@ function serveStatic(req, res, pathname) {
   if (!file.startsWith(ROOT + path.sep) && file !== path.join(ROOT, 'index.html')) {
     return send(res, 404, 'Topilmadi');
   }
-  fs.readFile(file, (err, data) => {
-    if (err) {
-      if (rel !== '/index.html') return serveStatic(req, res, '/index.html');
-      return send(res, 404, 'Topilmadi');
-    }
-    res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'X-Content-Type-Options': 'nosniff',
-      'Cache-Control': rel === '/index.html' ? 'no-cache' : 'public, max-age=300'
+  /* Kesh qoidasi.
+     MUHIM: kod fayllari (html, js, css, sw.js, manifest) "no-cache" bilan beriladi —
+     brauzer har safar serverdan so'raydi va o'zgarmagan bo'lsa 304 oladi.
+     Aks holda yangi index.html eski js bilan aralashib qolardi (5 daqiqa keshda).
+     Rasm va shriftlar uzoq keshlanaveradi — ular kamdan-kam o'zgaradi. */
+  const ext = path.extname(file).toLowerCase();
+  const codeFile = ['.html', '.js', '.css', '.webmanifest'].indexOf(ext) >= 0;
+  fs.stat(file, (se, st) => {
+    fs.readFile(file, (err, data) => {
+      if (err) {
+        if (rel !== '/index.html') return serveStatic(req, res, '/index.html');
+        return send(res, 404, 'Topilmadi');
+      }
+      const tag = st ? '"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"' : null;
+      // O'zgarmagan bo'lsa — qayta yubormaymiz
+      if (tag && req.headers['if-none-match'] === tag) {
+        res.writeHead(304, { 'Cache-Control': codeFile ? 'no-cache' : 'public, max-age=86400', ETag: tag });
+        return res.end();
+      }
+      const head = {
+        'Content-Type': MIME[ext] || 'application/octet-stream',
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': codeFile ? 'no-cache' : 'public, max-age=86400'
+      };
+      if (tag) head.ETag = tag;
+      res.writeHead(200, head);
+      res.end(data);
     });
-    res.end(data);
   });
 }
 
