@@ -523,6 +523,84 @@ async function handleLinkFlow(chatId, text, from, st) {
   }
 }
 
+/* ---------------- Telegram guruhiga ulanish ----------------
+   Bot guruhga qo'shilganda guruh NOMIDAGI kodni (4 raqam) topadi va
+   o'sha o'quv guruhiga bog'lanadi. Kod topilmasa — qanday qilishni tushuntiradi.
+   Ulangach guruhga "ulandim" xabari boradi.                                */
+
+/** Guruh nomidan kodga o'xshash 4 xonali raqamlarni ajratib olish */
+function codesInTitle(title) {
+  const out = [];
+  String(title || '').replace(/\d{4}/g, m => { if (out.indexOf(m) < 0) out.push(m); return m; });
+  return out;
+}
+
+async function allGroups() {
+  const rows = await store.list('groups/');
+  return rows.filter(r => r.path.split('/').length === 2).map(r => r.data).filter(Boolean);
+}
+
+/** Guruh nomiga qarab o'quv guruhini topish */
+async function groupByTitle(title) {
+  const codes = codesInTitle(title);
+  if (!codes.length) return { error: 'kod-yoq' };
+  const groups = await allGroups();
+  const hits = groups.filter(g => codes.indexOf(String(g.code || '')) >= 0);
+  if (!hits.length) return { error: 'topilmadi', codes };
+  if (hits.length > 1) return { error: 'kop', codes };
+  return { group: hits[0] };
+}
+
+/** Guruhni shu Telegram suhbatiga bog'lash */
+async function linkGroupChat(chatId, title) {
+  const r = await groupByTitle(title);
+  if (r.error === 'kod-yoq') {
+    await sendMessage(chatId,
+      'Assalomu alaykum! Bu guruhni markazga bog’lash uchun guruh nomiga ' +
+      '<b>guruh kodini</b> qo’shing — 4 ta raqam, masalan: <code>Arab tili A1 · 4821</code>\n' +
+      'Kodni ERP’dagi guruh sahifasidan olasiz. Nomni o’zgartirgach <code>/ulash</code> deb yozing.');
+    return null;
+  }
+  if (r.error === 'topilmadi') {
+    await sendMessage(chatId,
+      'Guruh nomidagi kod (' + r.codes.join(', ') + ') markazdagi hech bir guruhga to’g’ri kelmadi. ' +
+      'Kodni tekshirib, <code>/ulash</code> deb yozing.');
+    return null;
+  }
+  if (r.error === 'kop') {
+    await sendMessage(chatId, 'Nomda bir nechta kod bor. Faqat bittasini qoldiring va <code>/ulash</code> deb yozing.');
+    return null;
+  }
+  const g = r.group;
+  const already = String(g.tgChat || '') === String(chatId);
+  const rec = Object.assign({}, g, { tgChat: String(chatId), tgTitle: String(title || ''), tgAt: stamp() });
+  await store.set('groups/' + g.id, rec);
+  await sendMessage(chatId,
+    (already ? '✅ Bog’lanish yangilandi' : '✅ Ulandim!') + '\n\n' +
+    'Bu guruh <b>' + (g.name || g.id) + '</b> guruhiga bog’landi (kod <code>' + g.code + '</code>).\n' +
+    'Endi shu yerga e’lon, dars va to’lov xabarlarini yubora olaman.');
+  return rec;
+}
+
+/** Guruhdan kelgan xabar/hodisa */
+async function onGroupUpdate(chatId, title, text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (t === '/ulash' || t === '/start' || t.indexOf('/ulash@') === 0 || t.indexOf('/start@') === 0) {
+    return linkGroupChat(chatId, title);
+  }
+  if (t === '/id' || t.indexOf('/id@') === 0) {
+    return sendMessage(chatId, 'Suhbat raqami: <code>' + chatId + '</code>');
+  }
+  return null;
+}
+
+/** ERP’dan guruhga xabar yuborish */
+async function sendToGroup(group, text) {
+  if (!group || !group.tgChat) return { ok: false, error: 'Guruh Telegramga ulanmagan.' };
+  await sendMessage(group.tgChat, String(text || '').slice(0, 3500));
+  return { ok: true };
+}
+
 /* ---------------- Xabarlarni qayta ishlash ---------------- */
 async function onMessage(msg) {
   const chatId = msg.chat.id;
@@ -625,12 +703,25 @@ async function notifyApproved() {
 async function poll() {
   while (running) {
     try {
-      const updates = await tg('getUpdates', { offset, timeout: 25, allowed_updates: ['message'] });
+      const updates = await tg('getUpdates', {
+        offset, timeout: 25, allowed_updates: ['message', 'my_chat_member']
+      });
       for (const u of updates) {
         offset = u.update_id + 1;
+        // botni guruhga qo'shishdi — darhol ulashga urinamiz
+        const cm = u.my_chat_member;
+        if (cm && cm.chat && /group/.test(String(cm.chat.type || '')) &&
+          /member|administrator/.test(String((cm.new_chat_member || {}).status || ''))) {
+          try { await linkGroupChat(cm.chat.id, cm.chat.title); }
+          catch (e) { console.error('bot guruh:', e.message); }
+          continue;
+        }
         if (u.message && u.message.text) {
-          try { await onMessage(u.message); wake(); }
-          catch (e) { console.error('bot message:', e.message); }
+          const chat = u.message.chat || {};
+          try {
+            if (/group/.test(String(chat.type || ''))) await onGroupUpdate(chat.id, chat.title, u.message.text);
+            else { await onMessage(u.message); wake(); }
+          } catch (e) { console.error('bot message:', e.message); }
         }
       }
     } catch (e) {
@@ -711,6 +802,7 @@ function _test(ctx) {
     makeCode, normCode, studentByCode, botConf, getState, setState,
     balanceText, attendanceText, scheduleText, daysBetween, KINDS, MAX_TRIES,
     handleLinkFlow, findStudentByChat, notifyStaff,
+    linkGroupChat, onGroupUpdate, sendToGroup, codesInTitle,
     wake,
     /** Sinovda navbatchini qo'lda ishga tushirish/to'xtatish */
     startQueue: function (opts) { running = true; queueLoop(opts); },
@@ -718,4 +810,4 @@ function _test(ctx) {
   };
 }
 
-module.exports = { start, stop, setTransport, makeCode, normCode, wake, notifyStaff, _test };
+module.exports = { start, stop, setTransport, makeCode, normCode, wake, notifyStaff, sendToGroup, _test };
