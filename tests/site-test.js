@@ -146,8 +146,75 @@ async function api(p, opts = {}) {
   eq('Ismsiz rad etildi', (await api('/api/lead', { method: 'POST', body: { name: '', phone: '+998901112233' } })).status, 400);
   eq('Telefonsiz rad etildi', (await api('/api/lead', { method: 'POST', body: { name: 'Kimdir', phone: '123' } })).status, 400);
 
-  /* ================= 4. Telefon ko'rinishi ================= */
-  section('4. Telefon ko’rinishi');
+  /* ================= 4. Ustozlar ================= */
+  section('4. Ustozlar bo’limi');
+  const pub2 = await api('/api/public');
+  const tchs = pub2.json.teachers || [];
+  ok('Ustozlar ro’yxati bor', tchs.length >= 5, String(tchs.length));
+  ok('Ustoz Asmaa bor', tchs.some(t => /Asmaa/.test(t.name)), JSON.stringify(tchs.map(t => t.name)));
+  ok('Ayol ustoz guruhi belgilangan', tchs.some(t => /Asmaa/.test(t.name) && t.audience === 'ayollar'));
+  ok('Erkak ustozlar bor', tchs.filter(t => t.audience === 'erkaklar').length >= 3);
+  ok('Ustoz ma’lumotida telefon/oylik yo’q',
+    !tchs.some(t => t.phone || t.salaryAmount || t.payType), JSON.stringify(tchs[0] || {}));
+  ok('Dars uzunligi berilgan', (pub2.json.lessonMinutes || 0) === 90, String(pub2.json.lessonMinutes));
+
+  section('   Ustoz rasmi');
+  // har safar yangi profil — sinov qayta-qayta ishlaydi
+  const tId = R + '_t1';
+  await api('/api/doc?path=' + encodeURIComponent('teachers/' + tId), {
+    method: 'PUT', cookie: dir,
+    body: { data: { id: tId, name: 'Ustoz Sinov ' + R, tag: 'Misrlik ustoz', audience: 'erkaklar', active: true, order: 90 } }
+  });
+  eq('Rasm yo’q — 404', (await api('/api/photo?id=' + tId)).status, 404);
+  // 1x1 px JPEG
+  const PX = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAP//////////////////////' +
+    '/////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+  const put = await api('/api/doc?path=' + encodeURIComponent('photos/' + tId), {
+    method: 'PUT', cookie: dir, body: { data: { id: tId, data: PX } }
+  });
+  eq('Rasm saqlandi', put.status, 200);
+  const ph = await fetch(API + '/api/photo?id=' + tId);
+  eq('Rasm ochiladi', ph.status, 200);
+  ok('Rasm turi to’g’ri', /image\//.test(ph.headers.get('content-type') || ''), ph.headers.get('content-type'));
+  ok('Rasm keshlanadi', /max-age=\d+/.test(ph.headers.get('cache-control') || ''), ph.headers.get('cache-control'));
+  eq('Begona rasm berilmaydi', (await api('/api/photo?id=meta')).status, 404);
+  eq('Kirishsiz rasm yuklab bo’lmaydi',
+    (await api('/api/doc?path=' + encodeURIComponent('photos/' + tId), { method: 'PUT', body: { data: { id: tId, data: PX } } })).status, 401);
+  const bad = await api('/api/doc?path=' + encodeURIComponent('photos/' + tId), {
+    method: 'PUT', cookie: dir, body: { data: { id: tId, data: 'javascript:alert(1)' } }
+  });
+  eq('Rasm bo’lmagan fayl rad etiladi', bad.status, 400);
+
+  section('   Saytda ko’rinishi');
+  await page.goto(BASE);
+  await page.waitForSelector('.tch-grid', { timeout: 15000 });
+  const tv = await page.evaluate(() => ({
+    cards: document.querySelectorAll('.tch-card').length,
+    text: document.body.innerText,
+    slots: document.querySelectorAll('.slot').length
+  }));
+  ok('Ustoz kartalari ko’rinadi', tv.cards >= 5, String(tv.cards));
+  ok('Ustoz ismlari bor', /Asmaa/.test(tv.text) && /Ahmad/.test(tv.text));
+  ok('Misrlik ustoz yozuvi bor', /Misr/.test(tv.text));
+  ok('Ayollar guruhi yozilgan', /Ayollar guruhlari/.test(tv.text));
+  ok('Dars vaqtlari chiqdi', tv.slots >= 8, String(tv.slots));
+  ok('Kechki dars bor', /20:00–21:30/.test(tv.text), (tv.text.match(/\d\d:\d\d–\d\d:\d\d/g) || []).join(' '));
+
+  await page.evaluate(() => document.querySelector('.tch-card').click());
+  await page.waitForSelector('.tch-page', { timeout: 10000 });
+  const prof = await page.evaluate(() => ({
+    hash: location.hash, text: document.body.innerText,
+    times: document.querySelectorAll('.tch-page .slot').length
+  }));
+  ok('Ustoz profili ochildi', /ustoz\?id=/.test(prof.hash), prof.hash);
+  ok('Profilda dars vaqtlari bor', prof.times >= 8, String(prof.times));
+  ok('Profilda yozilish tugmasi bor', /yozilish/i.test(prof.text));
+  await page.screenshot({ path: path.join(SHOTS, 'ustoz-profil.png'), fullPage: true });
+  await page.goto(BASE);
+  await page.waitForSelector('.site-hero', { timeout: 15000 });
+
+  /* ================= 5. Telefon ko'rinishi ================= */
+  section('5. Telefon ko’rinishi');
   for (const w of [360, 390, 430]) {
     await page.setViewportSize({ width: w, height: 900 });
     await page.goto(BASE);
