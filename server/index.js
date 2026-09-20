@@ -175,6 +175,9 @@ const kabinetTries = new Map();
 const KAB_MAX = Number(process.env.KABINET_MAX_TRIES || 5);
 const KAB_LOCK_MS = Number(process.env.KABINET_LOCK_MS || 15 * 60 * 1000);
 const KAB_NOTIFY_AT = 20;
+/* KABINET_STRICT=1 bo'lsa kod yetarli emas: o'quvchi o'z telefon raqamining
+   oxirgi 4 raqamini ham yozadi. Standart holatda o'chiq (faqat kod).        */
+const STRICT_KAB = String(process.env.KABINET_STRICT || '') === '1';
 function kabinetGate(ip) {
   const rec = kabinetTries.get(ip);
   if (!rec) return { ok: true };
@@ -958,17 +961,63 @@ async function handleApi(req, res, url) {
 
   if (route === 'health') return send(res, 200, { ok: true, mode: store.kind });
 
-  /* ---------- O'quvchi kabineti: shaxsiy kod bo'yicha ma'lumot ----------
-     Kirishsiz ishlaydi. Kod 4 xonali bo'lgani uchun taxmin qilish xavfi bor:
-     har bir IP uchun urinishlar qattiq cheklanadi, uzoq davom etsa qulflanadi
-     va direktorga xabar boradi. Javobda telefon, ota-ona va manzil YO'Q.      */
-  /* ---------- O'quvchi kabineti ----------
-     MUHIM: 4 xonali kod bilan shaxsiy ma'lumot BERILMAYDI — u maxfiy emas.
-     Kabinet faqat bir martalik havola evaziga olingan sessiya bilan ochiladi. */
+  /* ---------- O'quvchi kabineti: shaxsiy kod bo'yicha kirish ----------
+     Markaz rahbari shu yo'lni tanladi: o'quvchi faqat 4 xonali kodini
+     yozadi va kabinetiga kiradi.
+
+     BILIB QO'YING: 4 xonali kod MAXFIY EMAS. Kodni ko'rgan yoki
+     0000–9999 orasidan topgan odam ham o'sha o'quvchining ismi, guruhi,
+     qarzi va davomatini ko'radi. Shu sababli bu yerda quyidagilar bor:
+       — har bir IP uchun urinishlar soni qattiq cheklangan (qulflash);
+       — noto'g'ri kodda javob ataylab sekinlashtiriladi;
+       — ko'p urinish bo'lsa direktorga xabar boradi va jurnalga yoziladi;
+       — javobda telefon, ota-ona va manzil YO'Q (kabinet.summary filtrlaydi);
+       — kirgandan keyin 30 kunlik sessiya beriladi, kod qayta yozilmaydi;
+       — kodni serverdan boshqa hech kim yoza olmaydi (guardWrite).
+     Xavfsizroq variant (kod + telefon oxirgi 4 raqami) tayyor turibdi —
+     sozlamadan KABINET_STRICT=1 bilan yoqiladi.                           */
   if (route === 'kabinet' && req.method === 'POST') {
-    return send(res, 410, {
-      error: 'Kod bilan kirish o’chirilgan. Markazdan shaxsiy havola so’rang yoki ' +
-        'Telegram botdagi “Kabinet” tugmasini bosing.'
+    const ip = clientIp(req);
+    const gate = kabinetGate(ip);
+    if (!gate.ok) {
+      return send(res, 429, {
+        error: 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin qayta urinib ko’ring.'
+      });
+    }
+    const body = await readBody(req);
+    const code = kabinet.normCode(body.code);
+    if (!kabinet.validCode(code)) {
+      kabinetFail(ip);
+      return send(res, 400, { error: 'Kod ' + kabinet.CODE_LEN + ' ta raqamdan iborat.' });
+    }
+    const student = await kabinet.byCode(store, code);
+    const okPhone = !STRICT_KAB || kabinet.phoneTailOk(student, body.phone4);
+    if (!student || !okPhone) {
+      const f = kabinetFail(ip);
+      if (f.notify) {
+        await writeAudit(null, 'Kabinet: ko’p noto’g’ri kod', ip, f.n + ' ta urinish');
+        await notifyDirectors('Diqqat: ' + ip + ' manzilidan o’quvchi kabinetiga ' +
+          f.n + ' marta noto’g’ri kod kiritildi. Kodlarni taxmin qilishga urinish bo’lishi mumkin.');
+      }
+      await new Promise(r => setTimeout(r, 400));     // taxmin qilishni sekinlashtirish
+      return send(res, 404, {
+        error: STRICT_KAB ? 'Kod yoki telefon raqami mos kelmadi.'
+          : 'Bunday kod topilmadi. Administratordan so’rang.'
+      });
+    }
+    if (student.status === 'o’chirilgan') {
+      kabinetFail(ip);
+      return send(res, 404, { error: 'Bunday kod topilmadi. Administratordan so’rang.' });
+    }
+    kabinetOk(ip);
+    const sum = await kabinet.summary(store, student);
+    /* Kodni qayta-qayta yozmasligi uchun 30 kunlik sessiya beriladi.
+       Sessiya bazada, sirning faqat xeshi saqlanadi (server/kabsess.js). */
+    const ses = await kabsess.create(store, { studentId: student.id, kind: 'student', via: 'kod', stamp });
+    await writeAudit(null, 'Kabinet: kod bilan kirildi',
+      (student.lastName || '') + ' ' + (student.firstName || ''), ip);
+    return send(res, 200, Object.assign({ csrf: ses.csrf }, sum), {
+      'Set-Cookie': kabsess.cookieHeader(ses.cookie, kabsess.TTL_MS / 1000)
     });
   }
 
