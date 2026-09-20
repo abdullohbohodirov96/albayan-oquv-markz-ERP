@@ -384,9 +384,15 @@ async function login(l, p) {
   ok('Markaz nomi bor', !!(pub.json && pub.json.centerName), pub.text);
   const pubKeys = Object.keys(pub.json || {});
   const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
-    'telegram', 'instagram', 'courses'];
+    'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes'];
   ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
+  const tKeys = ['id', 'name', 'tag', 'bio', 'levels', 'audience', 'country', 'years'];
+  ok('Ustozda faqat ochiq maydonlar',
+    (pub.json.teachers || []).every(t => Object.keys(t).every(k => tKeys.indexOf(k) >= 0)),
+    JSON.stringify((pub.json.teachers || [])[0] || {}));
+  ok('Ustoz telefoni/oyligi chiqmaydi',
+    !(pub.json.teachers || []).some(t => t.phone || t.salaryAmount || t.payType || t.percentRate));
   ok('O’quvchi yoki xodim ma’lumoti yo’q',
     !/students|staff|users|leads|payments|invoices/i.test(pub.text), pub.text.slice(0, 160));
   ok('Kurslarda faqat nom va narx', (pub.json.courses || []).every(c =>
