@@ -52,6 +52,11 @@ function readBlocked(docPath, user) {
   const col = String(docPath || '').split('/')[0];
   if (col === 'botstate') return true;
   if (col === 'photos') return true;               // rasm faqat /api/photo orqali beriladi
+  /* Daraja testi: savollar ichida TO'G'RI JAVOB bor — hech kimga berilmaydi.
+     Boshlangan test sessiyasi ham (savol ro'yxati) mijozga chiqmaydi.       */
+  if (col === 'testq' || col === 'testsess') return true;
+  /* Test natijalari — faqat murojaat/o'quvchi bilan ishlaydiganlarga */
+  if (col === 'placements' && !A.can(user, 'lead.view')) return true;
   if (col === 'payroll' && !A.can(user, 'finance.payroll')) return true;
   return false;
 }
@@ -125,6 +130,9 @@ function visibleData(user, all) {
       case 'groups': case 'courses': case 'rooms': case 'memberships':
         return A.can(user, 'group.view') || A.can(user, 'student.view');
       case 'leads': case 'funnels': return A.can(user, 'nav.leads');
+      /* Daraja testi natijalari — murojaatlar bilan ishlaydiganlarga.
+         Savollar ('testq') va sessiyalar ('testsess') hech kimga chiqmaydi. */
+      case 'placements': return A.can(user, 'lead.view');
       case 'invoices': case 'payments': return A.can(user, 'finance.payments') || A.can(user, 'finance.debts');
       case 'expenses': return A.can(user, 'finance.expenses');
       case 'payroll': return A.can(user, 'finance.payroll');
