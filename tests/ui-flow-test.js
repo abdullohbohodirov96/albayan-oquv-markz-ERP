@@ -342,6 +342,50 @@ async function typeIn(page, sel, val) {
   ok('Yon tomonga siljimadi', mob.scrollX <= 1, String(mob.scrollX));
   await page.screenshot({ path: path.join(SHOTS, 'ustoz-telefon.png'), fullPage: true });
 
+  /* ================= 4. ERP: ustozlar va Telegram guruhi ================= */
+  section('4. ERP’da saytdagi ustozlar va guruh kodi');
+  // bu bo'lim direktor ko'zi bilan tekshiriladi — yangi, toza oyna
+  const dctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const dpage = await dctx.newPage();
+  dpage.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi (direktor): ' + e.message); });
+  await dpage.goto(BASE + '#kirish');
+  await dpage.waitForSelector('#login-user', { timeout: 20000 });
+  await dpage.fill('#login-user', 'admin');
+  await dpage.fill('#login-pass', PASS);
+  await dpage.click('button[type=submit]');
+  await dpage.waitForSelector('#app:not([hidden])', { timeout: 20000 });
+  await dpage.evaluate(() => window.A.App.go('staff'));
+  await dpage.waitForSelector('.tch-admin-item', { timeout: 15000 }).catch(() => { });
+  const tAdmin = await dpage.evaluate(() => ({
+    who: (window.A.App.user || {}).login + '/' + (window.A.App.user || {}).role,
+    route: window.A.App.route.name,
+    tcount: Object.keys((window.A.Data.col.teachers) || {}).length,
+    card: !!document.querySelector('.tch-admin'),
+    items: document.querySelectorAll('.tch-admin-item').length,
+    text: document.body.innerText
+  }));
+  ok('“Saytdagi ustozlar” bo’limi bor', tAdmin.card, JSON.stringify({ who: tAdmin.who, route: tAdmin.route, t: tAdmin.tcount, n: tAdmin.items }));
+  ok('Ustozlar ro’yxati to’lgan', tAdmin.items >= 5, String(tAdmin.items));
+  ok('Ustoz ismi ko’rinadi', /Ustoz/.test(tAdmin.text));
+
+  const tgInfo = await dpage.evaluate(async () => {
+    const A = window.A, D = A.Data;
+    const g = D.all('groups')[0];
+    if (!g) return { none: true };
+    A.App.go('group', { id: g.id });
+    await new Promise(r => setTimeout(r, 900));
+    const code = document.querySelector('.tg-code b');
+    return {
+      code: code ? code.textContent.trim() : '',
+      hasCard: !!document.querySelector('.tg-group'),
+      text: document.body.innerText
+    };
+  });
+  ok('Guruhda Telegram kartasi bor', !!tgInfo.hasCard, JSON.stringify(tgInfo).slice(0, 120));
+  ok('Guruh kodi 4 raqam', /^\d{4}$/.test(tgInfo.code || ''), tgInfo.code);
+  ok('Nima qilish kerakligi yozilgan', /guruh nomiga/i.test(tgInfo.text || ''), (tgInfo.text || '').slice(0, 80));
+  await dctx.close();
+
   await browser.close();
   console.log(out.join('\n'));
   console.log('\nScreenshotlar: shots/ustoz-bosh-sahifa.png, shots/ustoz-telefon.png');

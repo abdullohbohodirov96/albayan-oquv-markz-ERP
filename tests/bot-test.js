@@ -220,6 +220,45 @@ function lastTo(chatId) {
   ok('Takroriy tasdiq xabari ketmadi',
     sent.filter(m => m.chatId === '100' && /tasdiqlandi/i.test(m.text)).length === cnt);
 
+  /* ================= Telegram guruhiga ulanish ================= */
+  section('Telegram guruhiga ulanish (guruh kodi nom ichida)');
+  await store.set('groups/g9', {
+    id: 'g9', code: '4821', name: 'Kechki A1', days: [2, 4], startTime: '18:30', endTime: '20:00'
+  });
+
+  ok('Nomdan kod ajratiladi',
+    JSON.stringify(B.codesInTitle('AlBayan · Kechki A1 · 4821')) === '["4821"]',
+    JSON.stringify(B.codesInTitle('AlBayan · Kechki A1 · 4821')));
+
+  await B.linkGroupChat(-100200, 'AlBayan Kechki A1');
+  const g9a = await store.get('groups/g9');
+  ok('Kodsiz nom bilan ulanmaydi', !g9a.tgChat);
+  ok('Nima qilish kerakligi tushuntiriladi', /kod/i.test(lastTo(-100200)), lastTo(-100200).slice(0, 80));
+
+  await B.linkGroupChat(-100200, 'AlBayan · Kechki A1 · 9999');
+  ok('Notanish kod bilan ulanmaydi', !(await store.get('groups/g9')).tgChat);
+
+  await B.linkGroupChat(-100200, 'AlBayan · Kechki A1 · 4821');
+  const g9b = await store.get('groups/g9');
+  ok('Kod bo’yicha guruhga ulandi', String(g9b.tgChat) === '-100200', String(g9b.tgChat));
+  ok('Guruh nomi saqlandi', /4821/.test(g9b.tgTitle || ''), g9b.tgTitle);
+  ok('Guruhga "ulandim" xabari bordi', /Ulandim/.test(lastTo(-100200)), lastTo(-100200).slice(0, 90));
+  ok('Xabarda guruh nomi bor', /Kechki A1/.test(lastTo(-100200)));
+
+  ok('Boshqa guruh tegilmadi', !(await store.get('groups/g1')).tgChat);
+
+  await B.onGroupUpdate(-100200, 'AlBayan · Kechki A1 · 4821', '/ulash');
+  ok('/ulash qayta ulaydi', /yangilandi|Ulandim/.test(lastTo(-100200)), lastTo(-100200).slice(0, 60));
+
+  const nBefore = sent.length;
+  await B.onGroupUpdate(-100200, 'AlBayan · Kechki A1 · 4821', 'shunchaki suhbat');
+  ok('Oddiy suhbatga aralashmaydi', sent.length === nBefore, String(sent.length - nBefore));
+
+  const res = await B.sendToGroup(await store.get('groups/g9'), 'Ertaga dars 19:00 da');
+  ok('Guruhga xabar yuborildi', res.ok && /19:00/.test(lastTo(-100200)), lastTo(-100200));
+  const no = await B.sendToGroup(await store.get('groups/g1'), 'salom');
+  ok('Ulanmagan guruhga yuborilmaydi', !no.ok, JSON.stringify(no));
+
   bot.stop();
   if (store.close) await store.close();
   fs.rmSync(tmp, { recursive: true, force: true });

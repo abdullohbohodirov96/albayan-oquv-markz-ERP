@@ -96,6 +96,64 @@
   };
 
   /* ================= GURUH KARTASI ================= */
+
+  /* ---------- Telegram guruhi ----------
+     Guruh kodi guruh NOMIGA yoziladi; bot qo'shilganda shu kodni ko'rib
+     o'zi ulanadi va guruhga "ulandim" deb yozadi. */
+  function tgGroupCard(g, App) {
+    var linked = !!g.tgChat;
+    var code = g.code || '—';
+    var body = h('div', { class: 'tg-group' }, [
+      h('div', { class: 'tg-code' }, [
+        h('span', { class: 'small muted' }, 'Guruh kodi'),
+        h('b', { class: 'mono' }, code)
+      ]),
+      h('div', { class: 'tg-info' }, linked
+        ? [
+          UI.pill('Telegramga ulangan', 'ok'),
+          h('span', { class: 'small muted' }, g.tgTitle ? '“' + g.tgTitle + '”' : '')
+        ]
+        : [
+          h('span', { class: 'small' },
+            'Telegram guruh nomiga shu kodni qo’shing (masalan “' + (g.name || 'Guruh') + ' · ' + code + '”), ' +
+            'so’ng botni guruhga admin qilib qo’shing — o’zi ulanadi.')
+        ]),
+      h('div', { class: 'rowflex' }, [
+        h('button', { class: 'btn sm', type: 'button', onclick: function () { UI.copy(String(code)); } },
+          'Kodni nusxalash'),
+        (linked && (App.can('group.edit') || App.can('bot.broadcast')))
+          ? h('button', {
+            class: 'btn sm primary', type: 'button',
+            onclick: function () { groupMessageForm(g); }
+          }, [UI.icon('chat'), 'Guruhga xabar']) : null
+      ].filter(Boolean))
+    ]);
+    return UI.card('Telegram guruhi', body);
+  }
+
+  function groupMessageForm(g) {
+    var f = UI.form([
+      { name: 'text', label: 'Xabar', type: 'textarea', required: true, rows: 5 }
+    ]);
+    UI.modal({
+      title: 'Guruhga xabar', body: f.node,
+      actions: [
+        { label: 'Bekor qilish' },
+        {
+          label: 'Yuborish', cls: 'primary', onClick: function (c, btn) {
+            if (!f.validate()) return;
+            UI.busy(btn, async function () {
+              try {
+                await D.api('POST', 'api/group/message', { groupId: g.id, text: f.values().text });
+                c(); UI.toast('Yuborildi.', 'ok');
+              } catch (e) { UI.toast(e.message || 'Yuborilmadi', 'bad'); }
+            });
+          }
+        }
+      ]
+    });
+  }
+
   A.Pages.group = function (view, route, App) {
     App.guard('group.view');
     var g = D.one('groups', route.id);
@@ -122,6 +180,8 @@
         App.can('group.edit') ? h('button', { class: 'btn', onclick: function () { groupForm(g, App); } },
           [UI.icon('edit'), 'Tahrirlash']) : null
       ]));
+
+    view.appendChild(tgGroupCard(g, App));
 
     var members = Q.membersOf(g.id);
     var tiles = h('div', { class: 'tiles' });

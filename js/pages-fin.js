@@ -1025,7 +1025,163 @@
         title: 'Xodim yo’q', text: 'O’qituvchi va boshqa xodimlarni qo’shing.',
         action: App.can('staff.edit') ? { label: 'Xodim qo’shish', onClick: function () { staffForm(null, App); } } : null
       }), null, null, true));
+
+    view.appendChild(siteTeachersCard(App));
   };
+
+  /* ---------- Saytdagi ustozlar ----------
+     Bu ochiq sahifadagi profillar: ism, rasm va qisqa ma'lumot.
+     Ish haqi va telefon bu yerda YO'Q — ular saytga chiqmaydi. */
+  function siteTeachersCard(App) {
+    var list = D.all('teachers').slice().sort(function (a, b) {
+      return (a.order || 0) - (b.order || 0) || String(a.name).localeCompare(String(b.name));
+    });
+    var grid = h('div', { class: 'tch-admin' }, list.map(function (t) {
+      return h('button', {
+        class: 'tch-admin-item', type: 'button',
+        onclick: function () { if (App.can('staff.edit')) teacherForm(t, App); }
+      }, [
+        teacherAvatar(t, 54),
+        h('div', {}, [
+          h('b', {}, t.name || '—'),
+          h('div', { class: 'small muted' }, [
+            t.tag || 'Ustoz',
+            t.audience ? ' · ' + audienceLabel(t.audience) : '',
+            t.active === false ? ' · yashirilgan' : ''
+          ].join(''))
+        ])
+      ]);
+    }));
+    return UI.card('Saytdagi ustozlar',
+      list.length ? grid : UI.empty({ title: 'Ustoz profili yo’q', text: 'Saytda ko’rinadigan ustozlarni qo’shing.' }),
+      App.can('staff.edit')
+        ? h('button', { class: 'btn', onclick: function () { teacherForm(null, App); } }, [UI.icon('plus'), 'Ustoz qo’shish'])
+        : null);
+  }
+
+  function audienceLabel(a) {
+    return { erkaklar: 'Erkaklar guruhlari', ayollar: 'Ayollar guruhlari', ikkalasi: 'Erkak va ayol guruhlari' }[a] || '';
+  }
+
+  /** Rasm bo'lsa — rasm, bo'lmasa ism harflaridan avatar */
+  function teacherAvatar(t, size) {
+    var box = h('span', { class: 'tch-ava', style: 'width:' + size + 'px;height:' + size + 'px' });
+    var initials = String(t.name || '?').replace(/ustoz/i, '').trim()
+      .split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase();
+    box.appendChild(h('span', { class: 'tch-ini' }, initials || '?'));
+    var img = h('img', {
+      alt: t.name || '', loading: 'lazy',
+      src: '/api/photo?id=' + encodeURIComponent(t.id) + '&v=' + (t.photoAt || '')
+    });
+    img.addEventListener('error', function () { img.remove(); });
+    box.appendChild(img);
+    return box;
+  }
+
+  /** Rasmni brauzerning o'zida kichraytirish — bazaga katta fayl tushmasin */
+  function shrinkImage(file, maxSide) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onerror = function () { reject(new Error('Rasmni o’qib bo’lmadi.')); };
+      fr.onload = function () {
+        var im = new Image();
+        im.onerror = function () { reject(new Error('Bu fayl rasm emas.')); };
+        im.onload = function () {
+          var k = Math.min(1, maxSide / Math.max(im.width, im.height));
+          var w = Math.round(im.width * k), hgt = Math.round(im.height * k);
+          var c = document.createElement('canvas');
+          c.width = w; c.height = hgt;
+          c.getContext('2d').drawImage(im, 0, 0, w, hgt);
+          var q = 0.86, out = c.toDataURL('image/jpeg', q);
+          while (out.length > 600000 && q > 0.4) { q -= 0.1; out = c.toDataURL('image/jpeg', q); }
+          resolve(out);
+        };
+        im.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function teacherForm(t, App) {
+    App.guard('staff.edit');
+    var isNew = !t;
+    var s = t || { active: true, tag: 'Misrlik ustoz', country: 'Misr', audience: 'erkaklar', order: (D.all('teachers').length + 1) };
+    var newPhoto = null;
+
+    var f = UI.form([
+      { name: 'name', label: 'Ism (saytda ko’rinadi)', required: true, value: s.name, placeholder: 'Ustoz Ahmad' },
+      { name: 'tag', label: 'Qisqa yozuv', value: s.tag, placeholder: 'Misrlik ustoz' },
+      { name: 'country', label: 'Davlat', value: s.country, placeholder: 'Misr' },
+      {
+        name: 'audience', label: 'Kimga dars beradi', type: 'select', value: s.audience,
+        options: [
+          { value: 'erkaklar', label: 'Erkaklar guruhlari' },
+          { value: 'ayollar', label: 'Ayollar guruhlari' },
+          { value: 'ikkalasi', label: 'Erkak va ayol guruhlari' }
+        ]
+      },
+      { name: 'levels', label: 'Darajalar', value: s.levels, placeholder: 'A1–B2' },
+      { name: 'years', label: 'Tajriba (yil)', type: 'number', value: s.years },
+      { name: 'bio', label: 'Qisqa ma’lumot', type: 'textarea', value: s.bio, placeholder: 'Al-Azhar bitiruvchisi, 8 yillik tajriba…' },
+      { name: 'order', label: 'Tartib raqami', type: 'number', value: s.order },
+      {
+        name: 'active', label: 'Saytda ko’rinsin', type: 'select',
+        value: s.active === false ? 'no' : 'yes',
+        options: [{ value: 'yes', label: 'Ha' }, { value: 'no', label: 'Yo’q' }]
+      }
+    ]);
+
+    /* rasm tanlash */
+    var ava = teacherAvatar(s, 96);
+    var file = h('input', { type: 'file', accept: 'image/*', id: 'tch-file', style: 'display:none' });
+    var hint = h('span', { class: 'small muted' }, 'JPG yoki PNG. Rasm o’zi kichraytiriladi.');
+    file.addEventListener('change', function () {
+      var fl = file.files && file.files[0];
+      if (!fl) return;
+      shrinkImage(fl, 640).then(function (d) {
+        newPhoto = d;
+        UI.clear(ava);
+        ava.appendChild(h('img', { src: d, alt: '' }));
+        hint.textContent = 'Yangi rasm tanlandi — saqlashni bosing.';
+      }).catch(function (e) { UI.toast(e.message || 'Rasm yuklanmadi', 'bad'); });
+    });
+    f.node.insertBefore(h('div', { class: 'tch-photo-row' }, [
+      ava,
+      h('div', {}, [
+        h('button', { class: 'btn', type: 'button', onclick: function () { file.click(); } },
+          [UI.icon('upload'), s.photoAt ? 'Rasmni almashtirish' : 'Rasm yuklash']),
+        file, h('div', {}, hint)
+      ])
+    ]), f.node.firstChild);
+
+    UI.modal({
+      title: isNew ? 'Yangi ustoz' : 'Ustoz profili',
+      wide: true,
+      body: f.node,
+      actions: [
+        { label: 'Bekor qilish' },
+        {
+          label: 'Saqlash', cls: 'primary', onClick: function (c, btn) {
+            if (!f.validate()) return;
+            UI.busy(btn, async function () {
+              var v = f.values();
+              var rec = Object.assign({}, s, v, {
+                active: v.active !== 'no',
+                years: Number(v.years) || 0,
+                order: Number(v.order) || 0
+              });
+              if (isNew) rec.id = A.uid('tch');
+              if (newPhoto) rec.photoAt = String(Date.now());
+              await D.save('teachers', rec);
+              if (newPhoto) await D.save('photos', { id: rec.id, data: newPhoto });
+              await A.Ops.audit(App.user, isNew ? 'Ustoz qo’shildi' : 'Ustoz tahrirlandi', rec.name, rec.tag || '');
+              c(); UI.toast('Saqlandi.', 'ok'); App.render();
+            });
+          }
+        }
+      ]
+    });
+  }
 
   /** Lavozimdan mos rolni tanlash */
   function roleForPosition(pos) {

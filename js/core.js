@@ -125,7 +125,7 @@
   function pad2hex(b) { return b < 16 ? '0' + b.toString(16) : b.toString(16); }
 
   /* ---------------- Ma'lumotlar qatlami ---------------- */
-  var COLLECTIONS = ['users', 'staff', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads',
+  var COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads',
     'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin',
     'invoices', 'payments', 'expenses', 'payroll', 'audit'];
   var AUTH_COLLECTIONS = ['users'];
@@ -342,6 +342,7 @@
     },
     async save(name, obj, meta) {
       if (!obj.id) obj.id = uid(name.slice(0, 3));
+      this.col[name] = this.col[name] || {};   // ro'yxatga kirmagan kolleksiya ham saqlanadi
       this.col[name][obj.id] = obj;
       await this._setDoc(name + '/' + obj.id, obj, meta);
       this._emit();

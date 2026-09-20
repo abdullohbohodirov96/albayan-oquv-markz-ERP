@@ -25,6 +25,8 @@ function writePermFor(docPath) {
     leads: 'lead.edit',
     funnels: 'settings.edit',
     staff: 'staff.edit',
+    teachers: 'staff.edit',      // saytdagi ustoz profillari
+    photos: 'staff.edit',       // ustoz rasmlari (alohida — ro'yxatlar yengil qolsin)
     users: 'users.manage',
     invoices: 'invoice.create',
     payments: '__server__',      // to'lovlar faqat /api/payment orqali
@@ -49,6 +51,7 @@ function writePermFor(docPath) {
 function readBlocked(docPath, user) {
   const col = String(docPath || '').split('/')[0];
   if (col === 'botstate') return true;
+  if (col === 'photos') return true;               // rasm faqat /api/photo orqali beriladi
   if (col === 'payroll' && !A.can(user, 'finance.payroll')) return true;
   return false;
 }
@@ -117,6 +120,7 @@ function visibleData(user, all) {
     switch (name) {
       case 'users': return true;                       // faqat nom/rol yuboriladi
       case 'staff': return true;                       // ish haqi olib tashlanadi
+      case 'teachers': return true;                    // ochiq ma'lumot — hamma ko'radi
       case 'students': return A.can(user, 'student.view');
       case 'groups': case 'courses': case 'rooms': case 'memberships':
         return A.can(user, 'group.view') || A.can(user, 'student.view');
