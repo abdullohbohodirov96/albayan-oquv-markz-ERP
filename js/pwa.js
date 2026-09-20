@@ -120,7 +120,8 @@
     if (!('serviceWorker' in navigator)) return null;
     if (location.protocol !== 'http:' && location.protocol !== 'https:') return null;
     try {
-      reg = await navigator.serviceWorker.register('sw.js', { scope: './' });
+      // updateViaCache: 'none' — sw.js har safar serverdan tekshiriladi (keshdan emas)
+      reg = await navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' });
       if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
       reg.addEventListener('updatefound', function () {
         var w = reg.installing;
