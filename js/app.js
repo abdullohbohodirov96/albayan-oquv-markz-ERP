@@ -93,7 +93,16 @@
     return r;
   }
   function onHashChange() {
-    if (App._hashLock || !App.user) return;
+    if (App._hashLock) return;
+    // Kirmagan foydalanuvchi: ochiq sahifalar orasida yurish (orqaga/oldinga ham ishlaydi)
+    if (!App.user) {
+      var where = String(location.hash || '').replace('#', '').split('?')[0];
+      if (where === 'kabinet') { renderKabinet(); return; }
+      if (where === 'ustoz') { renderTeacherFromHash(); return; }
+      if (where === 'kirish' || where === 'login') { renderLogin(null); return; }
+      if (!where) { renderLanding(); return; }
+      return;
+    }
     var r = hashToRoute();
     if (!r) return;
     App.route = r;
@@ -312,17 +321,11 @@
     wrap.className = 'screen';
     UI.clear(wrap);
 
-    var f = UI.field({
-      label: 'Shaxsiy kodingiz', id: 'kab-code', required: true,
-      placeholder: '4077', inputmode: 'numeric', autocomplete: 'off'
-    });
-    f.input.setAttribute('maxlength', '4');
-    if (prefill) f.input.value = prefill;
     var err = h('div', { class: 'err-msg', hidden: true });
     var result = h('div', { class: 'kab-result' });
-    var btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Ko’rish');
+    var info = h('p', { class: 'small muted', style: 'margin:0' }, 'Tekshirilmoqda…');
 
-    var form = h('form', { class: 'login kabinet', onsubmit: onSubmit }, [
+    var box = h('div', { class: 'login kabinet' }, [
       h('div', { class: 'brandline' }, [
         h('img', { class: 'logo', src: LOGO, alt: '' }),
         h('div', {}, [
@@ -330,43 +333,70 @@
           h('div', { class: 'sub' }, 'O’quvchi kabineti')
         ])
       ]),
-      h('p', { class: 'small muted', style: 'margin:0' },
-        'Markaz bergan 4 xonali kodingizni kiriting — ma’lumotlaringiz shu yerda chiqadi.'),
-      f.wrap, err, btn, result,
+      info, err, result,
       h('div', { class: 'login-alt' }, [
+        h('button', {
+          class: 'btn sm', type: 'button',
+          onclick: function () { location.hash = ''; renderLanding(); }
+        }, 'Bosh sahifa'),
         h('button', {
           class: 'btn sm', type: 'button',
           onclick: function () { location.hash = ''; renderLogin(null); }
         }, 'Xodimlar kirishi')
       ])
     ]);
-    wrap.appendChild(form);
+    wrap.appendChild(box);
     refreshCenterName();
-    setTimeout(function () { try { f.input.focus(); } catch (e) { } }, 40);
-    if (prefill && /^\d{4}$/.test(prefill)) lookup(prefill);
+    start();
 
-    function onSubmit(e) {
-      e.preventDefault();
-      lookup(f.input.value);
+    /* Kirish tartibi:
+       1) manzilda bir martalik havola (?t=...) bo'lsa — uni sessiyaga almashtiramiz;
+       2) sessiya bo'lsa — ma'lumot chiqadi;
+       3) bo'lmasa — qanday kirishni tushuntiramiz (kod bilan kirish yo'q). */
+    async function start() {
+      var token = tokenFromHash();
+      if (token) {
+        try {
+          await D.api('POST', 'api/kabinet/session', { token: token });
+          cleanHash();
+        } catch (ex) {
+          info.hidden = true;
+          err.hidden = false;
+          err.textContent = ex.message || 'Havola yaroqsiz.';
+          showHowTo();
+          return;
+        }
+      }
+      try {
+        var d = await D.api('GET', 'api/kabinet/me');
+        info.hidden = true;
+        showInfo(d);
+      } catch (ex) {
+        info.hidden = true;
+        showHowTo();
+      }
     }
 
-    function lookup(codeRaw) {
-      var code = String(codeRaw || '').replace(/\D/g, '');
-      err.hidden = true;
+    function tokenFromHash() {
+      var m = /[?&]t=([A-Za-z0-9_.-]+)/.exec(String(location.hash || ''));
+      return m ? m[1] : '';
+    }
+    function cleanHash() {
+      try { history.replaceState(null, '', location.pathname + '#kabinet'); } catch (e) { }
+    }
+
+    function showHowTo() {
       UI.clear(result);
-      if (code.length !== 4) {
-        err.hidden = false; err.textContent = 'Kod 4 ta raqamdan iborat.';
-        return;
-      }
-      UI.busy(btn, async function () {
-        try {
-          var data = await D.api('POST', 'api/kabinet', { code: code });
-          showInfo(data);
-        } catch (ex) {
-          err.hidden = false;
-          err.textContent = ex.message || 'Ma’lumot olinmadi.';
-        }
-      });
+      result.appendChild(h('div', { class: 'kab-howto' }, [
+        h('b', {}, 'Kabinetga qanday kiriladi?'),
+        h('p', { class: 'small' },
+          'Xavfsizlik uchun 4 xonali kod bilan kirish o’chirilgan — u maxfiy emas edi.'),
+        h('ol', { class: 'small' }, [
+          h('li', {}, 'Telegram botga kiring va “Kabinet (veb)” tugmasini bosing — bot shaxsiy havola yuboradi.'),
+          h('li', {}, 'Botga ulanmagan bo’lsangiz, markaz administratoridan bir martalik havola so’rang.')
+        ]),
+        h('p', { class: 'small muted' }, 'Havola bir marta ishlaydi va muddati cheklangan.')
+      ]));
     }
 
     function showInfo(d) {
