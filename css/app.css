@@ -16,6 +16,9 @@
   --sans:'Manrope',system-ui,'Segoe UI',sans-serif;
   --display:'Archivo','Manrope',system-ui,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,monospace;
+  /* Sakura fon ranglari */
+  --leaf-1:#f2a9c7; --leaf-2:#ffd8e6; --leaf-3:#e585ac; --leaf-core:#f3dc9b; --leaf-stem:#6d4b3c; --leaf-op:.62;
+  --site-bg:#ffffff;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -31,6 +34,8 @@
     --info:#7aa7e6; --info-soft:#14243c;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
     --shadow-lg:0 12px 40px -12px rgba(0,0,0,.7);
+    --leaf-1:#c17a9c; --leaf-2:#e3abc7; --leaf-3:#a85f82; --leaf-core:#c9a55f; --leaf-stem:#4a3931; --leaf-op:.5;
+    --site-bg:#151b27;
   }
 }
 :root[data-theme="dark"]{
@@ -46,6 +51,8 @@
   --info:#7aa7e6; --info-soft:#14243c;
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.6);
   --shadow-lg:0 12px 40px -12px rgba(0,0,0,.7);
+  --leaf-1:#c17a9c; --leaf-2:#e3abc7; --leaf-3:#a85f82; --leaf-core:#c9a55f; --leaf-stem:#4a3931; --leaf-op:.5;
+  --site-bg:#151b27;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -251,8 +258,65 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .empty p{margin:0 auto 14px;max-width:44ch;font-size:13.5px}
 
 /* ================= SAYT (ochiq sahifa) ================= */
-.site{min-height:100%;background:var(--bg);color:var(--ink);overflow-x:hidden;
-  background-image:radial-gradient(900px 420px at 80% -10%, color-mix(in srgb,var(--brand) 16%,transparent), transparent 70%)}
+.site{position:relative;min-height:100%;color:var(--ink);overflow-x:hidden;isolation:isolate;
+  background:var(--site-bg)}
+
+/* --- Jonli fon: oq fon, mayda gulli sakura shoxlari va tushayotgan gulbarglar --- */
+.site-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;
+  background:var(--site-bg)}
+
+.site-bg .tree{position:absolute;color:var(--leaf-stem);opacity:var(--leaf-op);filter:blur(.5px)}
+.site-bg .tree.tl{top:-80px;left:-100px;width:min(640px,60vw)}
+.site-bg .tree.tr{top:-60px;right:-90px;width:min(580px,54vw);transform:scaleX(-1)}
+.site-bg .tree.bl{bottom:-100px;left:-80px;width:min(470px,42vw);transform:scaleY(-1);opacity:calc(var(--leaf-op) * .7)}
+.site-bg .tree.br{bottom:-80px;right:-100px;width:min(430px,38vw);transform:scale(-1,-1);opacity:calc(var(--leaf-op) * .58)}
+.site-bg .branch{display:block;width:100%;height:auto;transform-origin:4% 94%;will-change:transform}
+.site-bg .sway-a{animation:sway 9s ease-in-out infinite}
+.site-bg .sway-b{animation:sway 11.5s ease-in-out infinite reverse;animation-delay:-2s}
+.site-bg .sway-c{animation:sway 13s ease-in-out infinite;animation-delay:-4s}
+.site-bg .lf{fill:var(--leaf-1)}
+.site-bg .lf2{fill:var(--leaf-2)}
+.site-bg .lf3{fill:var(--leaf-3)}
+.site-bg .core{fill:var(--leaf-core)}
+
+/* Tushayotgan mayda barglar */
+.site-bg .petal{position:absolute;top:0;will-change:transform;
+  animation-name:fall;animation-timing-function:linear;animation-iteration-count:infinite}
+.site-bg .petal i{display:block;width:100%;height:100%;
+  border-radius:100% 0 100% 0;
+  background:linear-gradient(135deg,var(--leaf-3),var(--leaf-2));
+  animation-name:twirl;animation-timing-function:linear;animation-iteration-count:infinite;
+  will-change:transform}
+
+@keyframes fall{
+  0%{transform:translate3d(0,-14vh,0);opacity:0}
+  7%{opacity:.75}
+  25%{transform:translate3d(4vw,18vh,0)}
+  50%{transform:translate3d(-3vw,48vh,0)}
+  75%{transform:translate3d(5vw,78vh,0)}
+  93%{opacity:.6}
+  100%{transform:translate3d(1vw,114vh,0);opacity:0}
+}
+@keyframes twirl{
+  0%{transform:rotate3d(1,1,.35,0deg)}
+  100%{transform:rotate3d(1,1,.35,360deg)}
+}
+@keyframes sway{
+  0%,100%{transform:rotate(-1.4deg) translateY(0)}
+  35%{transform:rotate(1.3deg) translateY(-5px)}
+  70%{transform:rotate(-.5deg) translateY(2px)}
+}
+@media (prefers-reduced-motion:reduce){
+  .site-bg .branch,.site-bg .petal,.site-bg .petal i{animation:none}
+  .site-bg .petals{display:none}
+}
+@media (max-width:560px){
+  .site-bg .tree.br{display:none}
+  .site-bg .tree.tl{top:-40px;left:-24vw;width:102vw}
+  .site-bg .tree.tr{top:28vh;right:-32vw;width:86vw;opacity:calc(var(--leaf-op) * .8)}
+  .site-bg .tree.bl{bottom:-50px;left:-26vw;width:90vw}
+  .site-bg .petal:nth-child(n+9){display:none}
+}
 .site-wrap{max-width:1100px;margin:0 auto;padding:0 16px 44px}
 
 .site-top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;
@@ -280,7 +344,8 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .hero-cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
 .hero-cta .btn.lg .ico{width:18px;height:18px}
 .hero-stats{display:flex;gap:14px;flex-wrap:wrap}
-.hero-stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+.hero-stat{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(6px);
+  border:1px solid var(--line);border-radius:12px;
   padding:10px 14px;min-width:104px;box-shadow:var(--shadow)}
 .hero-stat b{display:block;font-family:var(--display);font-size:22px;line-height:1.1;color:var(--brand)}
 .hero-stat span{font-size:11.5px;color:var(--muted)}
@@ -307,7 +372,8 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .site-sec>.muted{margin:0 0 18px}
 
 .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
-.feat{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;
+.feat{background:color-mix(in srgb,var(--surface) 88%,transparent);
+  backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:18px;
   transition:transform .14s,box-shadow .14s,border-color .14s}
 .feat:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--line-strong)}
 .feat-ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
@@ -317,7 +383,8 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .feat p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.55}
 
 .course-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.course{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;
+.course{background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(6px);
+  border:1px solid var(--line);border-radius:16px;padding:18px;
   display:flex;flex-direction:column;gap:9px;position:relative;overflow:hidden;
   transition:transform .14s,box-shadow .14s}
 .course::after{content:'';position:absolute;inset:0 auto 0 0;width:3px;background:var(--brand);opacity:.9}
@@ -331,8 +398,8 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 
 /* --- Ariza --- */
 .apply-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}
-.apply-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px;
-  box-shadow:var(--shadow-lg)}
+.apply-card{background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:var(--shadow-lg)}
 .lead-form{display:flex;flex-direction:column;gap:13px}
 .lead-ok-in{text-align:center;display:flex;flex-direction:column;align-items:center;gap:9px;padding:14px 0}
 .lead-ok-in .ok-ico{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
@@ -340,7 +407,8 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .lead-ok-in .ok-ico .ico{width:26px;height:26px}
 .lead-ok-in b{font-size:17.5px}
 .lead-ok-in p{margin:0;color:var(--muted);font-size:13.5px}
-.site-contact{background:var(--surface-2);border:1px solid var(--line);border-radius:18px;padding:20px}
+.site-contact{background:color-mix(in srgb,var(--surface-2) 90%,transparent);backdrop-filter:blur(8px);
+  border:1px solid var(--line);border-radius:18px;padding:20px}
 .site-contact h3{font-size:15px;margin-bottom:12px;letter-spacing:.02em}
 .contact-row{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;
   border-bottom:1px dashed var(--line)}
