@@ -454,6 +454,7 @@
       var r = await fetch('api/public', { credentials: 'same-origin' });
       PUBLIC = r.ok ? await r.json() : {};
     } catch (e) { PUBLIC = {}; }
+    A._pub = PUBLIC;
     return PUBLIC;
   }
 
@@ -596,6 +597,7 @@
         ])
       ]),
       h('nav', { class: 'site-nav' }, [
+        h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('ustozlar'); } }, 'Ustozlar'),
         h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('kurslar'); } }, 'Kurslar'),
         h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('ariza'); } }, 'Ariza'),
         h('button', {
@@ -660,6 +662,24 @@
         h('b', {}, t), h('p', {}, d)
       ]);
     }
+
+    /* --- Ustozlar --- */
+    var teachBox = h('div', { class: 'tch-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
+    var teachers = h('section', { class: 'site-sec', id: 'ustozlar' }, [
+      h('h2', {}, 'Ustozlar'),
+      h('p', { class: 'muted' },
+        'Darslarni Misrda tahsil olgan, ona tili arab tili bo’lgan ustozlar olib boradi. ' +
+        'Erkaklar va ayollar guruhlari uchun alohida ustozlar bor.'),
+      teachBox
+    ]);
+
+    /* --- Dars vaqtlari --- */
+    var slotBox = h('div', { class: 'slot-grid' });
+    var timetable = h('section', { class: 'site-sec', id: 'vaqt' }, [
+      h('h2', {}, 'Dars vaqtlari'),
+      h('p', { class: 'muted', id: 'slot-lead' }, 'Har bir dars 1 soat 30 daqiqa.'),
+      slotBox
+    ]);
 
     /* --- Kurslar --- */
     var courseBox = h('div', { class: 'course-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
@@ -726,7 +746,7 @@
     ]);
 
     wrap.appendChild(siteBackdrop());
-    wrap.appendChild(h('div', { class: 'site-wrap' }, [top, hero, feats, courses, apply, foot]));
+    wrap.appendChild(h('div', { class: 'site-wrap' }, [top, hero, feats, teachers, timetable, courses, apply, foot]));
     A.I18N.apply(wrap);
     fillPublic();
 
@@ -769,6 +789,8 @@
         var u = String(d.telegram).replace(/^@/, '');
         tg.textContent = '@' + u; tg.href = 'https://t.me/' + u;
       }
+      paintTeachers(d.teachers || []);
+      paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
       UI.clear(courseBox);
       var list = d.courses || [];
       if (!list.length) {
@@ -795,6 +817,46 @@
       }
       A.I18N.apply(wrap);
     }
+    function paintTeachers(list) {
+      UI.clear(teachBox);
+      if (!list.length) {
+        teachBox.appendChild(h('p', { class: 'muted' }, 'Ustozlar ro’yxati tez orada.'));
+        return;
+      }
+      list.forEach(function (t) {
+        teachBox.appendChild(h('button', {
+          class: 'tch-card', type: 'button',
+          onclick: function () { openTeacher(t, list); }
+        }, [
+          A.teacherAvatar(t, 96),
+          h('b', {}, t.name),
+          h('span', { class: 'tch-tag' }, t.tag || 'Ustoz'),
+          h('span', { class: 'tch-aud' }, A.audienceLabel(t.audience)),
+          t.levels ? h('span', { class: 'small muted' }, t.levels) : null
+        ]));
+      });
+    }
+
+    function openTeacher(t, list) {
+      location.hash = 'ustoz?id=' + encodeURIComponent(t.id);
+      renderTeacher(t, list);
+    }
+
+    function paintSlots(start, end, minutes) {
+      UI.clear(slotBox);
+      var lead = document.getElementById('slot-lead');
+      if (lead) {
+        lead.textContent = 'Darslar ' + start + '–' + end + ' oralig’ida. Har bir dars ' +
+          Math.floor(minutes / 60) + ' soat ' + (minutes % 60) + ' daqiqa.';
+      }
+      A.lessonSlots(start, end, minutes).forEach(function (sl) {
+        slotBox.appendChild(h('div', { class: 'slot' }, [
+          h('b', {}, sl.from + '–' + sl.to),
+          h('span', { class: 'small muted' }, sl.part)
+        ]));
+      });
+    }
+
     function show(id) { var el = document.getElementById(id); if (el) el.hidden = false; }
 
     function sendLead() {
@@ -831,6 +893,157 @@
     }
   }
   A.renderLanding = renderLanding;
+
+  /* ---------- Ustozlar: umumiy yordamchilar ---------- */
+
+  /** Rasm bo'lsa rasm, bo'lmasa ism harflaridan chiroyli avatar */
+  A.teacherAvatar = function (t, size) {
+    var box = h('span', { class: 'tch-ava', style: 'width:' + size + 'px;height:' + size + 'px' });
+    var ini = String(t.name || '?').replace(/ustoz/i, '').trim()
+      .split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0); }).join('').toUpperCase();
+    box.appendChild(h('span', { class: 'tch-ini' }, ini || '?'));
+    var img = h('img', { alt: t.name || '', loading: 'lazy', src: '/api/photo?id=' + encodeURIComponent(t.id) });
+    img.addEventListener('error', function () { img.remove(); });   // rasm yo'q — harflar qoladi
+    box.appendChild(img);
+    return box;
+  };
+
+  A.audienceLabel = function (a) {
+    return {
+      erkaklar: 'Erkaklar guruhlari',
+      ayollar: 'Ayollar guruhlari',
+      ikkalasi: 'Erkak va ayol guruhlari'
+    }[a] || '';
+  };
+
+  /** Ish vaqtini dars oralig'lariga bo'lish: 08:00–22:00, 90 daqiqadan */
+  A.lessonSlots = function (start, end, minutes) {
+    function toMin(v) {
+      var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || ''));
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    }
+    function toStr(x) {
+      var hh = Math.floor(x / 60), mm = x % 60;
+      return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+    }
+    var a = toMin(start), b = toMin(end), len = Number(minutes) || 90;
+    if (a == null || b == null || b <= a || len < 15) return [];
+    var out = [];
+    for (var t = a; t + len <= b && out.length < 12; t += len) {
+      out.push({
+        from: toStr(t), to: toStr(t + len),
+        part: t < 12 * 60 ? 'ertalabki' : (t < 17 * 60 ? 'kunduzgi' : 'kechki')
+      });
+    }
+    return out;
+  };
+
+  /* ---------- Ustoz profili (ochiq sahifa) ---------- */
+  function renderTeacher(t, list) {
+    document.getElementById('boot').hidden = true;
+    document.getElementById('app').hidden = true;
+    var wrap = document.getElementById('auth');
+    wrap.hidden = false;
+    wrap.className = 'site';
+    UI.clear(wrap);
+    wrap.appendChild(siteBackdrop());
+
+    var box = h('div', { class: 'site-wrap' });
+    wrap.appendChild(box);
+    window.scrollTo(0, 0);
+
+    box.appendChild(h('header', { class: 'site-top' }, [
+      h('button', {
+        class: 'btn sm ghost', type: 'button',
+        onclick: function () { location.hash = ''; renderLanding(); }
+      }, [UI.icon('back'), 'Orqaga']),
+      h('div', { class: 'site-brand', style: 'margin-inline-start:auto' }, [
+        h('img', { class: 'logo', src: LOGO, alt: '' }),
+        h('div', {}, [h('b', {}, centerNameNow()), h('span', {}, 'Arab tili o’quv markazi')])
+      ])
+    ]));
+
+    if (!t) {
+      box.appendChild(UI.empty({
+        title: 'Ustoz topilmadi',
+        text: 'Bu profil o’chirilgan bo’lishi mumkin.',
+        action: { label: 'Bosh sahifa', onClick: function () { location.hash = ''; renderLanding(); } }
+      }));
+      return;
+    }
+
+    var slots = A.lessonSlots(A._pub && A._pub.workStart || '08:00',
+      A._pub && A._pub.workEnd || '22:00', (A._pub && A._pub.lessonMinutes) || 90);
+
+    box.appendChild(h('section', { class: 'tch-page' }, [
+      h('div', { class: 'tch-hero' }, [
+        A.teacherAvatar(t, 168),
+        h('div', {}, [
+          h('span', { class: 'hero-eyebrow' }, t.tag || 'Ustoz'),
+          h('h1', {}, t.name),
+          h('p', { class: 'hero-lead' }, t.bio ||
+            'Arab tilini ona tili darajasida biladi va AlBayan Cairo’da dars beradi.'),
+          h('div', { class: 'tch-facts' }, [
+            t.country ? fact('home', 'Davlat', t.country) : null,
+            t.levels ? fact('chart', 'Darajalar', t.levels) : null,
+            t.years ? fact('history', 'Tajriba', t.years + ' yil') : null,
+            t.audience ? fact('users', 'Guruhlar', A.audienceLabel(t.audience)) : null
+          ].filter(Boolean)),
+          h('button', {
+            class: 'btn primary lg', type: 'button',
+            onclick: function () {
+              location.hash = '';
+              renderLanding();
+              setTimeout(function () {
+                var el = document.getElementById('ariza');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                var note = document.getElementById('lead-note');
+                if (note && !note.value) note.value = t.name + ' guruhiga yozilmoqchiman.';
+              }, 60);
+            }
+          }, 'Shu ustozga yozilish')
+        ])
+      ]),
+      slots.length ? h('div', { class: 'tch-times' }, [
+        h('h3', {}, 'Dars vaqtlari'),
+        h('div', { class: 'slot-grid' }, slots.map(function (sl) {
+          return h('div', { class: 'slot' }, [
+            h('b', {}, sl.from + '–' + sl.to),
+            h('span', { class: 'small muted' }, sl.part)
+          ]);
+        }))
+      ]) : null,
+      (list && list.length > 1) ? h('div', { class: 'tch-more' }, [
+        h('h3', {}, 'Boshqa ustozlar'),
+        h('div', { class: 'tch-grid' }, list.filter(function (x) { return x.id !== t.id; }).map(function (x) {
+          return h('button', {
+            class: 'tch-card', type: 'button',
+            onclick: function () { location.hash = 'ustoz?id=' + encodeURIComponent(x.id); renderTeacher(x, list); }
+          }, [
+            A.teacherAvatar(x, 84), h('b', {}, x.name),
+            h('span', { class: 'tch-tag' }, x.tag || 'Ustoz')
+          ]);
+        }))
+      ]) : null
+    ].filter(Boolean)));
+
+    function fact(icon, label, value) {
+      return h('div', { class: 'tch-fact' }, [
+        UI.icon(icon), h('div', {}, [h('span', {}, label), h('b', {}, value)])
+      ]);
+    }
+  }
+
+  /** Manzildagi #ustoz?id=... bo'yicha profilni ochish */
+  async function renderTeacherFromHash() {
+    var m = /[?&]id=([^&]+)/.exec(String(location.hash || ''));
+    var id = m ? decodeURIComponent(m[1]) : '';
+    var d = await publicInfo();
+    var list = (d && d.teachers) || [];
+    var t = list.filter(function (x) { return x.id === id; })[0] || null;
+    renderTeacher(t, list);
+  }
+  A.renderTeacherFromHash = renderTeacherFromHash;
 
   /* ---------- Til tanlash ---------- */
   function renderLangPick() {
@@ -1053,6 +1266,7 @@
         }
         var where = String(location.hash || '').replace('#', '').split('?')[0];
         if (where === 'kabinet') { renderKabinet(kabinetCodeFromHash()); return; }
+        if (where === 'ustoz') { renderTeacherFromHash(); return; }
         if (where === 'kirish' || where === 'login') { renderLogin(null); return; }
         renderLanding();                 // saytning ochiq sahifasi
         return;
