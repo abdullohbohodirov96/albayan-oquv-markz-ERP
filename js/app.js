@@ -597,7 +597,9 @@
           h('span', { class: 'test-kind' }, q.kindLabel || q.kind || ''),
           h('span', { class: 'test-count small muted' }, (pos + 1) + ' / ' + QS.length)
         ]),
-        h('p', { class: 'test-q', dir: 'auto' }, q.text),
+        /* Savol matni o'zbekcha — chapdan o'ngga. Ichidagi arabcha
+           parchalar baribir to'g'ri (o'ngdan chapga) ko'rinadi. */
+        h('p', { class: 'test-q', dir: 'ltr' }, q.text),
         opts,
         h('div', { class: 'test-nav' }, [
           pos > 0 ? h('button', {
