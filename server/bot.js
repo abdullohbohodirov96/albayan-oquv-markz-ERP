@@ -9,6 +9,7 @@
 'use strict';
 
 const kabinet = require('./kabinet');
+const link = require('./link');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API = 'https://api.telegram.org/bot' + TOKEN + '/';
@@ -51,10 +52,21 @@ async function sendMessage(chatId, text, keyboard) {
   });
 }
 
+/** Token ko'rinishi: "lt<hex>.<sir>" */
+function link_looksLikeToken(t) {
+  return /^\s*lt[a-f0-9]{6,}\.[A-Za-z0-9_-]{16,}\s*$/.test(String(t || ''));
+}
+
+/** Telegram HTML uchun xavfsiz matn */
+function esc(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 const MENU = [
   [{ text: 'Ma’lumotim' }, { text: 'To’lovim' }],
   [{ text: 'Davomatim' }, { text: 'Jadvalim' }],
-  [{ text: 'Markazga yozish' }]
+  [{ text: 'Kabinet (veb)' }, { text: 'Markazga yozish' }]
 ];
 
 /* ---------------- Ma'lumot yordamchilari ---------------- */
@@ -249,6 +261,12 @@ function hash(s) {
  * windowMs: shu vaqt ichida takroriy hisoblanadi (standart 24 soat).
  */
 async function enqueue(msg, windowMs) {
+  /* Shaxsiy xabar faqat SHAXSIY suhbatga boradi.
+     Telegramda guruh/kanal identifikatori manfiy raqam bo'ladi — bunday
+     manzilga o'quvchining ismi, qarzi yoki davomati yuborilmaydi.          */
+  if (String((msg && msg.chatId) || '').charAt(0) === '-') {
+    return { skipped: 'guruh', id: null };
+  }
   const key = dedupeKey(msg);
   const rows = (await store.list('botout/')).map(r => r.data).filter(Boolean);
   const limit = Date.now() - (windowMs == null ? 24 * 3600 * 1000 : windowMs);
@@ -408,24 +426,55 @@ function daysBetween(fromIso, toIso) {
 }
 
 /* ---------------- Ulash jarayoni ---------------- */
-async function linkWithCode(chatId, student, from, st) {
-  const rec = student;
-  rec.telegram = {
-    id: String(chatId), username: (from && from.username) || '',
-    name: (from && from.first_name) || '', linkedAt: stamp(), via: 'kod'
-  };
-  rec.botLink = Object.assign({}, rec.botLink, { usedAt: stamp(), usedBy: String(chatId) });
-  await store.set('students/' + rec.id, rec);
+/** Bog'langandan keyin: holatni yozamiz va ma'lumotni yuboramiz */
+async function afterLink(chatId, student, st) {
   st.step = 'linked';
-  st.studentId = rec.id;
+  st.studentId = student.id;
   await setState(chatId, st);
-  // Ulangan zahoti to'liq ma'lumot — qayta so'rash shart emas
   let info = '';
-  try { info = kabinet.summaryText(await kabinet.summary(store, rec)); } catch (e) { info = ''; }
+  try { info = kabinet.summaryText(await kabinet.summary(store, student)); } catch (e) { info = ''; }
   await sendMessage(chatId,
-    'Tayyor! Siz <b>' + rec.lastName + ' ' + rec.firstName + '</b> sifatida ulandingiz.\n' +
+    'Tayyor! Siz <b>' + esc(student.lastName) + ' ' + esc(student.firstName) + '</b> sifatida ulandingiz.\n' +
     (info ? '\n' + info + '\n' : '') +
     '\nEndi davomat va to’lovlar haqida xabar olasiz.', MENU);
+}
+
+/** Bir martalik havola (token) bilan bog'lash — yagona to'g'ri yo'l */
+async function linkWithToken(chatId, token, from, st) {
+  const gate = codeGate(chatId);
+  if (!gate.ok) {
+    await sendMessage(chatId, 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin qayta urinib ko’ring.');
+    return false;
+  }
+  const r = await link.use(store, token, { stamp, usedBy: String(chatId) });
+  if (!r.ok) {
+    codeFail(chatId);
+    const why = {
+      ishlatilgan: 'Bu havola allaqachon ishlatilgan.',
+      muddati: 'Havola muddati tugagan.',
+      topilmadi: 'Havola yaroqsiz.'
+    }[r.reason] || 'Havola yaroqsiz.';
+    await sendMessage(chatId, why + ' Administratordan yangi havola so’rang.');
+    return false;
+  }
+  codeOk(chatId);
+  // administrator bergan havola mavjud bog'lanishni ham almashtira oladi
+  const at = await link.attach(store, {
+    studentId: r.studentId, chatId, from, stamp, via: 'havola', force: true
+  });
+  if (!at.ok) {
+    await sendMessage(chatId, 'Bog’lab bo’lmadi. Administrator bilan bog’laning.');
+    return false;
+  }
+  if (at.replaced) {
+    try {
+      await sendMessage(at.replaced,
+        'Bu hisob boshqa Telegram profiliga bog’landi. Agar bu siz bo’lmasangiz, ' +
+        'darhol markaz administratoriga xabar bering.');
+    } catch (e) { }
+  }
+  await afterLink(chatId, at.student, st);
+  return true;
 }
 
 async function handleLinkFlow(chatId, text, from, st) {
@@ -434,40 +483,20 @@ async function handleLinkFlow(chatId, text, from, st) {
        — shaxsiy kod: 4 xonali raqam (masalan 4077), o'quvchida doim bitta;
        — bir martalik kod: 6 belgili (eski usul, administrator beradi).       */
   if (st.step === 'code') {
-    const digits = kabinet.normCode(text);
-    if (kabinet.validCode(digits) && /^\s*\d{4}\s*$/.test(text)) {
-      const gate = codeGate(chatId);
-      if (!gate.ok) {
-        await sendMessage(chatId, 'Juda ko’p urinish. ' + gate.wait +
-          ' daqiqadan keyin qayta urinib ko’ring.');
-        return;
-      }
-      const s = await kabinet.byCode(store, digits);
-      if (s) { codeOk(chatId); return linkWithCode(chatId, s, from, st); }
-      codeFail(chatId);
-      st.codeTries = (st.codeTries || 0) + 1;
-      await setState(chatId, st);
-      await sendMessage(chatId, 'Bunday kod topilmadi. Kodingizni markazdan so’rang.\n' +
-        'Kodingiz bo’lmasa, <b>ismim</b> deb yozing.');
+    // Havola (token) — yagona bog'lash yo'li
+    if (link_looksLikeToken(text)) {
+      await linkWithToken(chatId, text.trim(), from, st);
       return;
     }
-    const code = normCode(text);
-    if (code.length === 6) {
-      const s = await studentByCode(code);
-      if (s) return linkWithCode(chatId, s, from, st);
-      st.codeTries = (st.codeTries || 0) + 1;
-      await setState(chatId, st);
-      if (st.codeTries >= 3) {
-        st.step = 'name';
-        await setState(chatId, st);
-        await sendMessage(chatId,
-          'Kod to’g’ri kelmadi. Administrator tasdiqlashi uchun ' +
-          '<b>ism va familiyangizni</b> yozing.');
-        return;
-      }
-      await sendMessage(chatId, 'Bunday kod topilmadi yoki muddati o’tgan. ' +
-        'Administratordan yangi kod so’rang va qayta yozing.\n' +
-        'Kodingiz bo’lmasa, <b>ismim</b> deb yozing.');
+    // 4 xonali shaxsiy kod BOG'LAMAYDI: u maxfiy emas.
+    const digits = kabinet.normCode(text);
+    if (kabinet.validCode(digits) && /^\s*\d{4}\s*$/.test(text)) {
+      codeFail(chatId);
+      await sendMessage(chatId,
+        'Shaxsiy kod bilan bog’lash o’chirilgan — u maxfiy emas.\n\n' +
+        'Markaz administratoridan <b>bir martalik havola</b> so’rang: u yuborgan ' +
+        'havolani bossangiz, hisobingiz shu suhbatga bog’lanadi.\n' +
+        'Kodingiz bo’lmasa, <b>ismim</b> deb yozing — administrator tasdiqlaydi.');
       return;
     }
     if (/^ismim/i.test(text.trim())) {
@@ -605,6 +634,15 @@ async function sendToGroup(group, text) {
 async function onMessage(msg) {
   const chatId = msg.chat.id;
   const text = String(msg.text || '').trim();
+  const chatType = String((msg.chat && msg.chat.type) || 'private');
+
+  /* MUHIM: shaxsiy ma'lumot FAQAT shaxsiy suhbatda.
+     Guruh, supergroup va kanalda bu yo'l umuman ishlamaydi — u yerda
+     xabarni hamma ko'radi. Guruh uchun alohida onGroupUpdate bor.          */
+  if (chatType !== 'private') {
+    return onGroupUpdate(chatId, (msg.chat && msg.chat.title) || '', text);
+  }
+
   const conf = await botConf();
   let st = await getState(chatId);
   const student = await findStudentByChat(chatId);
@@ -616,7 +654,17 @@ async function onMessage(msg) {
       'formadan kelgan murojaatlar shu yerga tushadi.');
   }
 
-  if (text === '/start') {
+  // /start <token> — administrator yuborgan bir martalik havola
+  if (/^\/start\s+\S+/.test(text)) {
+    const payload = text.replace(/^\/start\s+/, '').trim();
+    if (link_looksLikeToken(payload)) {
+      st = st && st.chatId ? st : { chatId: String(chatId), step: 'code', codeTries: 0 };
+      await linkWithToken(chatId, payload, msg.from || {}, st);
+      return;
+    }
+  }
+
+  if (text === '/start' || /^\/start\s/.test(text)) {
     if (student) {
       st.step = 'linked'; st.studentId = student.id;
       await setState(chatId, st);
@@ -666,6 +714,22 @@ async function onMessage(msg) {
   if (text === 'To’lovim' || text === '/tolov') return sendMessage(chatId, await balanceText(student), MENU);
   if (text === 'Davomatim' || text === '/davomat') return sendMessage(chatId, await attendanceText(student), MENU);
   if (text === 'Jadvalim' || text === '/jadval') return sendMessage(chatId, await scheduleText(student), MENU);
+  /* Vebdagi kabinetga xavfsiz kirish: bir martalik, 15 daqiqalik havola.
+     Havola faqat shu shaxsiy suhbatga yuboriladi.                          */
+  if (text === 'Kabinet (veb)' || text === '/kabinet') {
+    const base = String(process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/$/, '');
+    if (!base) {
+      return sendMessage(chatId, 'Veb manzil sozlanmagan. Administrator bilan bog’laning.', MENU);
+    }
+    const made = await link.create(store, {
+      studentId: student.id, kind: 'kabinet', ttlMs: 15 * 60 * 1000, byUserId: 'bot', stamp
+    });
+    return sendMessage(chatId,
+      'Kabinetga kirish havolasi (15 daqiqa amal qiladi, bir marta ishlaydi):\n' +
+      base + '/#kabinet?t=' + made.token + '\n\n' +
+      'Havolani hech kimga bermang — u sizning hisobingizni ochadi.', MENU);
+  }
+
   if (text === 'Markazga yozish' || text === '/yozish') {
     st.step = 'writing';
     await setState(chatId, st);
