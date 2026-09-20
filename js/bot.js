@@ -162,20 +162,22 @@
       return D.all('students').filter(function (s) { return s.telegram && s.telegram.id; });
     },
 
+    /* Tasdiqlash SERVERDA bajariladi: bog'lanishni mijoz o'zi yoza olmaydi
+       (aks holda begona odam so'rovni o'ziga biriktirib olardi).            */
     async approve(req, studentId, App) {
       var st = D.one('students', studentId);
       if (!st) throw new Error('O’quvchi topilmadi.');
+      await D.api('POST', 'api/student/link-approve', { reqId: req.id, studentId: studentId });
       var rec = A.clone(st);
       rec.telegram = { id: req.chatId, username: req.username || '', name: req.name || '', linkedAt: A.nowStamp() };
-      await D.save('students', rec);
+      D.putLocal('students', rec);
       var r = A.clone(req);
       r.status = 'tasdiqlangan';
       r.studentId = studentId;
       r.handledAt = A.nowStamp();
-      await D.save('botreq', r);
+      D.putLocal('botreq', r);
       await Bot.enqueue(studentId,
         'Hisobingiz tasdiqlandi. Endi bu yerda davomat, to’lov va e’lonlarni olasiz.', 'ulash');
-      await A.Ops.audit(App.user, 'Bot: o’quvchi ulandi', rec.lastName + ' ' + rec.firstName, req.name || '');
     },
     async reject(req, App) {
       var r = A.clone(req);

@@ -12,6 +12,8 @@ const { createStore } = require('./store');
 const { A, writePermFor, readBlocked, safeUser, safeStaff, visibleData, GENERAL_CHAT } = require('./shared');
 const backup = require('./backup');
 const kabinet = require('./kabinet');
+const link = require('./link');
+const kabsess = require('./kabsess');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
 function backupReadSafe(name) {
@@ -82,7 +84,7 @@ function readBody(req) {
 /* ---------------- So'rov cheklovi (webhook uchun) ---------------- */
 const intakeHits = new Map();
 function intakeAllowed(req) {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+  const ip = clientIp(req);
   const now = Date.now();
   const rec = intakeHits.get(ip) || { n: 0, t: now };
   if (now - rec.t > 60000) { rec.n = 0; rec.t = now; }
@@ -95,9 +97,33 @@ function intakeAllowed(req) {
 /* ---------------- Kirish urinishlari cheklovi ---------------- */
 const loginTries = new Map();
 const MAX_TRIES = 8, LOCK_MS = 10 * 60 * 1000;
+/* ---------------- Haqiqiy IP ----------------
+   X-Forwarded-For ni MIJOZ ham yuborishi mumkin, shuning uchun uning chap
+   tomoniga ishonib bo'lmaydi. Render hujjatlari va jamoa javoblariga ko'ra
+   Render kelgan sarlavhani tozalamaydi, balki O'Z IP sini OXIRIGA qo'shadi;
+   haqiqiy mijoz IP si esa undan oldin turadi. Shuning uchun biz ro'yxatning
+   O'NG tomonidan TRUST_PROXY_HOPS ta qadam orqaga qaytamiz — mijoz qancha
+   soxta qiymat qo'shsa ham, ular faqat CHAPGA qo'shiladi va o'nggi hisob
+   o'zgarmaydi.
+     Render: 2 (mijoz IP + ichki proksi)   Lokal: 0 (sarlavhaga ishonilmaydi)
+   Boshqa hosting uchun TRUST_PROXY_HOPS bilan sozlanadi.                    */
+const PROXY_HOPS = Number(
+  process.env.TRUST_PROXY_HOPS != null
+    ? process.env.TRUST_PROXY_HOPS
+    : (process.env.RENDER || process.env.RENDER_SERVICE_ID ? 2 : 0)
+);
+function clientIp(req) {
+  const sock = String((req.socket && req.socket.remoteAddress) || '?').replace(/^::ffff:/, '');
+  if (!PROXY_HOPS) return sock;
+  const xs = String(req.headers['x-forwarded-for'] || '')
+    .split(',').map(x => x.trim()).filter(Boolean);
+  if (!xs.length) return sock;
+  const i = xs.length - PROXY_HOPS;
+  return String(i >= 0 ? xs[i] : xs[0]).replace(/^::ffff:/, '');
+}
+
 function gateKey(req, login) {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
-  return ip + '|' + login;
+  return clientIp(req) + '|' + login;
 }
 function loginGate(req, login) {
   const rec = loginTries.get(gateKey(req, login));
@@ -106,13 +132,38 @@ function loginGate(req, login) {
   if (rec.n < MAX_TRIES) return { ok: true };
   return { ok: false, wait: Math.ceil((LOCK_MS - (Date.now() - rec.first)) / 60000) };
 }
+/* IP bo'yicha UMUMIY hisob: muvaffaqiyatli kirish uni TOZALAMAYDI.
+   Aks holda hujumchi har 4 ta xato urinishdan keyin o'zining to'g'ri
+   hisobiga kirib, cheklovni nolga qaytarardi.                              */
+const ipTries = new Map();
+const IP_MAX = Number(process.env.LOGIN_IP_MAX || 30);          // 30 xato / oyna
+const IP_WINDOW_MS = Number(process.env.LOGIN_IP_WINDOW_MS || 30 * 60 * 1000);
+
+function ipGate(req) {
+  const rec = ipTries.get(clientIp(req));
+  if (!rec) return { ok: true };
+  if (Date.now() - rec.first > IP_WINDOW_MS) return { ok: true };
+  if (rec.n < IP_MAX) return { ok: true };
+  return { ok: false, wait: Math.max(1, Math.ceil((IP_WINDOW_MS - (Date.now() - rec.first)) / 60000)) };
+}
+function ipFail(req) {
+  const k = clientIp(req);
+  const rec = ipTries.get(k);
+  if (!rec || Date.now() - rec.first > IP_WINDOW_MS) ipTries.set(k, { n: 1, first: Date.now() });
+  else rec.n++;
+  if (ipTries.size > 20000) ipTries.clear();
+}
+
 function loginFail(req, login) {
   const k = gateKey(req, login);
   const rec = loginTries.get(k);
   if (!rec || Date.now() - rec.first > LOCK_MS) loginTries.set(k, { n: 1, first: Date.now() });
   else rec.n++;
   if (loginTries.size > 5000) loginTries.clear();
+  ipFail(req);                      // umumiy hisob ham o'sadi
 }
+/* Muvaffaqiyatli kirish: FAQAT shu login+IP juftligi bo'shaydi.
+   IP bo'yicha umumiy hisob o'z oynasi tugaguncha saqlanadi.               */
 function loginOk(req, login) { loginTries.delete(gateKey(req, login)); }
 
 /* ---------------- O'quvchi kabineti: kod taxmin qilishdan himoya ----------------
@@ -142,7 +193,14 @@ function kabinetFail(ip) {
   const cur = kabinetTries.get(ip) || { n: 1, total: 1 };
   return { n: cur.total, notify: cur.total === KAB_NOTIFY_AT };
 }
-function kabinetOk(ip) { kabinetTries.delete(ip); }
+/* To'g'ri havola qulfni bo'shatadi, lekin UMUMIY sanoq (total) saqlanadi —
+   shuning uchun hujumchi har safar to'g'ri kirish bilan hisobni nolga
+   qaytara olmaydi.                                                         */
+function kabinetOk(ip) {
+  const rec = kabinetTries.get(ip);
+  if (!rec) return;
+  kabinetTries.set(ip, { n: 0, first: Date.now(), total: rec.total || 0 });
+}
 
 /* ---------------- Sessiyalar ---------------- */
 const sessions = new Map();               // token -> {userId, at}
@@ -265,6 +323,29 @@ async function ensureSeed() {
     await store.set('groups/' + g.id, g);
   }
 
+  /* Eski xavfli bog'lanishlarni tozalash:
+     agar o'quvchining "telegram" hisobi GURUH suhbatiga (manfiy chat id)
+     ulangan bo'lsa — u yerda xabarni hamma ko'radi. Bunday bog'lanishlar
+     uziladi va tarixga yoziladi.                                          */
+  {
+    const rows = await store.list('students/');
+    let cleaned = 0;
+    for (const r of rows) {
+      if (r.path.split('/').length !== 2) continue;
+      const st = r.data;
+      const id = st && st.telegram && String(st.telegram.id || '');
+      if (!id || id.charAt(0) !== '-') continue;
+      delete st.telegram;
+      await store.set(r.path, st);
+      try { await store.set('botstate/' + id, { chatId: id, step: 'start' }); } catch (e) { }
+      cleaned++;
+    }
+    if (cleaned) {
+      console.log('  Guruhga ulangan ' + cleaned + ' ta bog’lanish uzildi (shaxsiy ma’lumot guruhga ketmasin).');
+      await writeAudit(null, 'Xavfsizlik: guruhga ulangan bog’lanishlar uzildi', '', cleaned + ' ta');
+    }
+  }
+
   const users = await store.list('users/');
   if (!users.length) {
     const login = (process.env.SEED_DIRECTOR_LOGIN || 'admin').toLowerCase();
@@ -337,6 +418,17 @@ async function nextReceiptNo(ym) {
   return 'ALB-' + ym.replace('-', '') + '-' + String(max + 1).padStart(4, '0');
 }
 
+/* Pul qiymati: butun, musbat, cheksiz emas va me'yordan katta emas.
+   1e12 so'm (1 trillion) — markaz uchun aniq xato kiritish belgisi.       */
+const MONEY_MAX = Number(process.env.MONEY_MAX || 1e12);
+function money(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  const r = Math.round(n);
+  if (r <= 0 || r > MONEY_MAX) return null;
+  return r;
+}
+
 async function createPaymentServer(body, user) {
   const id = String(body.id || '').slice(0, 60) || ('pay_' + Date.now().toString(36));
   const existing = await store.get('payments/' + id);
@@ -344,8 +436,8 @@ async function createPaymentServer(body, user) {
 
   const date = String(body.date || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Sana noto’g’ri.');
-  const amount = Math.round(Number(body.amount) || 0);
-  if (amount <= 0) throw new Error('Summa noto’g’ri.');
+  const amount = money(body.amount);
+  if (amount == null) throw new Error('Summa noto’g’ri.');
   const student = await store.get('students/' + String(body.studentId || ''));
   if (!student) throw new Error('O’quvchi topilmadi.');
 
@@ -357,16 +449,25 @@ async function createPaymentServer(body, user) {
     return await applyAdvanceServer(id, student, body, user);
   }
 
+  let refSrc = null;
   if (type === 'refund') {
     if (!A.can(user, 'payment.void')) throw new Error('Pul qaytarish uchun alohida ruxsat kerak.');
-    const src = await store.get('payments/' + String(body.refOf || ''));
-    if (!src) throw new Error('Asl to’lov topilmadi.');
-    if (src.voided) throw new Error('Bekor qilingan to’lovdan qaytarib bo’lmaydi.');
+    refSrc = await store.get('payments/' + String(body.refOf || ''));
+    if (!refSrc) throw new Error('Asl to’lov topilmadi.');
+    if (refSrc.voided) throw new Error('Bekor qilingan to’lovdan qaytarib bo’lmaydi.');
+    // Qaytarish faqat ODDIY to'lovdan bo'ladi: qaytarishdan yoki avansdan emas
+    if (refSrc.type && refSrc.type !== 'payment') {
+      throw new Error('Faqat oddiy to’lovdan qaytarish mumkin.');
+    }
+    // Va faqat O'SHA o'quvchining to'lovidan
+    if (String(refSrc.studentId) !== String(student.id)) {
+      throw new Error('Bu to’lov boshqa o’quvchiga tegishli.');
+    }
     const rows = await store.list('payments/');
     const done = rows.map(x => x.data)
-      .filter(p => p && p.type === 'refund' && p.refOf === src.id && !p.voided)
+      .filter(p => p && p.type === 'refund' && p.refOf === refSrc.id && !p.voided)
       .reduce((s, p) => s + Math.round(p.amount), 0);
-    const cap = Math.max(0, Math.round(src.amount) - done);
+    const cap = Math.max(0, Math.round(refSrc.amount) - done);
     if (amount > cap) throw new Error('Qaytarish mumkin bo’lgan qoldiq: ' + cap + ' so’m');
   }
 
@@ -380,17 +481,31 @@ async function createPaymentServer(body, user) {
       paidMap[a.invoiceId] = (paidMap[a.invoiceId] || 0) + sign * Math.round(a.amount);
     });
   });
+  /* Takroriy invoiceId larni BIRLASHTIRAMIZ.
+     Aks holda bitta so'rovda bir hisobga ikki marta yozib, qoldiqdan
+     oshirib yuborish mumkin edi (100 000 lik hisobga 200 000).            */
+  const wanted = new Map();
+  for (const a of (body.allocations || [])) {
+    const iid = String((a && a.invoiceId) || '');
+    if (!iid) continue;
+    const v = money(a.amount);
+    if (v == null) continue;
+    wanted.set(iid, (wanted.get(iid) || 0) + v);
+  }
+
   const allocations = [];
   let allocSum = 0;
-  for (const a of (body.allocations || [])) {
-    const inv = await store.get('invoices/' + String(a.invoiceId || ''));
+  for (const [iid, want] of wanted) {
+    const inv = await store.get('invoices/' + iid);
     if (!inv) continue;
     if (inv.studentId !== student.id) throw new Error('Hisob boshqa o’quvchiga tegishli.');
-    let amt = Math.round(Number(a.amount) || 0);
-    if (amt <= 0) continue;
+    let amt = want;
+    const already = Math.round(paidMap[inv.id] || 0);
     if (type !== 'refund') {
-      const remaining = Math.max(0, Math.round(inv.final) - Math.round(paidMap[inv.id] || 0));
-      if (amt > remaining) amt = remaining;
+      const remaining = Math.max(0, Math.round(inv.final) - already);
+      if (amt > remaining) amt = remaining;                 // ortiqchasi avans bo'lib qoladi
+    } else {
+      if (amt > Math.max(0, already)) amt = Math.max(0, already);   // yozilganidan ortiq qaytarilmaydi
     }
     if (amt <= 0) continue;
     allocations.push({ invoiceId: inv.id, amount: amt });
@@ -633,6 +748,8 @@ async function guardWrite(user, p, method, next) {
   /* --- O'quvchi: shaxsiy kodni server beradi va u o'zgarmaydi --- */
   if (col === 'students' && method === 'PUT') {
     const data = Object.assign({}, next);
+    // Telegram bog'lanishini mijoz o'zgartira olmaydi — faqat /api/student/link* yo'llari
+    if (old && old.telegram) data.telegram = old.telegram; else delete data.telegram;
     if (old && kabinet.validCode(old.code)) {
       data.code = old.code;                       // mijoz kodni o'zgartira olmaydi
     } else if (!kabinet.validCode(data.code)) {
@@ -845,34 +962,60 @@ async function handleApi(req, res, url) {
      Kirishsiz ishlaydi. Kod 4 xonali bo'lgani uchun taxmin qilish xavfi bor:
      har bir IP uchun urinishlar qattiq cheklanadi, uzoq davom etsa qulflanadi
      va direktorga xabar boradi. Javobda telefon, ota-ona va manzil YO'Q.      */
+  /* ---------- O'quvchi kabineti ----------
+     MUHIM: 4 xonali kod bilan shaxsiy ma'lumot BERILMAYDI — u maxfiy emas.
+     Kabinet faqat bir martalik havola evaziga olingan sessiya bilan ochiladi. */
   if (route === 'kabinet' && req.method === 'POST') {
-    const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+    return send(res, 410, {
+      error: 'Kod bilan kirish o’chirilgan. Markazdan shaxsiy havola so’rang yoki ' +
+        'Telegram botdagi “Kabinet” tugmasini bosing.'
+    });
+  }
+
+  /* Havolani sessiyaga almashtirish (bir marta) */
+  if (route === 'kabinet/session' && req.method === 'POST') {
+    const ip = clientIp(req);
     const gate = kabinetGate(ip);
     if (!gate.ok) {
-      return send(res, 429, {
-        error: 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin qayta urinib ko’ring.'
-      });
+      return send(res, 429, { error: 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin urinib ko’ring.' });
     }
     const body = await readBody(req);
-    const code = kabinet.normCode(body.code);
-    if (!kabinet.validCode(code)) {
+    const r = await link.use(store, String(body.token || ''), { stamp, usedBy: 'web:' + ip });
+    if (!r.ok) {
       kabinetFail(ip);
-      return send(res, 400, { error: 'Kod ' + kabinet.CODE_LEN + ' ta raqamdan iborat.' });
-    }
-    const student = await kabinet.byCode(store, code);
-    if (!student) {
-      const f = kabinetFail(ip);
-      if (f.notify) {
-        await writeAudit(null, 'Kabinet: ko’p noto’g’ri kod', ip, f.n + ' ta urinish');
-        await notifyDirectors('Diqqat: ' + ip + ' manzilidan o’quvchi kabinetiga ' +
-          f.n + ' marta noto’g’ri kod kiritildi. Kodlarni taxmin qilishga urinish bo’lishi mumkin.');
-      }
-      await new Promise(r => setTimeout(r, 400));     // taxmin qilishni sekinlashtirish
-      return send(res, 404, { error: 'Bunday kod topilmadi. Administratordan so’rang.' });
+      await new Promise(x => setTimeout(x, 300));
+      return send(res, 401, {
+        error: r.reason === 'ishlatilgan' ? 'Bu havola allaqachon ishlatilgan.'
+          : r.reason === 'muddati' ? 'Havola muddati tugagan.' : 'Havola yaroqsiz.'
+      });
     }
     kabinetOk(ip);
-    const sum = await kabinet.summary(store, student);
-    return send(res, 200, sum);
+    const st = await store.get('students/' + r.studentId);
+    if (!st || st.status === 'o’chirilgan') return send(res, 404, { error: 'O’quvchi topilmadi.' });
+    const ses = await kabsess.create(store, { studentId: r.studentId, kind: 'student', stamp });
+    await writeAudit(null, 'Kabinet: sessiya ochildi',
+      (st.lastName || '') + ' ' + (st.firstName || ''), ip);
+    return send(res, 200, { ok: true, csrf: ses.csrf }, {
+      'Set-Cookie': kabsess.cookieHeader(ses.cookie, kabsess.TTL_MS / 1000)
+    });
+  }
+
+  /* Kabinet ma'lumoti — faqat o'z sessiyasi bilan */
+  if (route === 'kabinet/me' && req.method === 'GET') {
+    const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
+    if (!ses) return send(res, 401, { error: 'Kirish kerak.' });
+    const st = await store.get('students/' + ses.studentId);
+    if (!st || st.status === 'o’chirilgan') {
+      return send(res, 401, { error: 'Kirish kerak.' }, { 'Set-Cookie': kabsess.clearHeader() });
+    }
+    const sum = await kabinet.summary(store, st);
+    return send(res, 200, Object.assign({ csrf: ses.csrf }, sum));
+  }
+
+  if (route === 'kabinet/logout' && req.method === 'POST') {
+    const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
+    if (ses) await kabsess.revoke(store, ses.id, { stamp });
+    return send(res, 200, { ok: true }, { 'Set-Cookie': kabsess.clearHeader() });
   }
 
   /* Kirish sahifasi uchun ochiq ma'lumot: faqat markaz nomi.
@@ -1040,8 +1183,10 @@ async function handleApi(req, res, url) {
     const login = String(body.login || '').toLowerCase().trim();
     const pass = String(body.password || '');
     const gate = loginGate(req, login);
-    if (!gate.ok) {
-      return send(res, 429, { error: 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin qayta urinib ko’ring.' });
+    const ipg = ipGate(req);
+    if (!gate.ok || !ipg.ok) {
+      const wait = !gate.ok ? gate.wait : ipg.wait;
+      return send(res, 429, { error: 'Juda ko’p urinish. ' + wait + ' daqiqadan keyin qayta urinib ko’ring.' });
     }
     const users = await store.list('users/');
     const u = users.map(x => x.data).filter(x => String(x.login).toLowerCase() === login)[0];
@@ -1093,6 +1238,73 @@ async function handleApi(req, res, url) {
     await writeAudit(user, 'O’quvchi kodi yangilandi',
       (st.lastName || '') + ' ' + (st.firstName || ''), oldCode + ' → ' + code);
     return send(res, 200, { ok: true, code });
+  }
+
+  /* ---------- Telegram hisobini bog'lash ----------
+     4 xonali kod MAXFIY EMAS, shuning uchun u bilan bog'lanmaydi.
+     Administrator bir martalik havola yaratadi (24 soat, bir marta).   */
+  if (route === 'student/link' && req.method === 'POST') {
+    if (!A.can(user, 'student.edit')) return send(res, 403, { error: 'Sizda bu amal uchun ruxsat yo’q.' });
+    const body = await readBody(req);
+    const sid = String(body.studentId || '');
+    if (!/^[A-Za-z0-9_\-.]+$/.test(sid)) return send(res, 400, { error: 'O’quvchi noto’g’ri.' });
+    const st = await store.get('students/' + sid);
+    if (!st) return send(res, 404, { error: 'O’quvchi topilmadi.' });
+    const made = await link.create(store, { studentId: sid, byUserId: user.id, stamp });
+    const s0 = (await store.get('meta/settings')) || {};
+    const uname = String((s0.bot && s0.bot.username) || process.env.TELEGRAM_BOT_USERNAME || '').replace(/^@/, '');
+    await writeAudit(user, 'Bot: bog’lash havolasi yaratildi',
+      (st.lastName || '') + ' ' + (st.firstName || ''), 'id ' + made.id);   // token o'zi YOZILMAYDI
+    return send(res, 200, {
+      ok: true,
+      id: made.id,
+      expiresAt: made.expiresAt,
+      url: uname ? 'https://t.me/' + uname + '?start=' + made.token : '',
+      token: made.token                        // faqat shu javobda, bir marta ko'rsatiladi
+    });
+  }
+
+  if (route === 'student/unlink' && req.method === 'POST') {
+    if (!A.can(user, 'student.edit')) return send(res, 403, { error: 'Sizda bu amal uchun ruxsat yo’q.' });
+    const body = await readBody(req);
+    const sid = String(body.studentId || '');
+    const st = await store.get('students/' + sid);
+    if (!st) return send(res, 404, { error: 'O’quvchi topilmadi.' });
+    const r = await link.revoke(store, { studentId: sid, stamp });
+    if (!r.ok) return send(res, 400, { error: 'Bekor qilinmadi.' });
+    // kabinet sessiyalari ham darhol yopiladi
+    const closed = await kabsess.revokeForStudent(store, sid, { stamp });
+    await writeAudit(user, 'Kabinet: sessiyalar yopildi',
+      (st.lastName || '') + ' ' + (st.firstName || ''), closed + ' ta');
+    await writeAudit(user, 'Bot: bog’lanish bekor qilindi',
+      (st.lastName || '') + ' ' + (st.firstName || ''), r.chatId ? 'suhbat ' + r.chatId : '');
+    return send(res, 200, { ok: true });
+  }
+
+  /* Administrator so'rovni tasdiqlaydi: botdagi suhbat o'quvchiga bog'lanadi */
+  if (route === 'student/link-approve' && req.method === 'POST') {
+    if (!A.can(user, 'student.edit')) return send(res, 403, { error: 'Sizda bu amal uchun ruxsat yo’q.' });
+    const body = await readBody(req);
+    const sid = String(body.studentId || '');
+    const reqId = String(body.reqId || '');
+    const br = await store.get('botreq/' + reqId);
+    if (!br) return send(res, 404, { error: 'So’rov topilmadi.' });
+    const st = await store.get('students/' + sid);
+    if (!st) return send(res, 404, { error: 'O’quvchi topilmadi.' });
+    const at = await link.attach(store, {
+      studentId: sid, chatId: String(br.chatId), from: { id: br.tgUserId || br.chatId, username: br.username, first_name: br.name },
+      stamp, via: 'admin', force: true
+    });
+    if (!at.ok) return send(res, 400, { error: 'Bog’lanmadi.' });
+    if (at.replaced) await kabsess.revokeForStudent(store, sid, { stamp });
+    br.status = 'tasdiqlangan';
+    br.studentId = sid;
+    br.handledAt = stamp();
+    br.handledBy = user.id;
+    await store.set('botreq/' + reqId, br);
+    await writeAudit(user, 'Bot: o’quvchi ulandi',
+      (st.lastName || '') + ' ' + (st.firstName || ''), 'suhbat ' + br.chatId);
+    return send(res, 200, { ok: true });
   }
 
   /* ---------- Telegram guruhiga xabar ----------

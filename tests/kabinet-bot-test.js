@@ -75,19 +75,20 @@ function stamp() { return new Date(Date.now() + 5 * 3600 * 1000).toISOString().s
   ok('Kodlar takrorlanmadi', s1.code !== s2.code, s1.code + ' / ' + s2.code);
 
   /* ---------- 1. Ulanish ---------- */
-  section('1. /start dan keyin shaxsiy kod so’raladi');
-  await t.onMessage({ chat: { id: 555 }, text: '/start', from: { username: 'abdulloh' } });
-  ok('Kod so’raldi', /4 ta raqam|kod/i.test(last()), last().slice(0, 120));
-  ok('Namuna ko’rsatilgan', /4077/.test(last()), last().slice(0, 160));
+  const link = require('../server/link');
+  section('1. /start dan keyin bog’lash yo’li tushuntiriladi');
+  await t.onMessage({ chat: { id: 555, type: 'private' }, text: '/start', from: { username: 'abdulloh' } });
+  ok('Nima qilish kerakligi aytildi', /kod|havola/i.test(last()), last().slice(0, 140));
 
-  section('   Noto’g’ri kod');
-  const wrong = String(Number(s1.code) === 1111 ? 2222 : 1111);
-  await t.onMessage({ chat: { id: 555 }, text: wrong, from: {} });
-  ok('Topilmadi deyildi', /topilmadi/i.test(last()), last().slice(0, 120));
+  section('   4 xonali kod bog’lamaydi (u maxfiy emas)');
+  await t.onMessage({ chat: { id: 555, type: 'private' }, text: String(s1.code), from: {} });
+  ok('Kod rad etildi', /o’chirilgan|havola/i.test(last()), last().slice(0, 140));
   ok('Hech kimning ismi oshkor bo’lmadi', !/Bahodirov|Karimova/.test(last()));
+  ok('Bog’lanish yaratilmadi', !(await store.get('students/s1')).telegram);
 
-  section('   To’g’ri kod — darhol to’liq ma’lumot');
-  await t.onMessage({ chat: { id: 555 }, text: String(s1.code), from: { username: 'abdulloh' } });
+  section('   Bir martalik havola — darhol to’liq ma’lumot');
+  const mk1 = await link.create(store, { studentId: 's1', byUserId: 'usr_admin', stamp });
+  await t.onMessage({ chat: { id: 555, type: 'private' }, text: '/start ' + mk1.token, from: { username: 'abdulloh', id: 555 } });
   const info = last();
   ok('Ism chiqdi', /Bahodirov Abdulloh/.test(info), info.slice(0, 160));
   ok('Guruh chiqdi', /Bot guruhi/.test(info), info.slice(0, 300));
@@ -103,32 +104,36 @@ function stamp() { return new Date(Date.now() + 5 * 3600 * 1000).toISOString().s
   section('   Chat o’quvchiga bog’landi');
   const linked = await store.get('students/s1');
   eq('Telegram ID saqlandi', (linked.telegram || {}).id, '555');
-  await t.onMessage({ chat: { id: 555 }, text: 'Ma’lumotim', from: {} });
+  await t.onMessage({ chat: { id: 555, type: 'private' }, text: 'Ma’lumotim', from: {} });
   ok('"Ma’lumotim" tugmasi ishladi', /Bahodirov Abdulloh/.test(last()) && /Davomat/.test(last()));
-  await t.onMessage({ chat: { id: 555 }, text: '/start', from: {} });
-  ok('Qayta /start da kod so’ralmadi', !/4 ta raqam/.test(last()), last().slice(0, 120));
+  await t.onMessage({ chat: { id: 555, type: 'private' }, text: '/start', from: {} });
+  ok('Qayta /start da havola so’ralmadi', !/havola so’rang/.test(last()), last().slice(0, 120));
 
-  /* ---------- 2. Begona kod bilan boshqa o'quvchi ---------- */
+  /* ---------- 2. Har kim faqat o'zinikini ---------- */
   section('2. Har kim faqat o’z ma’lumotini oladi');
-  await t.onMessage({ chat: { id: 666 }, text: '/start', from: {} });
-  await t.onMessage({ chat: { id: 666 }, text: String(s2.code), from: {} });
+  const mk2 = await link.create(store, { studentId: 's2', byUserId: 'usr_admin', stamp });
+  await t.onMessage({ chat: { id: 666, type: 'private' }, text: '/start ' + mk2.token, from: { id: 666 } });
   ok('Ikkinchi chat ikkinchi o’quvchiga bog’landi', /Karimova Zuhra/.test(last()), last().slice(0, 140));
   ok('Birinchisining ma’lumoti chiqmadi', !/Bahodirov/.test(last()));
 
-  /* ---------- 3. Taxmin qilishdan himoya ---------- */
-  section('3. Kodni taxmin qilishdan himoya');
-  await t.onMessage({ chat: { id: 777 }, text: '/start', from: {} });
+  section('   Begona odam mavjud bog’lanishni egallay olmaydi');
+  await t.onMessage({ chat: { id: 777, type: 'private' }, text: '/start', from: { id: 777 } });
+  await t.onMessage({ chat: { id: 777, type: 'private' }, text: String(s1.code), from: { id: 777 } });
+  const stillOne = await store.get('students/s1');
+  eq('Begona chat bog’lanmadi', (stillOne.telegram || {}).id, '555');
+  ok('Begonaga ma’lumot berilmadi', !/Bahodirov/.test(last()), last().slice(0, 140));
+
+  /* ---------- 3. Havolani taxmin qilishdan himoya ---------- */
+  section('3. Havolani taxmin qilishdan himoya');
   let locked = false;
   for (let i = 0; i < 8; i++) {
-    const guess = String(3000 + i) === String(s1.code) ? '3999' : String(3000 + i);
-    await t.onMessage({ chat: { id: 777 }, text: guess, from: {} });
+    await t.onMessage({
+      chat: { id: 888, type: 'private' }, from: { id: 888 },
+      text: 'lt00000000000' + i + '.AAAAAAAAAAAAAAAAAAAAAA'
+    });
     if (/Juda ko’p urinish/.test(last())) { locked = true; break; }
   }
   ok('Ko’p urinishdan keyin to’xtatildi', locked, last().slice(0, 120));
-  await t.onMessage({ chat: { id: 777 }, text: String(s1.code), from: {} });
-  ok('Qulf paytida to’g’ri kod ham o’tmadi', /Juda ko’p urinish/.test(last()), last().slice(0, 120));
-  const stillOne = await store.get('students/s1');
-  eq('Begona chat bog’lanmadi', (stillOne.telegram || {}).id, '555');
 
   /* ---------- 4. Saytdagi formadan xabar ---------- */
   section('4. Saytdagi formadan kelgan murojaat botga tushadi');

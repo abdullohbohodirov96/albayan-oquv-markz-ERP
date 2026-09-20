@@ -35,7 +35,21 @@ async function req(path, opts = {}) {
 const put = (path, data, cookie, extra) => req('/api/doc?path=' + encodeURIComponent(path),
   { method: 'PUT', cookie, body: Object.assign({ data }, extra || {}) });
 const get = (path, cookie) => req('/api/doc?path=' + encodeURIComponent(path), { cookie });
-const kab = (code, ip) => req('/api/kabinet', { method: 'POST', body: { code }, ip });
+/* Kabinet endi kod bilan emas, bir martalik havola bilan ochiladi:
+   administrator havola yaratadi → havola sessiyaga almashadi → ma'lumot. */
+let DIRC = null;
+async function kabLink(studentId) {
+  return req('/api/student/link', { method: 'POST', cookie: DIRC, body: { studentId } });
+}
+async function kab(studentId, ip) {
+  const mk = await kabLink(studentId);
+  if (mk.status !== 200) return mk;
+  const ses = await req('/api/kabinet/session', { method: 'POST', body: { token: mk.json.token }, ip });
+  if (ses.status !== 200) return ses;
+  return req('/api/kabinet/me', { cookie: ses.cookie, ip });
+}
+/* Eski usul: kod bilan ochishga urinish (endi ishlamasligi kerak) */
+const kabByCode = (code, ip) => req('/api/kabinet', { method: 'POST', body: { code }, ip });
 async function login(l, p) {
   const r = await req('/api/login', { method: 'POST', body: { login: l, password: p } });
   return r.status === 200 ? r.cookie : null;
@@ -86,12 +100,16 @@ const ID = n => R + '_' + n;
   eq('Qo’lda yozilgan kod qabul qilinmadi', forced.code, st1.code);
 
   /* ---------- 2. Kabinet ---------- */
-  section('2. Kod bo’yicha ma’lumot (kirishsiz)');
-  const wrongLen = await kab('40');
-  eq('Qisqa kod rad etildi', wrongLen.status, 400);
+  DIRC = dir;
+  section('2. Kabinet faqat bir martalik havola bilan ochiladi');
+  const byCode = await kabByCode(st1.code);
+  ok('4 xonali kod bilan ochilmaydi', byCode.status === 410 || byCode.status === 403, String(byCode.status));
+  ok('Javobda ism yo’q', !/Bahodirov/.test(byCode.text), byCode.text.slice(0, 120));
+  const noSes = await req('/api/kabinet/me');
+  eq('Sessiyasiz ma’lumot berilmaydi', noSes.status, 401);
 
-  const r1 = await kab(st1.code);
-  eq('To’g’ri kod bilan ochildi', r1.status, 200);
+  const r1 = await kab(ID('s1'));
+  eq('Havola bilan ochildi', r1.status, 200);
   const d = r1.json || {};
   eq('Ism to’g’ri', (d.student || {}).name, 'Bahodirov Abdulloh');
   eq('Kod javobda', (d.student || {}).code, String(st1.code));
@@ -111,8 +129,8 @@ const ID = n => R + '_' + n;
   ok('Boshqa o’quvchi yo’q', !/Zuhra|Karimova/.test(r1.text));
 
   section('   Har kim faqat o’zinikini ko’radi');
-  const r2 = await kab(st2.code);
-  eq('Ikkinchi kod ishladi', r2.status, 200);
+  const r2 = await kab(ID('s2'));
+  eq('Ikkinchi o’quvchi havolasi ishladi', r2.status, 200);
   eq('Ikkinchi o’quvchi ismi', (r2.json.student || {}).name, 'Karimova Zuhra');
   ok('Birinchisining ismi chiqmadi', !/Bahodirov/.test(r2.text));
 
@@ -125,7 +143,7 @@ const ID = n => R + '_' + n;
   const myInv = Object.values(inv.json.items || {}).filter(i => i.studentId === ID('s1'))[0];
   ok('O’quvchiga hisob chiqdi', !!myInv, JSON.stringify(Object.keys(inv.json.items || {}).length));
 
-  const r3 = await kab(st1.code);
+  const r3 = await kab(ID('s1'));
   const f = r3.json.finance;
   eq('Qarz hisobga mos', f.debt, myInv ? Math.round(myInv.final) : 0);
   eq('Keyingi to’lov summasi', f.next.amount, myInv ? Math.round(myInv.final) : 0);
@@ -141,7 +159,7 @@ const ID = n => R + '_' + n;
     }
   });
   ok('To’lov qabul qilindi', payRes.status === 200, payRes.text.slice(0, 120));
-  const r4 = await kab(st1.code);
+  const r4 = await kab(ID('s1'));
   eq('Qarz kamaydi', r4.json.finance.debt, (myInv ? Math.round(myInv.final) : 0) - 100000);
   eq('To’langan ko’rinadi', r4.json.finance.received, 100000);
 
@@ -155,7 +173,7 @@ const ID = n => R + '_' + n;
       '2026-09-14': { attendance: { [ID('m1')]: { status: 'sababli' } } }
     }
   }, dir);
-  const r5 = await kab(st1.code);
+  const r5 = await kab(ID('s1'));
   const a = r5.json.attendance;
   eq('Jami dars', a.total, 4);
   eq('Keldi (kechikdi bilan)', a.attended, 2);
@@ -166,30 +184,66 @@ const ID = n => R + '_' + n;
   ok('Oxirgi darslar ro’yxati', (a.last || []).length === 4, JSON.stringify(a.last));
 
   /* ---------- 4. Himoya ---------- */
-  section('4. Kodni taxmin qilishdan himoya');
-  // Har bir ishga tushirish uchun boshqa manzil — oldingi qulf xalaqit bermasin
-  const FAKE_IP = '203.0.113.' + (2 + Math.floor(Math.random() * 250));   // RFC 5737 sinov manzili
-  let locked = false, lockAt = 0;
-  for (let i = 0; i < 12; i++) {
-    const guess = String(1000 + i) === String(st1.code) ? '9998' : String(1000 + i);
-    const r = await kab(guess, FAKE_IP);
-    if (r.status === 429) { locked = true; lockAt = i + 1; break; }
+  section('   Ishlatilgan havola qayta ishlamaydi');
+  const once = await kabLink(ID('s1'));
+  const s1a = await req('/api/kabinet/session', { method: 'POST', body: { token: once.json.token } });
+  eq('Birinchi marta ishladi', s1a.status, 200);
+  const s1b = await req('/api/kabinet/session', { method: 'POST', body: { token: once.json.token } });
+  eq('Ikkinchi marta rad etildi', s1b.status, 401);
+
+  section('   Bog’lanish bekor qilinsa, sessiya ham yopiladi');
+  const live = await kabLink(ID('s2'));
+  const liveSes = await req('/api/kabinet/session', { method: 'POST', body: { token: live.json.token } });
+  eq('Sessiya ochildi', liveSes.status, 200);
+  eq('Ma’lumot ko’rinadi', (await req('/api/kabinet/me', { cookie: liveSes.cookie })).status, 200);
+  const un = await req('/api/student/unlink', { method: 'POST', cookie: dir, body: { studentId: ID('s2') } });
+  eq('Bekor qilindi', un.status, 200);
+  const after = await req('/api/kabinet/me', { cookie: liveSes.cookie });
+  eq('Eski sessiya endi ishlamaydi', after.status, 401);
+  ok('Javobda ism yo’q', !/Karimova/.test(after.text), after.text.slice(0, 120));
+
+
+  /* Qulflash sinovi ALOHIDA server nusxasida bajariladi: u IP ni qulflaydi,
+     shuning uchun asosiy serverga va boshqa sinovlarga xalaqit bermaydi.   */
+  section('   Havolani taxmin qilishdan himoya (alohida server nusxasida)');
+  {
+    const { spawn } = require('child_process');
+    const fs2 = require('fs'); const os2 = require('os'); const path2 = require('path');
+    const dir2 = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'albayan-kablock-'));
+    const port2 = 3600 + Math.floor(Math.random() * 300);
+    const srv = spawn(process.execPath, [path2.join(__dirname, '..', 'server', 'index.js')], {
+      env: Object.assign({}, process.env, {
+        DATA_DIR: dir2, DB_DRIVER: 'sqlite', PORT: String(port2),
+        BACKUP_DIR: path2.join(dir2, 'backups'), SEED_DIRECTOR_PASSWORD: 'Albyana2026!'
+      }),
+      stdio: 'ignore'
+    });
+    const B2 = 'http://localhost:' + port2;
+    const tryToken = (tok) => fetch(B2 + '/api/kabinet/session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: tok })
+    }).then(r => r.status).catch(() => 0);
+
+    for (let i = 0; i < 40; i++) {                      // server ko'tarilguncha kutamiz
+      const st = await fetch(B2 + '/api/health').then(r => r.status).catch(() => 0);
+      if (st === 200) break;
+      await new Promise(r => setTimeout(r, 300));
+    }
+    let locked = false, lockAt = 0;
+    for (let i = 0; i < 12; i++) {
+      const st = await tryToken('lt00000000000' + i + '.AAAAAAAAAAAAAAAAAAAAAA');
+      if (st === 429) { locked = true; lockAt = i + 1; break; }
+    }
+    ok('Ko’p noto’g’ri havoladan keyin qulflandi (' + lockAt + '-urinish)', locked);
+    const st2 = await tryToken('lt000000000099.AAAAAAAAAAAAAAAAAAAAAA');
+    eq('Qulf paytida ham kutadi', st2, 429);
+    try { srv.kill(); } catch (e) { }
+    try { fs2.rmSync(dir2, { recursive: true, force: true }); } catch (e) { }
   }
-  ok('Ko’p noto’g’ri urinishdan keyin qulflandi (' + lockAt + '-urinish)', locked);
-  const afterLock = await kab(st1.code, FAKE_IP);
-  eq('Qulf paytida to’g’ri kod ham kutadi', afterLock.status, 429);
-  ok('Javobda ogohlantirish bor', /urinish/i.test(afterLock.text), afterLock.text);
-
-  section('   Noto’g’ri kod javobi hech narsani oshkor qilmaydi');
-  ok('Javobda ism yo’q', !/Bahodirov|Karimova/.test(afterLock.text));
-
-  section('   Qulf faqat o’sha manzilga tegishli');
-  const other = await kab(st1.code);
-  eq('Boshqa manzil ishlayveradi', other.status, 200);
 
   console.log(out.join('\n'));
   console.log('\n' + '─'.repeat(52));
   console.log((fail === 0 ? '✓ HAMMASI O’TDI' : '✗ XATOLAR BOR') + ` — ${pass} ta o'tdi, ${fail} ta xato`);
-  console.log('Eslatma: qulf sinovi alohida (soxta) IP bilan bajarildi.');
+  console.log('Eslatma: qulf sinovi alohida (soxta) IP bilan bajarildi; haqiqiy odamga xabar yuborilmadi.');
   process.exit(fail === 0 ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });

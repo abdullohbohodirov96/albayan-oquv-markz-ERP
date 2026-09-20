@@ -66,58 +66,68 @@ const ID = n => R + '_' + n;
   page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi: ' + e.message); });
 
   /* ---------- 1. Kirish sahifasidan kabinetga ---------- */
-  section('1. Kirish sahifasida "O’quvchimisiz?" havolasi');
-  await page.goto(BASE + '#kirish');
-  await page.waitForSelector('#login-user', { timeout: 20000 });
-  const hasLink = await page.evaluate(() =>
-    !!Array.from(document.querySelectorAll('button')).find(b => /Shaxsiy kod/.test(b.textContent)));
-  ok('Havola bor', hasLink);
-  await page.evaluate(() => {
-    Array.from(document.querySelectorAll('button')).find(b => /Shaxsiy kod/.test(b.textContent)).click();
-  });
-  await page.waitForSelector('#kab-code', { timeout: 10000 });
-  ok('Kabinet sahifasi ochildi', true);
-  ok('Kirish talab qilinmadi (parol maydoni yo’q)',
-    !(await page.evaluate(() => !!document.getElementById('login-pass'))));
+  section('1. Kabinet sahifasi kod so’ramaydi');
+  await page.goto(BASE + '#kabinet');
+  await page.waitForSelector('.kabinet', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  const noCode = await page.evaluate(() => ({
+    codeInput: !!document.getElementById('kab-code'),
+    text: document.body.innerText
+  }));
+  ok('Kod maydoni yo’q', !noCode.codeInput);
+  ok('Qanday kirish tushuntirilgan', /havola/i.test(noCode.text), noCode.text.slice(0, 200));
+  ok('Parol maydoni yo’q', !(await page.evaluate(() => !!document.getElementById('login-pass'))));
 
-  /* ---------- 2. Noto'g'ri kod ---------- */
-  section('2. Noto’g’ri kod');
-  await page.fill('#kab-code', '0001');
-  await page.click('.kabinet button[type=submit]');
+  /* ---------- 2. Soxta havola ---------- */
+  section('2. Soxta havola bilan ochilmaydi');
+  await page.goto(BASE + '#kabinet?t=lt000000000000.AAAAAAAAAAAAAAAAAAAAAA');
+  await page.waitForSelector('.kabinet', { timeout: 20000 });
   await page.waitForTimeout(900);
-  const errText = await page.evaluate(() => {
-    const e = document.querySelector('.kabinet .err-msg');
-    return e && !e.hidden ? e.textContent : '';
-  });
-  ok('Xato yozuvi chiqdi', /topilmadi|kod/i.test(errText), JSON.stringify(errText));
-  ok('Hech kimning ismi chiqmadi', !/Bahodirov/.test(await page.evaluate(() => document.body.innerText)));
+  const badTxt = await page.evaluate(() => document.body.innerText);
+  ok('Ism chiqmadi', !/Bahodirov/.test(badTxt), badTxt.slice(0, 200));
+  ok('Xato aytildi', /yaroqsiz|muddati|ishlatilgan|havola/i.test(badTxt), badTxt.slice(0, 200));
 
-  /* ---------- 3. To'g'ri kod ---------- */
-  section('3. To’g’ri kod — ma’lumot chiqadi');
-  await page.fill('#kab-code', code);
-  await page.click('.kabinet button[type=submit]');
-  await page.waitForSelector('.kab-card', { timeout: 10000 });
+  /* ---------- 3. To'g'ri havola ---------- */
+  section('3. Bir martalik havola — ma’lumot chiqadi');
+  const mk = await fetch('http://localhost:' + PORT + '/api/student/link', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: dir },
+    body: JSON.stringify({ studentId: ID('s') })
+  }).then(r => r.json());
+  ok('Havola yaratildi', !!(mk && mk.token), JSON.stringify(mk).slice(0, 160));
+  if (!mk || !mk.token) { console.log(out.join('\n')); console.log('Havola yaratilmadi — sinov to’xtadi.'); process.exit(1); }
+
+  await page.goto(BASE + '#kabinet?t=' + mk.token);
+  await page.waitForSelector('.kab-card', { timeout: 15000 });
   const txt = await page.evaluate(() => document.querySelector('.kab-card').innerText);
   ok('Ism ko’rindi', /Bahodirov Abdulloh/.test(txt), txt.slice(0, 120));
-  ok('Kod ko’rindi', txt.indexOf(code) >= 0, txt.slice(0, 120));
   ok('Guruh ko’rindi', /Sayt guruhi/.test(txt), txt.slice(0, 250));
   ok('O’qituvchi ko’rindi', /Ustoz Sayt/.test(txt));
   ok('Dars vaqti ko’rindi', /16:00–17:30/.test(txt));
   ok('To’lov bo’limi bor', /To’lov|Qarz/.test(txt));
   ok('Davomat bo’limi bor', /Davomat/i.test(txt));
   ok('Telefon raqami ko’rsatilmadi', !/998901119988/.test(txt), txt.slice(0, 300));
+  ok('Havola manzil satrida qolmadi', !/[?&]t=/.test(await page.evaluate(() => location.hash)),
+    await page.evaluate(() => location.hash));
   await page.screenshot({ path: path.join(SHOTS, 'kabinet-390.png'), fullPage: true });
 
   const noScroll = await page.evaluate(() =>
     document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok('Sahifa yon tomonga siljimadi', noScroll <= 1, String(noScroll));
 
-  /* ---------- 4. Havola orqali ---------- */
-  section('4. Havola orqali to’g’ridan-to’g’ri');
-  await page.goto(BASE + '#kabinet?kod=' + code);
+  /* ---------- 4. Sessiya saqlanadi, havola qayta ishlamaydi ---------- */
+  section('4. Sessiya saqlanadi, havola esa bir marta ishlaydi');
+  await page.goto(BASE + '#kabinet');
   await page.waitForSelector('.kab-card', { timeout: 15000 });
-  const txt2 = await page.evaluate(() => document.querySelector('.kab-card').innerText);
-  ok('Havoladan ochilganda ham chiqdi', /Bahodirov Abdulloh/.test(txt2), txt2.slice(0, 120));
+  ok('Qayta kirganda sessiya bilan ochildi', true);
+
+  const reuse = await page.evaluate(async (tok) => {
+    const r = await fetch('api/kabinet/session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: tok }), credentials: 'same-origin'
+    });
+    return r.status;
+  }, mk.token);
+  eq('Ishlatilgan havola rad etildi', reuse, 401);
 
   /* ---------- 5. Xodimlar tizimiga kirish mumkin emas ---------- */
   section('5. Kabinet xodimlar tizimini ochmaydi');
@@ -136,7 +146,7 @@ const ID = n => R + '_' + n;
   section('6. 360 va 430 px');
   for (const w of [360, 430]) {
     await page.setViewportSize({ width: w, height: 860 });
-    await page.goto(BASE + '#kabinet?kod=' + code);
+    await page.goto(BASE + '#kabinet');
     await page.waitForSelector('.kab-card', { timeout: 15000 });
     const sx = await page.evaluate(() =>
       document.documentElement.scrollWidth - document.documentElement.clientWidth);

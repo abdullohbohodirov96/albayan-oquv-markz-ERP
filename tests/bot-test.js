@@ -68,33 +68,32 @@ function lastTo(chatId) {
   ok('Administrator uchun so’rov yaratildi', !!req && req.status === 'kutilmoqda');
   ok('O’quvchiga kutish haqida aytildi', /administrator/i.test(lastTo(100)), lastTo(100));
 
-  /* ---------- 2. Bir martalik kod ---------- */
-  section('2. Bir martalik kod bilan ulash');
-  const code = bot.makeCode();
-  ok('Kod 6 belgidan iborat', code.length === 6, code);
-  ok('Chalkash harflar yo’q (O, 0, I, 1)', !/[O0I1]/.test(code), code);
-  s1.botLink = { code, createdAt: stamp(), expiresAt: new Date(Date.now() + 3600e3).toISOString() };
-  await store.set('students/s1', s1);
+  /* ---------- 2. Bir martalik havola bilan ulash ---------- */
+  section('2. Bir martalik havola (token) bilan ulash');
+  const link = require('../server/link');
 
   await msg(200, '/start');
-  await msg(200, 'XXXXXX');
-  ok('Noto’g’ri kod rad etildi', /topilmadi|muddati/i.test(lastTo(200)), lastTo(200));
-  const notLinked = await store.get('students/s1');
-  ok('Noto’g’ri kodda ulanmadi', !notLinked.telegram);
+  await msg(200, '4077');                                  // 4 xonali kod — endi bog'lamaydi
+  ok('Kod bilan bog’lanmaydi', !(await store.get('students/s1')).telegram,
+    JSON.stringify((await store.get('students/s1')).telegram));
+  ok('Nima qilish kerakligi aytiladi', /havola|administrator/i.test(lastTo(200)), lastTo(200).slice(0, 120));
 
-  await msg(200, code.toLowerCase());                    // kichik harf ham ishlasin
+  await msg(200, 'lt000000000000.AAAAAAAAAAAAAAAAAAAAAA');  // soxta havola
+  ok('Soxta havola rad etildi', /yaroqsiz|muddati|ishlatilgan/i.test(lastTo(200)), lastTo(200).slice(0, 120));
+  ok('Soxta havolada ulanmadi', !(await store.get('students/s1')).telegram);
+
+  const mk = await link.create(store, { studentId: 's1', byUserId: 'usr_admin', stamp });
+  await msg(200, '/start ' + mk.token);
   const linked = await store.get('students/s1');
-  ok('To’g’ri kod bilan ulandi', !!(linked.telegram && linked.telegram.id === '200'),
+  ok('Havola bilan ulandi', !!(linked.telegram && linked.telegram.id === '200'),
     JSON.stringify(linked.telegram));
-  ok('Ulanish "kod" orqali deb yozildi', linked.telegram.via === 'kod');
-  ok('Kod ishlatilgan deb belgilandi', !!linked.botLink.usedAt);
+  ok('Ulanish "havola" orqali deb yozildi', linked.telegram.via === 'havola', linked.telegram.via);
+  ok('Barqaror Telegram identifikatori saqlandi', !!linked.telegram.tgUserId, JSON.stringify(linked.telegram));
   ok('Boshqa o’quvchi ulanmadi', !(await store.get('students/s2')).telegram);
 
-  section('   Ishlatilgan va muddati o’tgan kod');
-  ok('Ishlatilgan kod endi yaramaydi', !(await B.studentByCode(code)));
-  s2.botLink = { code: 'ABCDEF', createdAt: stamp(), expiresAt: new Date(Date.now() - 1000).toISOString() };
-  await store.set('students/s2', s2);
-  ok('Muddati o’tgan kod yaramaydi', !(await B.studentByCode('ABCDEF')));
+  section('   Ishlatilgan havola qayta yaramaydi');
+  const used = await link.use(store, mk.token, { stamp });
+  ok('Ikkinchi marta ishlatib bo’lmaydi', !used.ok && used.reason === 'ishlatilgan', JSON.stringify(used));
 
   /* ---------- 3. To'lov ma'lumoti (yangi hujjat tuzilishi) ---------- */
   section('3. To’lov holati to’g’ri hisoblanadi');
