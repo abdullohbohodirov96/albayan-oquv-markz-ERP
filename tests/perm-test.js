@@ -184,12 +184,14 @@ async function dbDoc(path, dirCookie) {
 
   /* ================= 3. SHAXSIY SUHBAT ================= */
   section('3. Shaxsiy suhbatni faqat ishtirokchilar ko’radi');
-  const CH = 'chats/pchat_dir_bux';
+  // har bir yurgizishda yangi suhbat — sinov qayta-qayta ishlaydi
+  const CHID = 'pchat_dir_bux_' + Date.now().toString(36);
+  const CH = 'chats/' + CHID;
   await put(CH, {
-    id: 'pchat_dir_bux', type: 'direct', members: ['usr_admin', 'usr_pbux'],
+    id: CHID, type: 'direct', members: ['usr_admin', 'usr_pbux'],
     messages: [], readAt: {}, updatedAt: '2026-09-19 10:00'
   }, dir);
-  await sendMsg('pchat_dir_bux', 'Maxfiy gap', dir);   // xabar faqat shu amal orqali
+  await sendMsg(CHID, 'Maxfiy gap', dir);   // xabar faqat shu amal orqali
 
   const chatByBux = await get(CH, bux);
   ok('Ishtirokchi o’qiy oladi', chatByBux.status === 200 && !!chatByBux.json.data, chatByBux.text.slice(0, 120));
@@ -200,15 +202,15 @@ async function dbDoc(path, dirCookie) {
   ok('Xabar matni javobga tushmadi', !/Maxfiy gap/.test(chatByUstoz.text), chatByUstoz.text.slice(0, 160));
 
   const chatsCol = await req('/api/collection?name=chats', { cookie: ustoz });
-  ok('Ro’yxatda ham ko’rinmadi', !(chatsCol.json.items || {}).pchat_dir_bux);
+  ok('Ro’yxatda ham ko’rinmadi', !(chatsCol.json.items || {})[CHID]);
   ok('Ro’yxatda xabar matni yo’q', !/Maxfiy gap/.test(chatsCol.text));
 
   const boot = await req('/api/bootstrap', { cookie: ustoz });
-  ok('Bootstrap’da ham yo’q', !((boot.json.col.chats || {}).pchat_dir_bux));
+  ok('Bootstrap’da ham yo’q', !((boot.json.col.chats || {})[CHID]));
 
   section('   O’zini begona suhbatga qo’sha olmaydi');
   const joinTry = await put(CH, {
-    id: 'pchat_dir_bux', type: 'direct', members: ['usr_admin', 'usr_pbux', 'usr_pust'],
+    id: CHID, type: 'direct', members: ['usr_admin', 'usr_pbux', 'usr_pust'],
     messages: [{ id: 'm1', from: 'usr_admin', text: 'Maxfiy gap', at: '2026-09-19 10:00' }],
     readAt: {}, updatedAt: '2026-09-19 11:00'
   }, ustoz);
@@ -217,11 +219,11 @@ async function dbDoc(path, dirCookie) {
   eq('A’zolar ro’yxati o’zgarmadi', (afterJoin.members || []).join(','), 'usr_admin,usr_pbux');
 
   const wipeTry = await put(CH, {
-    id: 'pchat_dir_bux', type: 'direct', members: ['usr_admin', 'usr_pbux'],
+    id: CHID, type: 'direct', members: ['usr_admin', 'usr_pbux'],
     messages: [], readAt: {}, updatedAt: '2026-09-19 12:00'
   }, ustoz);
   eq('Begona xabarlarni o’chira olmadi', wipeTry.status, 403);
-  const wipeBySelf = await sendMsg('pchat_dir_bux', 'Men kirdim', ustoz);
+  const wipeBySelf = await sendMsg(CHID, 'Men kirdim', ustoz);
   eq('Begona xabar yubora olmadi', wipeBySelf.status, 403);
   eq('Xabar joyida', ((await dbDoc(CH, dir)).messages || []).length, 1);
   const chatDel = await del(CH, ustoz);
