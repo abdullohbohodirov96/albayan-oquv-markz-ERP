@@ -12,6 +12,12 @@ const CODE_LEN = 4;
 const MIN = Math.pow(10, CODE_LEN - 1);          // 1000
 const MAX = Math.pow(10, CODE_LEN) - 1;          // 9999
 
+/** Telegram HTML uchun xavfsiz matn — ism yoki izohda < > & bo'lsa buzilmasin */
+function esc(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function normCode(t) {
   return String(t == null ? '' : t).replace(/\D/g, '');
 }
@@ -211,16 +217,16 @@ async function summary(store, student) {
 /** Telegram uchun matn ko'rinishi */
 function summaryText(sum) {
   const L = [];
-  L.push('<b>' + sum.student.name + '</b>  ·  kod: <code>' + sum.student.code + '</code>');
+  L.push('<b>' + esc(sum.student.name) + '</b>  ·  kod: <code>' + esc(sum.student.code) + '</code>');
   L.push('');
   if (sum.groups.length) {
     L.push('<b>Guruhlaringiz</b>');
     sum.groups.forEach(g => {
-      L.push('• ' + (g.code ? g.code + ' · ' : '') + g.name +
-        (g.teacher ? ' — ' + g.teacher : ''));
+      L.push('• ' + (g.code ? esc(g.code) + ' · ' : '') + esc(g.name) +
+        (g.teacher ? ' — ' + esc(g.teacher) : ''));
       const when = [g.daysText, (g.startTime && g.endTime) ? g.startTime + '–' + g.endTime : '']
         .filter(Boolean).join('  ');
-      if (when) L.push('   ' + when + (g.room ? '  ·  ' + g.room : ''));
+      if (when) L.push('   ' + esc(when) + (g.room ? '  ·  ' + esc(g.room) : ''));
     });
   } else {
     L.push('Hozircha guruhga yozilmagansiz.');
@@ -267,5 +273,5 @@ function summaryText(sum) {
 
 module.exports = {
   CODE_LEN, normCode, validCode, ensureCode, ensureAllCodes, byCode,
-  summary, summaryText, studentsOf, codeMap
+  summary, summaryText, studentsOf, codeMap, esc
 };
