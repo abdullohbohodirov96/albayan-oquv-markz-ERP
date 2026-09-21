@@ -1145,7 +1145,45 @@
     'Ustoz qo’shish': ['Добавить преподавателя', 'Add teacher', 'إضافة معلّم'],
     'Ustoz profili yo’q': ['Профилей преподавателей нет', 'No teacher profiles', 'لا توجد ملفات معلّمين'],
     'Saytda ko’rinadigan ustozlarni qo’shing.': ['Добавьте преподавателей, которые видны на сайте.', 'Add the teachers shown on the website.', 'أضف المعلّمين الظاهرين في الموقع.'],
-    'Saytdagi formadan kelgan murojaatlar shu suhbatga yuboriladi. Raqamni bilish uchun botga /id deb yozing. Bir nechta bo’lsa vergul bilan.': ['Обращения с формы сайта отправляются в этот чат. Чтобы узнать номер, напишите боту /id. Если их несколько — через запятую.', 'Leads from the website form are sent to this chat. Send /id to the bot to learn the number. Separate several with commas.', 'تُرسل الطلبات الواردة من نموذج الموقع إلى هذه المحادثة. أرسل /id إلى البوت لمعرفة الرقم. افصل بين الأرقام بفواصل.']
+    'Saytdagi formadan kelgan murojaatlar shu suhbatga yuboriladi. Raqamni bilish uchun botga /id deb yozing. Bir nechta bo’lsa vergul bilan.': ['Обращения с формы сайта отправляются в этот чат. Чтобы узнать номер, напишите боту /id. Если их несколько — через запятую.', 'Leads from the website form are sent to this chat. Send /id to the bot to learn the number. Separate several with commas.', 'تُرسل الطلبات الواردة من نموذج الموقع إلى هذه المحادثة. أرسل /id إلى البوت لمعرفة الرقم. افصل بين الأرقام بفواصل.'],
+
+    /* --- Ochiq sayt: hero, bo'limlar va ariza --- */
+    'Toshkentda arab tili': ['Арабский язык в Ташкенте', 'Arabic in Tashkent', 'اللغة العربية في طشقند'],
+    'Qur’on tili — boshlang’ichdan suhbatgacha. Kichik guruhlar, tajribali ustozlar va har bir o’quvchi uchun aniq natija rejasi.': ['Язык Корана — от начального уровня до свободной беседы. Малые группы, опытные преподаватели и понятный план результата для каждого ученика.', 'The language of the Qur’an — from beginner to conversation. Small groups, experienced teachers and a clear plan of results for every student.', 'لغة القرآن — من المبتدئ إلى المحادثة. مجموعات صغيرة ومعلّمون ذوو خبرة وخطة نتائج واضحة لكل طالب.'],
+    'Darajangizni aniqlang': ['Определите свой уровень', 'Find your level', 'حدّد مستواك'],
+    'Daraja testi': ['Тест на уровень', 'Level test', 'اختبار المستوى'],
+    'Ustozlar': ['Преподаватели', 'Teachers', 'المعلّمون'],
+    'Dars vaqtlari': ['Расписание занятий', 'Lesson times', 'مواعيد الدروس'],
+    'Har bir dars 1 soat 30 daqiqa.': ['Каждое занятие — 1 час 30 минут.', 'Each lesson lasts 1 hour 30 minutes.', 'مدة كل درس ساعة ونصف.'],
+    'Darslarni Misrda tahsil olgan, ona tili arab tili bo’lgan ustozlar olib boradi. Erkaklar va ayollar guruhlari uchun alohida ustozlar bor.': ['Занятия ведут преподаватели — носители арабского языка, получившие образование в Египте. Для мужских и женских групп есть отдельные преподаватели.', 'Lessons are taught by native Arabic speakers educated in Egypt. Men’s and women’s groups have their own teachers.', 'يقوم بالتدريس معلّمون ناطقون بالعربية تلقّوا تعليمهم في مصر. وللمجموعات الرجالية والنسائية معلّمون مستقلون.'],
+    'Ustozlar ro’yxati tez orada.': ['Список преподавателей скоро появится.', 'The list of teachers is coming soon.', 'قائمة المعلّمين قريباً.'],
+    'Kurslar ro’yxati tez orada. Ariza qoldiring — o’zimiz bog’lanamiz.': ['Список курсов скоро появится. Оставьте заявку — мы свяжемся с вами.', 'The course list is coming soon. Leave a request and we will contact you.', 'قائمة الدورات قريباً. اترك طلبك وسنتواصل معك.'],
+    'Formani to’ldiring — administratorimiz bog’lanadi.': ['Заполните форму — наш администратор свяжется с вами.', 'Fill in the form — our administrator will contact you.', 'املأ النموذج وسيتواصل معك مسؤولنا.'],
+    'Arizangizni olib, bir ish kuni ichida qo’ng’iroq qilamiz.': ['Мы получим заявку и позвоним в течение одного рабочего дня.', 'We will take your request and call you within one working day.', 'سنستلم طلبك ونتصل بك خلال يوم عمل واحد.'],
+    'Arizangiz qabul qilindi!': ['Ваша заявка принята!', 'Your request has been received!', 'تم استلام طلبك!'],
+    'Arizangiz allaqachon qabul qilingan': ['Ваша заявка уже принята', 'Your request has already been received', 'طلبك مستلم بالفعل'],
+    'Administratorimiz tez orada shu raqamga qo’ng’iroq qiladi.': ['Наш администратор скоро позвонит на этот номер.', 'Our administrator will call this number shortly.', 'سيتصل مسؤولنا بهذا الرقم قريباً.'],
+    'Yana ariza qoldirish': ['Оставить ещё одну заявку', 'Send another request', 'إرسال طلب آخر'],
+    'Ismingizni yozing.': ['Укажите ваше имя.', 'Enter your name.', 'اكتب اسمك.'],
+    'Telefon raqamni to’liq yozing.': ['Укажите полный номер телефона.', 'Enter the full phone number.', 'اكتب رقم الهاتف كاملاً.'],
+    'Yuborilmadi. Birozdan keyin urinib ko’ring.': ['Не отправлено. Попробуйте чуть позже.', 'Not sent. Please try again shortly.', 'لم يُرسل. حاول بعد قليل.'],
+    'Qaysi vaqt qulay?': ['Какое время удобно?', 'Which time suits you?', 'ما الوقت المناسب لك؟'],
+    'Kichik guruhlar': ['Малые группы', 'Small groups', 'مجموعات صغيرة'],
+    'Har bir o’quvchiga vaqt yetadi — 8–12 kishilik guruhlar.': ['На каждого ученика хватает времени — группы по 8–12 человек.', 'There is time for every student — groups of 8–12.', 'الوقت يكفي لكل طالب — مجموعات من ٨ إلى ١٢ طالباً.'],
+    'Tajribali ustozlar': ['Опытные преподаватели', 'Experienced teachers', 'معلّمون ذوو خبرة'],
+    'Arab tilini Misrda o’rgangan va yillar davomida dars bergan ustozlar.': ['Преподаватели, изучавшие арабский в Египте и годами ведущие занятия.', 'Teachers who studied Arabic in Egypt and have taught for years.', 'معلّمون درسوا العربية في مصر ودرّسوا لسنوات.'],
+    'Davomat va natija': ['Посещаемость и результат', 'Attendance and results', 'الحضور والنتيجة'],
+    'Har dars davomat olinadi, ota-ona va o’quvchi kabinetdan ko’rib turadi.': ['На каждом занятии отмечается посещаемость — родитель и ученик видят её в кабинете.', 'Attendance is taken every lesson; the parent and the student see it in the cabinet.', 'يُسجَّل الحضور في كل درس، ويراه وليّ الأمر والطالب في صفحته.'],
+    'Shaffof to’lov': ['Прозрачная оплата', 'Transparent payment', 'دفع شفّاف'],
+    'Oylik hisob, qarz va to’lov tarixi — hammasi kabinetda ko’rinadi.': ['Ежемесячный счёт, долг и история платежей — всё видно в кабинете.', 'Monthly invoice, debt and payment history — all visible in the cabinet.', 'الفاتورة الشهرية والدين وسجل الدفعات — كل ذلك ظاهر في الصفحة.'],
+    'Qulay jadval': ['Удобное расписание', 'A convenient schedule', 'جدول مريح'],
+    'Ertalabki va kechki guruhlar; ishlaydiganlar uchun ham vaqt bor.': ['Утренние и вечерние группы — время найдётся и для работающих.', 'Morning and evening groups — there is time for those who work too.', 'مجموعات صباحية ومسائية — وهناك وقت للعاملين أيضاً.'],
+    'Davomat, to’lov va e’lonlar bot orqali darhol yetib boradi.': ['Посещаемость, оплата и объявления сразу приходят через бота.', 'Attendance, payments and announcements arrive instantly through the bot.', 'يصلك الحضور والدفع والإعلانات فوراً عبر البوت.'],
+    'Imkoniyatlar': ['Возможности', 'What we offer', 'المزايا'],
+    'Yo’nalishlar': ['Направления', 'Courses', 'المسارات'],
+    'daraja: A1–C2': ['уровней: A1–C2', 'levels: A1–C2', 'مستويات: A1–C2'],
+    'kishilik guruh': ['человек в группе', 'per group', 'طالباً في المجموعة'],
+    'kun ish rejimi': ['дней в неделю', 'days a week', 'أيام عمل']
   };
 
   /* Ichida o'zgaruvchi bo'lgan iboralar uchun bo'lak tarjimalari */
@@ -1285,7 +1323,12 @@
     ' joy)': [' мест)', ' seats)', ' مقعد)'],
     '% tushumdan': ['% от выручки', '% of revenue', '% من الإيراد'],
     ' ta o’quvchiga yuboriladi': [' ученикам будет отправлено', ' students will receive it', ' طالباً سيستلمها'],
-    'Keyin guruh kodini so’raydi': ['Затем спросит код группы', 'Then it asks for the group code', 'ثم يسأل عن رمز المجموعة']
+    'Keyin guruh kodini so’raydi': ['Затем спросит код группы', 'Then it asks for the group code', 'ثم يسأل عن رمز المجموعة'],
+    /* Sayt: ichida vaqt/summa bor iboralar */
+    'Darslar ': ['Занятия ', 'Lessons ', 'الدروس '],
+    ' oralig’ida. Har bir dars ': [' . Каждое занятие ', ' . Each lesson ', ' . كل درس '],
+    'so’m / oy': ['сум / мес', 'UZS / month', 'سوم / شهرياً'],
+    'Dushanba–Shanba · ': ['Понедельник–Суббота · ', 'Monday–Saturday · ', 'الاثنين–السبت · ']
   };
 
   /* Sana, hafta kunlari va valyuta — har bir til uchun */

@@ -1039,122 +1039,164 @@
   }
 
 
-  /** Fon bezagi: oq fon ustida mayda gulli sakura shoxlari va sekin
-      tushayotgan gulbarglar. Faqat ko'rinish uchun — bosishga xalaqit bermaydi,
-      harakat kamaytirilgan rejimda (prefers-reduced-motion) to'xtab turadi. */
+  /** Fon bezagi: qog'oz rangli fon, arab-islom geometriyasidagi "xatam"
+      (sakkiz burchakli yulduz) naqshi va sekin suzuvchi yorug'lik dog'lari.
+      Naqsh logotip ranglarida chiziladi. Faqat ko'rinish uchun — bosishga
+      xalaqit bermaydi, harakat kamaytirilgan rejimda to'xtab turadi. */
   function siteBackdrop() {
-    var NS = 'http://www.w3.org/2000/svg';
-    function svg(tag, attrs) {
-      var el = document.createElementNS(NS, tag);
-      Object.keys(attrs || {}).forEach(function (k) { el.setAttribute(k, attrs[k]); });
-      return el;
-    }
-    /** Takrorlanadigan "tasodif": har safar bir xil chiqadi, shuning uchun
-        sinovlar ham barqaror bo'ladi. */
-    function rnd(seed) {
-      var x = Math.sin(seed * 12.9898) * 43758.5453;
-      return x - Math.floor(x);
-    }
-    var LEAF = ['lf', 'lf2', 'lf3'];
-
-    /** Mayda sakura guli: besh kichkina gulbarg va sarg'ish markaz. */
-    function bloom(g, x, y, ang, r, seed) {
-      var turn = ang + rnd(seed) * 72;
-      var cx = x + Math.cos(ang * Math.PI / 180) * r * 1.1;
-      var cy = y + Math.sin(ang * Math.PI / 180) * r * 1.1;
-      var cls = LEAF[Math.floor(rnd(seed + 5) * 3)];
-      for (var k = 0; k < 5; k++) {
-        var a = (turn + k * 72) * Math.PI / 180;
-        var px = cx + Math.cos(a) * r * 0.62;
-        var py = cy + Math.sin(a) * r * 0.62;
-        g.appendChild(svg('ellipse', {
-          cx: px.toFixed(1), cy: py.toFixed(1),
-          rx: (r * 0.5).toFixed(1), ry: (r * 0.38).toFixed(1),
-          transform: 'rotate(' + (a * 180 / Math.PI).toFixed(1) + ' ' + px.toFixed(1) + ' ' + py.toFixed(1) + ')',
-          class: cls
-        }));
-      }
-      g.appendChild(svg('circle', {
-        cx: cx.toFixed(1), cy: cy.toFixed(1), r: (r * 0.22).toFixed(1), class: 'core'
-      }));
-    }
-    /** Ochilmagan kurtak — shoxni jonlantiradi. */
-    function bud(g, x, y, ang, r, seed) {
-      var cx = x + Math.cos(ang * Math.PI / 180) * r * 1.4;
-      var cy = y + Math.sin(ang * Math.PI / 180) * r * 1.4;
-      g.appendChild(svg('circle', {
-        cx: cx.toFixed(1), cy: cy.toFixed(1), r: (r * 0.5).toFixed(1),
-        class: LEAF[Math.floor(rnd(seed) * 3)]
-      }));
-    }
-
-    /** Bir shox: egilgan poya, ikkita yon shox va ular bo'ylab mayda barglar. */
-    function branch(cls, seed) {
-      var g = svg('svg', { viewBox: '0 0 400 260', class: 'branch ' + cls, 'aria-hidden': 'true' });
-      function curve(P0, P1, P2, w) {
-        g.appendChild(svg('path', {
-          d: 'M' + P0[0] + ' ' + P0[1] + ' Q' + P1[0] + ' ' + P1[1] + ' ' + P2[0] + ' ' + P2[1],
-          fill: 'none', stroke: 'currentColor', 'stroke-width': w, 'stroke-linecap': 'round'
-        }));
-        return function (t) {
-          var u = 1 - t;
-          return [u * u * P0[0] + 2 * u * t * P1[0] + t * t * P2[0],
-          u * u * P0[1] + 2 * u * t * P1[1] + t * t * P2[1]];
-        };
-      }
-      function angleOf(f, t) {
-        var a = f(Math.max(0, t - 0.02)), b = f(Math.min(1, t + 0.02));
-        return Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
-      }
-      // asosiy poya va ikkita yon shox
-      var main = curve([4, 244], [150, 232], [388, 34], 5.5);
-      var arm1 = curve(main(0.34), [190, 96], [252, 42], 3.2);
-      var arm2 = curve(main(0.6), [286, 188], [366, 176], 2.8);
-      var arms = [
-        { f: main, n: 26, from: 0.08, step: 0.035, len: 7.5 },
-        { f: arm1, n: 13, from: 0.1, step: 0.07, len: 6.5 },
-        { f: arm2, n: 12, from: 0.1, step: 0.075, len: 6 }
-      ];
-      arms.forEach(function (arm, ai) {
-        for (var i = 0; i < arm.n; i++) {
-          var t = arm.from + i * arm.step;
-          var p = arm.f(t), ang = angleOf(arm.f, t);
-          var s = ai * 29 + i * 5 + seed;
-          // har nuqtada ikki tomonga bittadan mayda barg
-          [-1, 1].forEach(function (side, si) {
-            var sd = s + si * 3;
-            var r = arm.len * (0.66 + rnd(sd) * 0.5);
-            var a = ang + side * (40 + rnd(sd + 1) * 36);
-            if (rnd(sd + 2) < 0.24) bud(g, p[0], p[1], a, r, sd);
-            else bloom(g, p[0], p[1], a, r, sd);
-          });
-        }
-      });
-      return g;
-    }
-
-    /* --- Tushayotgan gulbarglar --- */
-    var petals = h('div', { class: 'petals' });
-    for (var i = 0; i < 14; i++) {
-      var size = 7 + rnd(i + 1) * 6;                 // 7–13 px
-      var dur = 13 + rnd(i + 20) * 12;               // 13–25 s
-      var sp = h('span', { class: 'petal' }, h('i'));
-      sp.style.left = (rnd(i + 40) * 96).toFixed(1) + '%';
-      sp.style.width = size.toFixed(1) + 'px';
-      sp.style.height = (size * 0.82).toFixed(1) + 'px';
-      sp.style.animationDuration = dur.toFixed(1) + 's';
-      sp.style.animationDelay = '-' + (rnd(i + 60) * dur).toFixed(1) + 's';
-      sp.firstChild.style.animationDuration = (3.5 + rnd(i + 80) * 4).toFixed(1) + 's';
-      petals.appendChild(sp);
-    }
-
     return h('div', { class: 'site-bg', 'aria-hidden': 'true' }, [
-      h('div', { class: 'tree tl' }, branch('sway-a', 1)),
-      h('div', { class: 'tree tr' }, branch('sway-b', 7)),
-      h('div', { class: 'tree bl' }, branch('sway-c', 13)),
-      h('div', { class: 'tree br' }, branch('sway-b', 21)),
-      petals
+      khatamSvg('khatam'),
+      h('div', { class: 'glow g1' }),
+      h('div', { class: 'glow g2' }),
+      h('div', { class: 'glow g3' })
     ]);
+  }
+
+  /** Xatam yulduzi naqshi — takrorlanadigan SVG katak.
+      Geometriya: {8/3} yulduz (tashqi radius R, ichki radius 0.4142·R) va
+      uni bog'lab turuvchi sakkiz burchaklar. Naqsh qadimiy kitob bezaklaridan. */
+  function khatamSvg(cls) {
+    var NS = 'http://www.w3.org/2000/svg';
+    var S = 132, R = 40, r = R * 0.4142, half = S / 2;
+    function poly(cx, cy, n, rad, rad2, start) {
+      var p = [];
+      for (var k = 0; k < n; k++) {
+        var a = (start + k * (360 / n)) * Math.PI / 180;
+        var rr = (rad2 != null && k % 2) ? rad2 : rad;
+        p.push((cx + rr * Math.cos(a)).toFixed(2) + ' ' + (cy + rr * Math.sin(a)).toFixed(2));
+      }
+      return 'M' + p.join('L') + 'Z';
+    }
+    var d = [
+      poly(half, half, 16, R, r, -90),
+      poly(0, 0, 16, R, r, -90), poly(S, 0, 16, R, r, -90),
+      poly(0, S, 16, R, r, -90), poly(S, S, 16, R, r, -90),
+      poly(half, half, 8, r * 1.02, null, -67.5),
+      poly(0, half, 8, r * 0.9, null, -67.5), poly(S, half, 8, r * 0.9, null, -67.5),
+      poly(half, 0, 8, r * 0.9, null, -67.5), poly(half, S, 8, r * 0.9, null, -67.5)
+    ].join('');
+
+    var id = 'khatam-' + Math.random().toString(36).slice(2, 8);
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', cls);
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+    var defs = document.createElementNS(NS, 'defs');
+    var pat = document.createElementNS(NS, 'pattern');
+    pat.setAttribute('id', id);
+    pat.setAttribute('width', S); pat.setAttribute('height', S);
+    pat.setAttribute('patternUnits', 'userSpaceOnUse');
+    var path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '1.1');
+    path.setAttribute('stroke-linejoin', 'round');
+    pat.appendChild(path);
+    defs.appendChild(pat);
+    svg.appendChild(defs);
+    var rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('width', '100%'); rect.setAttribute('height', '100%');
+    rect.setAttribute('fill', 'url(#' + id + ')');
+    svg.appendChild(rect);
+    return svg;
+  }
+
+  /** Saytdagi harakat (motion).
+      Qoida: JS ishlamasa ham sahifa to'liq ko'rinadi — harakat faqat shu
+      yerda yoqiladi (html.js-reveal). Harakat kamaytirilgan rejimda CSS
+      hammasini o'chiradi, JS esa siljish (parallaks) hisobini o'tkazmaydi.
+
+      Nimalar bor:
+        1) hero ketma-ket ochiladi (sarlavha, chiziq, matn, tugmalar, raqamlar);
+        2) bo'limlar aylantirilganda yumshoq chiqadi, kartalar birin-ketin;
+        3) tepada tilla o'qish chizig'i;
+        4) fon naqshi aylantirilganda sekin siljiydi;
+        5) tepa panel yopishganda ostida chiziq paydo bo'ladi.            */
+  function siteMotion(topBar) {
+    var root = document.documentElement;
+    if (!('IntersectionObserver' in window)) return;
+    root.classList.add('js-reveal');
+
+    var slow = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    /* --- 1. Ketma-ketlik uchun tartib raqami --- */
+    function order(sel, hostSel) {
+      Array.prototype.forEach.call(document.querySelectorAll(hostSel), function (host) {
+        Array.prototype.forEach.call(host.querySelectorAll(sel), function (el, i) {
+          el.style.setProperty('--i', i);
+        });
+      });
+    }
+    var hero = document.querySelector('.site .site-hero');
+    if (hero) {
+      Array.prototype.forEach.call(hero.querySelectorAll('.hero-text > *'), function (el, i) {
+        el.style.setProperty('--d', i);
+      });
+      order('.hero-stat', '.site .hero-stats');
+      /* Keyingi kadrda yoqamiz — boshlang'ich holat brauzerga yetib borsin */
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { hero.classList.add('lit'); });
+      });
+    }
+
+    /* --- 2. Bo'limlar va kartalar --- */
+    var io = new IntersectionObserver(function (rows) {
+      rows.forEach(function (row) {
+        if (!row.isIntersecting) return;
+        var el = row.target;
+        ['.feat-grid > *', '.course-grid > *', '.tch-grid > *', '.slot-grid > *',
+          '.site-contact .contact-row'].forEach(function (sel) {
+            Array.prototype.forEach.call(el.querySelectorAll(sel), function (x, i) {
+              x.style.setProperty('--i', i);
+            });
+          });
+        el.classList.add('seen');
+        io.unobserve(el);
+      });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.05 });
+    Array.prototype.forEach.call(document.querySelectorAll('.site .reveal'), function (el) {
+      io.observe(el);
+    });
+    /* Keyin yuklanadigan kartalar (ustozlar, kurslar, vaqtlar) uchun ham */
+    A._siteSeen = function (host) {
+      if (!host) return;
+      var sec = host.closest ? host.closest('.reveal') : null;
+      if (sec && sec.classList.contains('seen')) {
+        Array.prototype.forEach.call(host.children, function (x, i) { x.style.setProperty('--i', i); });
+      }
+    };
+
+    /* --- 3. Tilla o'qish chizig'i --- */
+    if (!slow) {
+      var bar = h('div', { class: 'site-scroll', 'aria-hidden': 'true' });
+      document.getElementById('auth').appendChild(bar);
+      var khatam = document.querySelector('.site-bg .khatam');
+      var tick = false;
+      var onScroll = function () {
+        if (tick) return;
+        tick = true;
+        requestAnimationFrame(function () {
+          tick = false;
+          var max = document.documentElement.scrollHeight - window.innerHeight;
+          var y = window.scrollY || 0;
+          bar.style.transform = 'scaleX(' + (max > 0 ? Math.min(1, y / max) : 0).toFixed(4) + ')';
+          /* --- 4. Fon naqshi sekin siljiydi --- */
+          if (khatam) khatam.style.transform = 'translate3d(0,' + (-y * 0.06).toFixed(1) + 'px,0)';
+        });
+      };
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+    }
+
+    /* --- 5. Yopishqoq tepa panel --- */
+    if (!topBar) return;
+    var probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;top:0;height:1px;width:1px';
+    topBar.parentNode.insertBefore(probe, topBar);
+    new IntersectionObserver(function (rows) {
+      topBar.classList.toggle('stuck', !rows[0].isIntersecting);
+    }, { threshold: 1 }).observe(probe);
   }
 
   function renderLanding() {
@@ -1168,7 +1210,7 @@
     var name = centerNameNow();
 
     /* --- Tepa panel --- */
-    var top = h('header', { class: 'site-top' }, [
+    var topIn = h('div', { class: 'site-top-in' }, [
       h('div', { class: 'site-brand' }, [
         h('img', { class: 'logo', src: LOGO, alt: '' }),
         h('div', {}, [
@@ -1194,35 +1236,41 @@
         }, [UI.icon('key'), 'Kirish'])
       ])
     ]);
+    var top = h('header', { class: 'site-top' }, topIn);
 
-    /* --- Hero --- */
+    /* --- Hero: to'q ko'k panel, tilla hoshiya va xatam naqshi --- */
     var hero = h('section', { class: 'site-hero' }, [
       h('div', { class: 'hero-text' }, [
         h('span', { class: 'hero-eyebrow' }, 'Toshkentda arab tili'),
-        h('h1', {}, name),
+        h('h1', {}, [
+          h('span', { class: 'gold', id: 'site-name-hero' }, name)
+        ]),
+        h('div', { class: 'hero-rule', 'aria-hidden': 'true' }),
         h('p', { class: 'hero-lead', id: 'site-about' },
-          'Qur’on tili — boshlang’ichdan suhbatgacha. Kichik guruhlar, tajribali ' +
-          'ustozlar va har bir o’quvchi uchun aniq natija rejasi.'),
+          'Qur’on tili — boshlang’ichdan suhbatgacha. Kichik guruhlar, tajribali ustozlar va har bir o’quvchi uchun aniq natija rejasi.'),
         h('div', { class: 'hero-cta' }, [
-          h('button', { class: 'btn primary lg', type: 'button', onclick: function () { scrollTo('ariza'); } },
+          h('button', { class: 'btn gold lg', type: 'button', onclick: function () { scrollTo('ariza'); } },
             'Darsga yozilish'),
           h('button', {
-            class: 'btn lg', type: 'button',
+            class: 'btn on-dark lg', type: 'button',
             onclick: function () { location.hash = 'test'; renderTest(); }
           }, 'Darajangizni aniqlang'),
-          h('a', { class: 'btn lg', id: 'site-call', href: '#ariza' },
-            [UI.icon('phone'), h('span', { id: 'site-call-text' }, 'Bog’lanish')])
+          h('a', { class: 'btn on-dark lg', id: 'site-call', href: '#ariza' },
+            [UI.icon('phone'), h('span', { id: 'site-call-text' }, 'Bog\u2019lanish')])
         ]),
         h('div', { class: 'hero-stats' }, [
-          stat('6', 'daraja: A1–C2'),
-          stat('8–12', 'kishilik guruh'),
+          stat('6', 'daraja: A1\u2013C2'),
+          stat('8\u201312', 'kishilik guruh'),
           stat('6', 'kun ish rejimi')
         ])
       ]),
       h('div', { class: 'hero-art' }, [
-        h('div', { class: 'hero-logo' }, [
-          h('span', { class: 'hero-ar', 'aria-hidden': 'true' }, 'البيان'),
-          h('img', { src: LOGO, alt: '' })
+        h('div', { class: 'site-medal' }, [
+          h('div', { class: 'medal-in' }, [
+            khatamSvg('khatam-in'),
+            h('img', { src: LOGO, alt: '' }),
+            h('span', { class: 'hero-ar', 'aria-hidden': 'true' }, '\u0627\u0644\u0628\u064a\u0627\u0646')
+          ])
         ]),
         h('div', { class: 'hero-badge' }, [h('b', {}, 'AlBayan'), h('span', {}, 'Cairo')])
       ])
@@ -1233,7 +1281,8 @@
     }
 
     /* --- Nima beramiz --- */
-    var feats = h('section', { class: 'site-sec' }, [
+    var feats = h('section', { class: 'site-sec reveal' }, [
+      h('div', { class: 'sec-eyebrow' }, 'Imkoniyatlar'),
       h('h2', {}, 'Nega AlBayan Cairo?'),
       h('div', { class: 'feat-grid' }, [
         feat('users', 'Kichik guruhlar', 'Har bir o’quvchiga vaqt yetadi — 8–12 kishilik guruhlar.'),
@@ -1253,17 +1302,18 @@
 
     /* --- Ustozlar --- */
     var teachBox = h('div', { class: 'tch-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
-    var teachers = h('section', { class: 'site-sec', id: 'ustozlar' }, [
+    var teachers = h('section', { class: 'site-sec reveal', id: 'ustozlar' }, [
+      h('div', { class: 'sec-eyebrow' }, 'Jamoa'),
       h('h2', {}, 'Ustozlar'),
       h('p', { class: 'muted' },
-        'Darslarni Misrda tahsil olgan, ona tili arab tili bo’lgan ustozlar olib boradi. ' +
-        'Erkaklar va ayollar guruhlari uchun alohida ustozlar bor.'),
+        'Darslarni Misrda tahsil olgan, ona tili arab tili bo’lgan ustozlar olib boradi. Erkaklar va ayollar guruhlari uchun alohida ustozlar bor.'),
       teachBox
     ]);
 
     /* --- Dars vaqtlari --- */
     var slotBox = h('div', { class: 'slot-grid' });
-    var timetable = h('section', { class: 'site-sec', id: 'vaqt' }, [
+    var timetable = h('section', { class: 'site-sec reveal', id: 'vaqt' }, [
+      h('div', { class: 'sec-eyebrow' }, 'Jadval'),
       h('h2', {}, 'Dars vaqtlari'),
       h('p', { class: 'muted', id: 'slot-lead' }, 'Har bir dars 1 soat 30 daqiqa.'),
       slotBox
@@ -1271,7 +1321,8 @@
 
     /* --- Kurslar --- */
     var courseBox = h('div', { class: 'course-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
-    var courses = h('section', { class: 'site-sec', id: 'kurslar' }, [
+    var courses = h('section', { class: 'site-sec reveal', id: 'kurslar' }, [
+      h('div', { class: 'sec-eyebrow' }, 'Yo’nalishlar'),
       h('h2', {}, 'Kurslar'),
       courseBox
     ]);
@@ -1310,7 +1361,8 @@
       ])
     ]);
 
-    var apply = h('section', { class: 'site-sec', id: 'ariza' }, [
+    var apply = h('section', { class: 'site-sec reveal', id: 'ariza' }, [
+      h('div', { class: 'sec-eyebrow' }, 'Ariza'),
       h('h2', {}, 'Darsga yozilish'),
       h('p', { class: 'muted' }, 'Formani to’ldiring — administratorimiz bog’lanadi.'),
       h('div', { class: 'apply-grid' }, [h('div', { class: 'apply-card' }, [form, okBox]), contact])
@@ -1334,9 +1386,11 @@
     ]);
 
     wrap.appendChild(siteBackdrop());
-    wrap.appendChild(h('div', { class: 'site-wrap' }, [top, hero, feats, teachers, timetable, courses, apply, foot]));
+    wrap.appendChild(top);
+    wrap.appendChild(h('div', { class: 'site-wrap' }, [hero, feats, teachers, timetable, courses, apply, foot]));
     A.I18N.apply(wrap);
     fillPublic();
+    siteMotion(top);
 
     function scrollTo(id) {
       var el = document.getElementById(id);
@@ -1346,8 +1400,10 @@
     async function fillPublic() {
       var d = await publicInfo();
       if (d.centerName) {
-        var el = document.getElementById('site-name');
-        if (el) el.textContent = d.centerName;
+        ['site-name', 'site-name-hero'].forEach(function (k) {
+          var el = document.getElementById(k);
+          if (el) el.textContent = d.centerName;
+        });
       }
       if (d.about) {
         var ab = document.getElementById('site-about');
@@ -1379,6 +1435,7 @@
       }
       paintTeachers(d.teachers || []);
       paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
+      if (A._siteSeen) { A._siteSeen(teachBox); A._siteSeen(slotBox); }
       UI.clear(courseBox);
       var list = d.courses || [];
       if (!list.length) {
@@ -1403,6 +1460,7 @@
           fCourse.input.appendChild(h('option', { value: o.value }, o.label));
         });
       }
+      if (A._siteSeen) A._siteSeen(courseBox);
       A.I18N.apply(wrap);
     }
     function paintTeachers(list) {

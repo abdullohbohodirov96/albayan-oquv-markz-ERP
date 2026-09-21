@@ -257,164 +257,268 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .empty h3{font-size:16px;color:var(--ink);margin-bottom:6px}
 .empty p{margin:0 auto 14px;max-width:44ch;font-size:13.5px}
 
-/* ================= SAYT (ochiq sahifa) ================= */
-.site{position:relative;min-height:100%;color:var(--ink);overflow-x:hidden;isolation:isolate;
-  background:var(--site-bg)}
+/* ================= SAYT (ochiq sahifa) =================
+   Ranglar logotipdan olingan: to'q ko'k gradient (#3F5A8F → #1E355F) va oq.
+   Unga arab qo'lyozmalari bezagidan kelgan tilla rang qo'shilgan — ko'k va
+   tilla juftligi mushaf bezaklarining klassik juftligi.
+   Fon naqshi: sakkiz burchakli "xatam" yulduzi — arab-islom geometriyasi.  */
 
-/* --- Jonli fon: oq fon, mayda gulli sakura shoxlari va tushayotgan gulbarglar --- */
+.site{
+  /* Logotip gradienti */
+  --st-n9:#0b1730; --st-n8:#101f3c; --st-n7:#16294d; --st-n6:#1e355f;
+  --st-n5:#274377; --st-n4:#3f5a8f; --st-n3:#6d85b4; --st-n2:#a8b8d6;
+  /* Qo'lyozma tillasi */
+  --st-gold:#b8901f; --st-gold-2:#d8ae43; --st-gold-3:#efd08a; --st-gold-soft:#f7edd6;
+  /* Qog'oz */
+  --st-paper:#fbf8f3; --st-paper-2:#f4efe5; --st-card:#ffffff;
+  --st-ink:#101c33; --st-ink-2:#3c4a64; --st-mut:#6f7c94;
+  --st-line:#e6dfd1; --st-line-2:#d6cdb9;
+  --st-shadow:0 1px 2px rgba(16,28,51,.05), 0 14px 34px -18px rgba(16,28,51,.30);
+  --st-shadow-lg:0 26px 60px -26px rgba(16,28,51,.45);
+  --st-glow:0 0 0 1px rgba(216,174,67,.28), 0 20px 60px -24px rgba(11,23,48,.65);
+  --st-serif:'Fraunces','Archivo',Georgia,serif;
+  --st-ar:'Amiri','Times New Roman',serif;
+  /* Xatam yulduzi naqshi — to'q panellar ustida tilla chiziqlar */
+  --st-khatam:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22132%22%20height%3D%22132%22%20viewBox%3D%220%200%20132%20132%22%3E%3Cpath%20d%3D%22M66.00%2026.00L72.34%2050.69L94.28%2037.72L81.31%2059.66L106.00%2066.00L81.31%2072.34L94.28%2094.28L72.34%2081.31L66.00%20106.00L59.66%2081.31L37.72%2094.28L50.69%2072.34L26.00%2066.00L50.69%2059.66L37.72%2037.72L59.66%2050.69ZM0.00%20-40.00L6.34%20-15.31L28.28%20-28.28L15.31%20-6.34L40.00%200.00L15.31%206.34L28.28%2028.28L6.34%2015.31L0.00%2040.00L-6.34%2015.31L-28.28%2028.28L-15.31%206.34L-40.00%200.00L-15.31%20-6.34L-28.28%20-28.28L-6.34%20-15.31ZM132.00%20-40.00L138.34%20-15.31L160.28%20-28.28L147.31%20-6.34L172.00%200.00L147.31%206.34L160.28%2028.28L138.34%2015.31L132.00%2040.00L125.66%2015.31L103.72%2028.28L116.69%206.34L92.00%200.00L116.69%20-6.34L103.72%20-28.28L125.66%20-15.31ZM0.00%2092.00L6.34%20116.69L28.28%20103.72L15.31%20125.66L40.00%20132.00L15.31%20138.34L28.28%20160.28L6.34%20147.31L0.00%20172.00L-6.34%20147.31L-28.28%20160.28L-15.31%20138.34L-40.00%20132.00L-15.31%20125.66L-28.28%20103.72L-6.34%20116.69ZM132.00%2092.00L138.34%20116.69L160.28%20103.72L147.31%20125.66L172.00%20132.00L147.31%20138.34L160.28%20160.28L138.34%20147.31L132.00%20172.00L125.66%20147.31L103.72%20160.28L116.69%20138.34L92.00%20132.00L116.69%20125.66L103.72%20103.72L125.66%20116.69ZM72.47%2050.39L81.61%2059.53L81.61%2072.47L72.47%2081.61L59.53%2081.61L50.39%2072.47L50.39%2059.53L59.53%2050.39ZM5.71%2052.22L13.78%2060.29L13.78%2071.71L5.71%2079.78L-5.71%2079.78L-13.78%2071.71L-13.78%2060.29L-5.71%2052.22ZM137.71%2052.22L145.78%2060.29L145.78%2071.71L137.71%2079.78L126.29%2079.78L118.22%2071.71L118.22%2060.29L126.29%2052.22ZM71.71%20-13.78L79.78%20-5.71L79.78%205.71L71.71%2013.78L60.29%2013.78L52.22%205.71L52.22%20-5.71L60.29%20-13.78ZM71.71%20118.22L79.78%20126.29L79.78%20137.71L71.71%20145.78L60.29%20145.78L52.22%20137.71L52.22%20126.29L60.29%20118.22Z%22%20fill%3D%22none%22%20stroke%3D%22%23d8ae43%22%20stroke-width%3D%221.1%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+
+  position:relative;min-height:100%;overflow-x:hidden;isolation:isolate;
+  color:var(--st-ink);background:var(--st-paper);
+  font-feature-settings:"ss01";
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .site{
+    --st-paper:#0c1424; --st-paper-2:#111b2e; --st-card:#151f33;
+    --st-ink:#eaf0fa; --st-ink-2:#c3cee1; --st-mut:#93a0b8;
+    --st-line:#23304a; --st-line-2:#33415f;
+    --st-gold:#e0bb5c; --st-gold-2:#efd08a; --st-gold-soft:#2a2313;
+    --st-shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 34px -18px rgba(0,0,0,.8);
+    --st-shadow-lg:0 26px 60px -26px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"] .site{
+  --st-paper:#0c1424; --st-paper-2:#111b2e; --st-card:#151f33;
+  --st-ink:#eaf0fa; --st-ink-2:#c3cee1; --st-mut:#93a0b8;
+  --st-line:#23304a; --st-line-2:#33415f;
+  --st-gold:#e0bb5c; --st-gold-2:#efd08a; --st-gold-soft:#2a2313;
+  --st-shadow:0 1px 2px rgba(0,0,0,.5), 0 14px 34px -18px rgba(0,0,0,.8);
+  --st-shadow-lg:0 26px 60px -26px rgba(0,0,0,.9);
+}
+
+/* --- Fon: qog'oz rangi, xatam naqshi va sekin suzuvchi yorug'lik --- */
 .site-bg{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;
-  background:var(--site-bg)}
+  background:
+    radial-gradient(120% 80% at 50% -10%, color-mix(in srgb,var(--st-n4) 9%, transparent), transparent 60%),
+    var(--st-paper)}
+.site-bg .khatam{position:absolute;inset:-4%;width:108%;height:108%;
+  color:var(--st-n4);opacity:.055}
+.site-bg .glow{position:absolute;border-radius:50%;filter:blur(60px);will-change:transform}
+.site-bg .glow.g1{width:44vw;height:44vw;left:-8vw;top:-10vw;
+  background:radial-gradient(circle,color-mix(in srgb,var(--st-n4) 17%,transparent),transparent 70%);
+  animation:stDrift1 26s ease-in-out infinite}
+.site-bg .glow.g2{width:38vw;height:38vw;right:-6vw;top:22vh;
+  background:radial-gradient(circle,color-mix(in srgb,var(--st-gold) 11%,transparent),transparent 70%);
+  animation:stDrift2 31s ease-in-out infinite}
+.site-bg .glow.g3{width:40vw;height:40vw;left:24vw;bottom:-14vw;
+  background:radial-gradient(circle,color-mix(in srgb,var(--st-n5) 12%,transparent),transparent 70%);
+  animation:stDrift1 37s ease-in-out infinite reverse}
+@keyframes stDrift1{0%,100%{transform:translate3d(0,0,0) scale(1)}50%{transform:translate3d(5vw,4vh,0) scale(1.12)}}
+@keyframes stDrift2{0%,100%{transform:translate3d(0,0,0) scale(1.05)}50%{transform:translate3d(-6vw,-3vh,0) scale(.92)}}
 
-.site-bg .tree{position:absolute;color:var(--leaf-stem);opacity:var(--leaf-op);filter:blur(.5px)}
-.site-bg .tree.tl{top:-80px;left:-100px;width:min(640px,60vw)}
-.site-bg .tree.tr{top:-60px;right:-90px;width:min(580px,54vw);transform:scaleX(-1)}
-.site-bg .tree.bl{bottom:-100px;left:-80px;width:min(470px,42vw);transform:scaleY(-1);opacity:calc(var(--leaf-op) * .7)}
-.site-bg .tree.br{bottom:-80px;right:-100px;width:min(430px,38vw);transform:scale(-1,-1);opacity:calc(var(--leaf-op) * .58)}
-.site-bg .branch{display:block;width:100%;height:auto;transform-origin:4% 94%;will-change:transform}
-.site-bg .sway-a{animation:sway 9s ease-in-out infinite}
-.site-bg .sway-b{animation:sway 11.5s ease-in-out infinite reverse;animation-delay:-2s}
-.site-bg .sway-c{animation:sway 13s ease-in-out infinite;animation-delay:-4s}
-.site-bg .lf{fill:var(--leaf-1)}
-.site-bg .lf2{fill:var(--leaf-2)}
-.site-bg .lf3{fill:var(--leaf-3)}
-.site-bg .core{fill:var(--leaf-core)}
+/* --- Ochilishda ko'rinish (JS ishlasa) --- */
+.js-reveal .site .reveal{opacity:0;transform:translateY(18px)}
+.js-reveal .site .reveal.seen{opacity:1;transform:none;
+  transition:opacity .7s cubic-bezier(.22,.8,.3,1), transform .7s cubic-bezier(.22,.8,.3,1)}
 
-/* Tushayotgan mayda barglar */
-.site-bg .petal{position:absolute;top:0;will-change:transform;
-  animation-name:fall;animation-timing-function:linear;animation-iteration-count:infinite}
-.site-bg .petal i{display:block;width:100%;height:100%;
-  border-radius:100% 0 100% 0;
-  background:linear-gradient(135deg,var(--leaf-3),var(--leaf-2));
-  animation-name:twirl;animation-timing-function:linear;animation-iteration-count:infinite;
-  will-change:transform}
-
-@keyframes fall{
-  0%{transform:translate3d(0,-14vh,0);opacity:0}
-  7%{opacity:.75}
-  25%{transform:translate3d(4vw,18vh,0)}
-  50%{transform:translate3d(-3vw,48vh,0)}
-  75%{transform:translate3d(5vw,78vh,0)}
-  93%{opacity:.6}
-  100%{transform:translate3d(1vw,114vh,0);opacity:0}
-}
-@keyframes twirl{
-  0%{transform:rotate3d(1,1,.35,0deg)}
-  100%{transform:rotate3d(1,1,.35,360deg)}
-}
-@keyframes sway{
-  0%,100%{transform:rotate(-1.4deg) translateY(0)}
-  35%{transform:rotate(1.3deg) translateY(-5px)}
-  70%{transform:rotate(-.5deg) translateY(2px)}
-}
 @media (prefers-reduced-motion:reduce){
-  .site-bg .branch,.site-bg .petal,.site-bg .petal i{animation:none}
-  .site-bg .petals{display:none}
+  .site-bg .glow{animation:none}
+  .js-reveal .site .reveal{opacity:1;transform:none}
+  .site-medal::before{animation:none}
 }
-@media (max-width:560px){
-  .site-bg .tree.br{display:none}
-  .site-bg .tree.tl{top:-40px;left:-24vw;width:102vw}
-  .site-bg .tree.tr{top:28vh;right:-32vw;width:86vw;opacity:calc(var(--leaf-op) * .8)}
-  .site-bg .tree.bl{bottom:-50px;left:-26vw;width:90vw}
-  .site-bg .petal:nth-child(n+9){display:none}
-}
-.site-wrap{max-width:1100px;margin:0 auto;padding:0 16px 44px}
 
+.site-wrap{max-width:1140px;margin:0 auto;padding:0 20px 52px}
+
+/* --- Tepa panel --- */
 .site-top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;
-  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-  padding:12px 0;background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(10px)}
-.site-brand{display:flex;align-items:center;gap:11px;flex:1;min-width:0}
-.site-brand .logo{width:42px;height:42px;border-radius:12px;box-shadow:var(--shadow)}
-.site-brand b{display:block;font-family:var(--display);font-size:16.5px;line-height:1.15;letter-spacing:-.01em}
-.site-brand span{font-size:11.5px;color:var(--muted)}
-.site-nav{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  background:color-mix(in srgb,var(--st-paper) 80%,transparent);backdrop-filter:blur(14px);
+  border-bottom:1px solid transparent;transition:border-color .2s,box-shadow .2s}
+.site-top-in{max-width:1140px;margin:0 auto;padding:12px 20px;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.site-top.stuck{border-bottom-color:color-mix(in srgb,var(--st-line) 80%,transparent);
+  box-shadow:0 10px 30px -22px rgba(16,28,51,.55)}
+.site-brand{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.site-brand .logo{width:44px;height:44px;border-radius:13px;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--st-gold) 42%,transparent), var(--st-shadow)}
+.site-brand b{display:block;font-family:var(--st-serif);font-weight:600;
+  font-size:17px;line-height:1.12;letter-spacing:-.015em;color:var(--st-ink)}
+.site-brand span{font-size:11.5px;color:var(--st-mut);letter-spacing:.01em}
+.site-nav{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.site-nav .btn{border-radius:11px}
+.site-nav .btn.ghost{color:var(--st-ink-2)}
+.site-nav .btn.ghost:hover{background:color-mix(in srgb,var(--st-n4) 10%,transparent);color:var(--st-n6)}
 .btn.ghost{border-color:transparent;background:none}
 .btn.ghost:hover{background:var(--surface-2)}
-.btn.lg{padding:12px 20px;font-size:15px;border-radius:12px}
+.btn.lg{padding:13px 22px;font-size:15px;border-radius:13px}
+.site .btn.primary{background:linear-gradient(160deg,var(--st-n5),var(--st-n7));border-color:var(--st-n7);
+  color:#fff;box-shadow:0 10px 26px -14px rgba(11,23,48,.8)}
+.site .btn.primary:hover{background:linear-gradient(160deg,var(--st-n4),var(--st-n6))}
 
-/* --- Hero --- */
-.site-hero{display:grid;grid-template-columns:1.15fr .85fr;gap:30px;align-items:center;padding:30px 0 40px}
-.hero-eyebrow{display:inline-flex;align-items:center;gap:7px;font-size:12px;letter-spacing:.08em;
-  text-transform:uppercase;color:var(--brand);background:var(--brand-soft);
-  border:1px solid color-mix(in srgb,var(--brand) 22%,transparent);
-  border-radius:999px;padding:5px 13px;margin-bottom:14px}
-.site-hero h1{font-size:clamp(32px,6.4vw,56px);line-height:1.03;margin-bottom:14px;
-  background:linear-gradient(120deg,var(--ink),color-mix(in srgb,var(--brand) 75%,var(--ink)));
+/* --- Hero: to'q ko'k panel, tilla hoshiya, xatam naqshi --- */
+.site-hero{position:relative;display:grid;grid-template-columns:1.12fr .88fr;gap:34px;
+  align-items:center;margin:22px 0 10px;padding:44px 44px 46px;
+  border-radius:30px;overflow:hidden;isolation:isolate;
+  background:
+    radial-gradient(90% 120% at 12% 0%, var(--st-n5), transparent 58%),
+    radial-gradient(70% 100% at 98% 100%, color-mix(in srgb,var(--st-gold) 18%,transparent), transparent 60%),
+    linear-gradient(155deg, var(--st-n7), var(--st-n9));
+  box-shadow:var(--st-glow), var(--st-shadow-lg);
+  color:#fff}
+.site-hero::before{content:'';position:absolute;inset:0;z-index:-1;
+  background-image:var(--st-khatam);background-size:132px 132px;opacity:.16}
+.site-hero::after{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.14), inset 0 0 0 1px rgba(216,174,67,.20)}
+.hero-text{position:relative;z-index:1}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:11.5px;letter-spacing:.16em;
+  text-transform:uppercase;font-weight:600;color:var(--st-gold-3);
+  background:rgba(216,174,67,.10);border:1px solid rgba(216,174,67,.34);
+  border-radius:999px;padding:6px 15px;margin-bottom:18px}
+.hero-eyebrow::before{content:'';width:5px;height:5px;border-radius:50%;
+  background:var(--st-gold-2);box-shadow:0 0 10px var(--st-gold-2)}
+.site-hero h1{font-family:var(--st-serif);font-weight:600;
+  font-size:clamp(34px,6.2vw,62px);line-height:1.02;margin:0 0 16px;letter-spacing:-.025em;
+  color:#fff;text-wrap:balance}
+.site-hero h1 .gold{background:linear-gradient(104deg,var(--st-gold) 2%,var(--st-gold-3) 34%,#fff6dd 56%,var(--st-gold-2) 88%);
   -webkit-background-clip:text;background-clip:text;color:transparent}
-.hero-lead{font-size:16.5px;color:var(--ink-2);max-width:54ch;margin:0 0 22px;line-height:1.6}
-.hero-cta{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+.hero-lead{font-size:16.5px;color:#d7e0f2;max-width:52ch;margin:0 0 26px;line-height:1.62}
+.hero-rule{width:64px;height:2px;margin:0 0 20px;border-radius:2px;
+  background:linear-gradient(90deg,var(--st-gold-2),transparent)}
+.hero-cta{display:flex;gap:11px;flex-wrap:wrap;margin-bottom:28px}
 .hero-cta .btn.lg .ico{width:18px;height:18px}
-.hero-stats{display:flex;gap:14px;flex-wrap:wrap}
-.hero-stat{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(6px);
-  border:1px solid var(--line);border-radius:12px;
-  padding:10px 14px;min-width:104px;box-shadow:var(--shadow)}
-.hero-stat b{display:block;font-family:var(--display);font-size:22px;line-height:1.1;color:var(--brand)}
-.hero-stat span{font-size:11.5px;color:var(--muted)}
+.hero-cta .btn.gold{background:linear-gradient(160deg,var(--st-gold-2),var(--st-gold));
+  border-color:rgba(255,255,255,.18);color:#1a1405;font-weight:700;
+  box-shadow:0 14px 34px -16px rgba(216,174,67,.9)}
+.hero-cta .btn.gold:hover{background:linear-gradient(160deg,var(--st-gold-3),var(--st-gold-2))}
+.hero-cta .btn.on-dark{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.22);color:#fff}
+.hero-cta .btn.on-dark:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4)}
+.hero-stats{display:flex;gap:0;flex-wrap:wrap;
+  border-top:1px solid rgba(255,255,255,.14);padding-top:20px}
+.hero-stat{padding:0 26px 0 0;margin-right:26px;
+  border-right:1px solid rgba(255,255,255,.12)}
+.hero-stat:last-child{border-right:0;margin-right:0;padding-right:0}
+.hero-stat b{display:block;font-family:var(--st-serif);font-weight:600;font-size:30px;line-height:1.05;
+  color:var(--st-gold-3);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.hero-stat span{font-size:11.5px;color:#a9b8d6;letter-spacing:.02em}
 
-.hero-art{position:relative;display:grid;place-items:center;min-height:240px}
-.hero-logo{position:relative;display:grid;place-items:center;
-  width:min(280px,72vw);aspect-ratio:1;border-radius:30px;
-  background:linear-gradient(150deg,var(--surface),var(--surface-2));
-  border:1px solid var(--line);box-shadow:var(--shadow-lg);overflow:hidden}
-.hero-logo::before{content:'';position:absolute;inset:-30% -30% auto auto;width:70%;aspect-ratio:1;
-  background:radial-gradient(circle,color-mix(in srgb,var(--brand) 30%,transparent),transparent 65%)}
-.hero-logo img{position:relative;width:52%;height:auto;border-radius:22px;box-shadow:var(--shadow)}
-.hero-ar{position:absolute;bottom:10px;left:0;right:0;text-align:center;
-  font-size:clamp(34px,9vw,52px);line-height:1;color:var(--brand);opacity:.12;
-  font-family:'Times New Roman',serif;pointer-events:none;user-select:none}
-.hero-badge{position:absolute;right:-6px;bottom:14px;background:var(--surface);border:1px solid var(--line);
-  border-radius:13px;padding:9px 13px;box-shadow:var(--shadow-lg);text-align:center}
-.hero-badge b{display:block;font-family:var(--display);font-size:14px}
-.hero-badge span{font-size:10.5px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase}
+/* Hero medalyoni: logotip tilla halqa ichida, sekin porlaydi */
+.hero-art{position:relative;display:grid;place-items:center;min-height:250px;z-index:1;
+  padding-inline-end:34px;padding-block:6px}
+.site-medal{position:relative;display:grid;place-items:center;
+  width:min(234px,58vw);aspect-ratio:1;border-radius:50%}
+.site-medal::before{content:'';position:absolute;inset:-3px;border-radius:50%;
+  background:conic-gradient(from 0deg, transparent 0deg, var(--st-gold-2) 40deg,
+    var(--st-gold-3) 72deg, transparent 130deg, transparent 220deg,
+    var(--st-gold) 270deg, transparent 330deg);
+  animation:stSpin 14s linear infinite;opacity:.95}
+.site-medal::after{content:'';position:absolute;inset:3px;border-radius:50%;
+  background:radial-gradient(circle at 34% 26%, var(--st-n5), var(--st-n9) 74%);
+  box-shadow:inset 0 0 44px rgba(0,0,0,.55)}
+@keyframes stSpin{to{transform:rotate(360deg)}}
+.medal-in{position:relative;z-index:2;display:grid;place-items:center;
+  width:100%;height:100%;border-radius:50%;overflow:hidden}
+.medal-in .khatam-in{position:absolute;inset:0;width:100%;height:100%;color:#fff;opacity:.13}
+.hero-art img{position:relative;width:44%;height:auto;border-radius:24px;
+  box-shadow:0 0 0 1px rgba(216,174,67,.4), 0 22px 46px -18px rgba(0,0,0,.9)}
+.hero-ar{position:absolute;left:0;right:0;bottom:12%;text-align:center;
+  font-family:var(--st-ar);font-size:clamp(30px,7.4vw,46px);line-height:1;
+  color:var(--st-gold-3);opacity:.34;pointer-events:none;user-select:none}
+.hero-badge{position:absolute;inset-inline-end:0;bottom:14px;z-index:3;
+  background:color-mix(in srgb,var(--st-card) 94%,transparent);backdrop-filter:blur(8px);
+  border:1px solid color-mix(in srgb,var(--st-gold) 40%,transparent);
+  border-radius:14px;padding:10px 15px;box-shadow:var(--st-shadow-lg);text-align:center}
+.hero-badge b{display:block;font-family:var(--st-serif);font-weight:600;font-size:14.5px;color:var(--st-ink)}
+.hero-badge span{font-size:10px;color:var(--st-gold);letter-spacing:.2em;text-transform:uppercase;font-weight:600}
 
 /* --- Bo'limlar --- */
-.site-sec{padding:30px 0}
-.site-sec h2{font-size:clamp(21px,3.6vw,30px);margin-bottom:6px;letter-spacing:-.02em}
-.site-sec>.muted{margin:0 0 18px}
+.site-sec{padding:52px 0 8px}
+.sec-eyebrow{display:flex;align-items:center;gap:11px;margin-bottom:12px;
+  font-size:11px;letter-spacing:.2em;text-transform:uppercase;font-weight:700;color:var(--st-gold)}
+.sec-eyebrow::after{content:'';flex:1;height:1px;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--st-gold) 45%,transparent),transparent)}
+.site-sec h2{font-family:var(--st-serif);font-weight:600;
+  font-size:clamp(24px,3.8vw,38px);margin-bottom:8px;letter-spacing:-.025em;color:var(--st-ink)}
+.site-sec>.muted{margin:0 0 22px;color:var(--st-mut);font-size:15px;max-width:62ch}
 
-.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px}
-.feat{background:color-mix(in srgb,var(--surface) 88%,transparent);
-  backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:18px;
-  transition:transform .14s,box-shadow .14s,border-color .14s}
-.feat:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--line-strong)}
-.feat-ico{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
-  background:var(--brand-soft);color:var(--brand);margin-bottom:12px}
-.feat-ico .ico{width:20px;height:20px}
-.feat b{display:block;margin-bottom:5px;font-size:15.5px}
-.feat p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.55}
+/* Kartalar — umumiy ko'rinish */
+.feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
+.feat{position:relative;background:var(--st-card);border:1px solid var(--st-line);
+  border-radius:18px;padding:22px;overflow:hidden;
+  transition:transform .2s cubic-bezier(.22,.8,.3,1),box-shadow .2s,border-color .2s}
+.feat::before{content:'';position:absolute;inset:0 auto auto 0;height:2px;width:0;
+  background:linear-gradient(90deg,var(--st-gold-2),var(--st-gold));transition:width .35s cubic-bezier(.22,.8,.3,1)}
+.feat:hover{transform:translateY(-4px);box-shadow:var(--st-shadow);border-color:var(--st-line-2)}
+.feat:hover::before{width:100%}
+.feat-ico{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;margin-bottom:14px;
+  background:linear-gradient(155deg,var(--st-n5),var(--st-n7));
+  box-shadow:0 10px 22px -12px rgba(11,23,48,.8)}
+.feat-ico .ico{width:20px;height:20px;color:var(--st-gold-3)}
+.feat b{display:block;margin-bottom:6px;font-size:16px;font-family:var(--st-serif);font-weight:600;
+  color:var(--st-ink);letter-spacing:-.01em}
+.feat p{margin:0;font-size:13.5px;color:var(--st-mut);line-height:1.6}
 
-.course-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.course{background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(6px);
-  border:1px solid var(--line);border-radius:16px;padding:18px;
-  display:flex;flex-direction:column;gap:9px;position:relative;overflow:hidden;
-  transition:transform .14s,box-shadow .14s}
-.course::after{content:'';position:absolute;inset:0 auto 0 0;width:3px;background:var(--brand);opacity:.9}
-.course:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
-.course b{font-size:16.5px}
-.course p{margin:0;font-size:13px;color:var(--muted)}
-.course-fee{display:flex;align-items:baseline;gap:6px;margin-top:auto}
-.course-fee b{font-family:var(--display);font-size:21px;color:var(--brand)}
-.course-fee span{font-size:12px;color:var(--muted)}
-.course .btn{align-self:flex-start}
+/* Kurslar */
+.course-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.course{position:relative;background:var(--st-card);border:1px solid var(--st-line);
+  border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:10px;overflow:hidden;
+  transition:transform .2s cubic-bezier(.22,.8,.3,1),box-shadow .2s,border-color .2s}
+.course::after{content:'';position:absolute;top:0;inset-inline-end:0;width:54px;height:54px;
+  border-top:2px solid color-mix(in srgb,var(--st-gold) 62%,transparent);
+  border-inline-end:2px solid color-mix(in srgb,var(--st-gold) 62%,transparent);
+  border-start-end-radius:18px;opacity:.55;transition:opacity .3s,width .3s,height .3s}
+.course:hover{transform:translateY(-4px);box-shadow:var(--st-shadow);border-color:var(--st-line-2)}
+.course:hover::after{opacity:1;width:74px;height:74px}
+.course b{font-size:17.5px;font-family:var(--st-serif);font-weight:600;color:var(--st-ink);
+  letter-spacing:-.015em;position:relative}
+.course p{margin:0;font-size:13.5px;color:var(--st-mut);line-height:1.58;position:relative}
+.course-fee{display:flex;align-items:baseline;gap:7px;margin-top:auto;position:relative}
+.course-fee b{font-family:var(--st-serif);font-size:24px;color:var(--st-n6);font-variant-numeric:tabular-nums}
+.course-fee span{font-size:12px;color:var(--st-mut)}
+.course .btn{align-self:flex-start;position:relative}
+
+/* Dars vaqtlari */
+.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:10px}
+.slot{background:var(--st-card);border:1px solid var(--st-line);border-radius:13px;
+  padding:12px 14px;display:flex;flex-direction:column;gap:3px;
+  transition:border-color .18s,transform .18s}
+.slot:hover{border-color:color-mix(in srgb,var(--st-gold) 50%,transparent);transform:translateY(-2px)}
+.slot b{font-family:var(--mono);font-size:14.5px;color:var(--st-ink);font-variant-numeric:tabular-nums}
+.slot span{font-size:11.5px;color:var(--st-mut)}
 
 /* --- Ariza --- */
-.apply-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start}
-.apply-card{background:color-mix(in srgb,var(--surface) 94%,transparent);backdrop-filter:blur(8px);
-  border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:var(--shadow-lg)}
+.apply-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:18px;align-items:start}
+.apply-card{background:var(--st-card);border:1px solid var(--st-line);
+  border-radius:22px;padding:24px;box-shadow:var(--st-shadow)}
 .lead-form{display:flex;flex-direction:column;gap:13px}
-.lead-ok-in{text-align:center;display:flex;flex-direction:column;align-items:center;gap:9px;padding:14px 0}
-.lead-ok-in .ok-ico{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;
+.lead-ok-in{text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;padding:16px 0}
+.lead-ok-in .ok-ico{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;
   background:var(--ok-soft);color:var(--ok)}
-.lead-ok-in .ok-ico .ico{width:26px;height:26px}
-.lead-ok-in b{font-size:17.5px}
-.lead-ok-in p{margin:0;color:var(--muted);font-size:13.5px}
-.site-contact{background:color-mix(in srgb,var(--surface-2) 90%,transparent);backdrop-filter:blur(8px);
-  border:1px solid var(--line);border-radius:18px;padding:20px}
-.site-contact h3{font-size:15px;margin-bottom:12px;letter-spacing:.02em}
-.contact-row{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;
-  border-bottom:1px dashed var(--line)}
+.lead-ok-in .ok-ico .ico{width:28px;height:28px}
+.lead-ok-in b{font-size:18px;font-family:var(--st-serif);font-weight:600}
+.lead-ok-in p{margin:0;color:var(--st-mut);font-size:13.5px}
+.site-contact{position:relative;overflow:hidden;
+  border-radius:22px;padding:24px;color:#fff;
+  background:
+    radial-gradient(80% 110% at 100% 0%, color-mix(in srgb,var(--st-gold) 16%,transparent), transparent 58%),
+    linear-gradient(160deg,var(--st-n6),var(--st-n9));
+  box-shadow:var(--st-shadow-lg)}
+.site-contact::before{content:'';position:absolute;inset:0;
+  background-image:var(--st-khatam);background-size:118px 118px;opacity:.13;pointer-events:none}
+.site-contact h3{position:relative;font-family:var(--st-serif);font-weight:600;
+  font-size:17px;margin-bottom:14px;letter-spacing:-.01em;color:#fff}
+.contact-row{position:relative;display:flex;align-items:center;gap:11px;padding:10px 0;font-size:14px;
+  border-bottom:1px solid rgba(255,255,255,.12);color:#dbe3f3}
 .contact-row:last-child{border-bottom:0}
-.contact-row .ico{width:18px;height:18px;flex:none;color:var(--brand)}
-.contact-row a{font-weight:600}
+.contact-row .ico{width:18px;height:18px;flex:none;color:var(--st-gold-2)}
+.contact-row a{font-weight:600;color:#fff}
+.contact-row a:hover{color:var(--st-gold-3)}
 
 /* --- Telegram guruhi (ERP) --- */
 .tg-group{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
@@ -424,45 +528,53 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .tg-info{flex:1 1 260px;display:flex;flex-direction:column;gap:5px}
 
 /* --- Ustozlar --- */
-.tch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
-.tch-card{display:flex;flex-direction:column;align-items:center;gap:7px;text-align:center;
-  background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(6px);
-  border:1px solid var(--line);border-radius:18px;padding:18px 14px;cursor:pointer;
-  color:inherit;font:inherit;transition:transform .14s,box-shadow .14s,border-color .14s}
-.tch-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);border-color:var(--line-strong)}
-.tch-card b{font-size:15.5px;font-family:var(--display)}
-.tch-tag{font-size:12.5px;color:var(--brand);font-weight:600}
-.tch-aud{font-size:12.5px;color:var(--muted)}
+.tch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:16px}
+.tch-card{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;
+  background:var(--st-card);border:1px solid var(--st-line);border-radius:20px;padding:22px 16px;
+  cursor:pointer;color:inherit;font:inherit;position:relative;overflow:hidden;
+  transition:transform .2s cubic-bezier(.22,.8,.3,1),box-shadow .2s,border-color .2s}
+.tch-card::before{content:'';position:absolute;inset:auto 0 0 0;height:3px;
+  background:linear-gradient(90deg,transparent,var(--st-gold-2),transparent);
+  opacity:0;transition:opacity .25s}
+.tch-card:hover{transform:translateY(-4px);box-shadow:var(--st-shadow);border-color:var(--st-line-2)}
+.tch-card:hover::before{opacity:1}
+.tch-card b{font-size:16px;font-family:var(--st-serif);font-weight:600;color:var(--st-ink)}
+.tch-tag{font-size:12.5px;color:var(--st-gold);font-weight:700;letter-spacing:.02em}
+.tch-aud{font-size:12.5px;color:var(--st-mut)}
 
 .tch-ava{position:relative;display:inline-flex;align-items:center;justify-content:center;
   border-radius:50%;overflow:hidden;flex:none;
-  background:linear-gradient(140deg,color-mix(in srgb,var(--brand) 22%,var(--surface)),var(--surface-2));
-  border:1px solid var(--line);box-shadow:var(--shadow)}
+  background:linear-gradient(150deg,var(--st-n5),var(--st-n8));
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--st-gold) 46%,transparent),
+    0 14px 30px -16px rgba(11,23,48,.8)}
 .tch-ava img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top}
-.tch-ini{font-family:var(--display);font-weight:700;color:var(--brand);
+.tch-ini{font-family:var(--st-serif);font-weight:700;color:var(--st-gold-3);
   font-size:calc(min(34px, 1em + 12px));letter-spacing:.02em}
 
 /* Ustoz profili */
-.tch-page{display:flex;flex-direction:column;gap:26px;padding-top:8px}
-.tch-hero{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;
-  background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(8px);
-  border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:var(--shadow-lg)}
-.tch-hero > div{flex:1 1 320px;display:flex;flex-direction:column;gap:11px;align-items:flex-start}
-.tch-hero h1{font-size:clamp(26px,4vw,40px)}
-.tch-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;width:100%}
-.tch-fact{display:flex;align-items:center;gap:9px;background:var(--surface-2);
-  border:1px solid var(--line);border-radius:12px;padding:9px 11px}
-.tch-fact .ico{width:17px;height:17px;color:var(--brand);flex:none}
-.tch-fact span{display:block;font-size:12px;color:var(--muted)}
+.tch-page{display:flex;flex-direction:column;gap:28px;padding-top:10px}
+.tch-hero{position:relative;overflow:hidden;display:flex;gap:26px;align-items:flex-start;flex-wrap:wrap;
+  border-radius:26px;padding:28px;color:#fff;
+  background:
+    radial-gradient(80% 120% at 8% 0%, var(--st-n5), transparent 58%),
+    linear-gradient(155deg,var(--st-n7),var(--st-n9));
+  box-shadow:var(--st-glow),var(--st-shadow-lg)}
+.tch-hero::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:var(--st-khatam);background-size:124px 124px;opacity:.14}
+.tch-hero > div{position:relative;flex:1 1 320px;display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.tch-hero .tch-ava{position:relative}
+.tch-hero h1{font-family:var(--st-serif);font-weight:600;font-size:clamp(27px,4vw,42px);
+  color:#fff;letter-spacing:-.02em}
+.tch-hero .tch-tag{color:var(--st-gold-3)}
+.tch-hero .tch-aud,.tch-hero p{color:#c6d2e8}
+.tch-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(164px,1fr));gap:10px;width:100%}
+.tch-fact{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.14);border-radius:13px;padding:10px 12px;color:#fff}
+.tch-fact .ico{width:17px;height:17px;color:var(--st-gold-2);flex:none}
+.tch-fact span{display:block;font-size:11.5px;color:#a9b8d6}
 .tch-fact b{font-size:14px}
-.tch-times h3,.tch-more h3{font-size:16px;margin-bottom:10px}
-
-/* Dars vaqtlari */
-.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.slot{background:color-mix(in srgb,var(--surface) 90%,transparent);backdrop-filter:blur(6px);
-  border:1px solid var(--line);border-radius:12px;padding:11px 13px;
-  display:flex;flex-direction:column;gap:2px}
-.slot b{font-family:var(--mono);font-size:14.5px;letter-spacing:-.01em}
+.tch-times h3,.tch-more h3{font-family:var(--st-serif);font-weight:600;font-size:18px;margin-bottom:11px;
+  color:var(--st-ink)}
 
 /* ERP: saytdagi ustozlar ro'yxati */
 .tch-admin{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
@@ -473,30 +585,182 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .tch-photo-row{display:flex;align-items:center;gap:14px;margin-bottom:14px;flex-wrap:wrap}
 .tch-photo-row .tch-ava{width:96px;height:96px}
 
-@media (max-width:640px){
-  .tch-hero{padding:18px;gap:16px}
-  .tch-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-}
+/* --- Pastki qism --- */
+.site-foot{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  border-top:1px solid var(--st-line);padding-top:22px;margin-top:44px;
+  color:var(--st-mut);font-size:13px}
+.foot-brand{display:flex;align-items:center;gap:10px}
+.foot-brand .logo-sm{border-radius:9px;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--st-gold) 36%,transparent)}
+.site-foot .btn.ghost{color:var(--st-ink-2)}
 
-.site-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
-  border-top:1px solid var(--line);padding-top:18px;margin-top:12px;color:var(--muted);font-size:13px}
-.foot-brand{display:flex;align-items:center;gap:9px}
+/* --- Arab tili: sarlavhalar naskh yozuvida --- */
+.site[dir="rtl"] h1,.site[dir="rtl"] h2,.site[dir="rtl"] h3,
+[dir="rtl"] .site h1,[dir="rtl"] .site h2,[dir="rtl"] .site h3{font-family:var(--st-ar);letter-spacing:0}
+[dir="rtl"] .hero-rule{background:linear-gradient(270deg,var(--st-gold-2),transparent)}
+[dir="rtl"] .hero-stat{padding:0 0 0 26px;margin:0 0 0 26px;
+  border-right:0;border-left:1px solid rgba(255,255,255,.12)}
+[dir="rtl"] .hero-stat:last-child{border-left:0;margin-left:0;padding-left:0}
+[dir="rtl"] .sec-eyebrow::after{background:linear-gradient(270deg,color-mix(in srgb,var(--st-gold) 45%,transparent),transparent)}
 
 @media (max-width:900px){
-  .site-hero{grid-template-columns:1fr;gap:20px;padding:18px 0 26px}
+  .site-hero{grid-template-columns:1fr;gap:24px;padding:30px 24px 32px;border-radius:24px;margin-top:16px}
   .hero-art{order:-1;min-height:0}
-  .hero-logo{width:min(210px,58vw);border-radius:26px}
-  .hero-badge{right:2px;bottom:8px;padding:7px 11px}
+  .site-medal{width:min(210px,56vw)}
+  .hero-badge{right:0;bottom:6px;padding:8px 12px}
   .feat-grid,.course-grid{grid-template-columns:1fr 1fr}
   .apply-grid{grid-template-columns:1fr}
+  .site-sec{padding:40px 0 6px}
 }
 @media (max-width:560px){
+  .site-wrap{padding:0 16px 40px}
+  .site-top-in{padding:10px 16px}
+  .hero-art{padding-inline-end:0}
   .feat-grid,.course-grid{grid-template-columns:1fr}
   .site-nav{width:100%}
   .site-nav .btn{flex:1 1 auto;justify-content:center}
-  .hero-stats{gap:10px}
-  .hero-stat{flex:1 1 30%;min-width:92px;padding:9px 11px}
-  .site-hero h1{font-size:clamp(28px,8.6vw,40px)}
+  .site-hero{padding:26px 18px 28px;border-radius:20px}
+  .site-hero h1{font-size:clamp(29px,8.4vw,40px)}
+  .hero-stats{gap:0;padding-top:16px}
+  .hero-stat{padding-right:16px;margin-right:16px}
+  .hero-stat b{font-size:25px}
+  [dir="rtl"] .hero-stat{padding:0 0 0 16px;margin:0 0 0 16px}
+  .site-medal{width:min(168px,44vw)}
+  .hero-badge{display:none}
+  .hero-art{min-height:0}
+  .tch-grid{grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
+  .tch-hero{padding:20px;gap:18px;border-radius:20px}
+  .apply-card,.site-contact{padding:18px;border-radius:18px}
+}
+
+
+/* ================= SAYT: HARAKAT (motion) =================
+   Qoida: JS ishlamasa ham hamma narsa ko'rinadi — harakat faqat
+   "html.js-reveal" bo'lganda yoqiladi. prefers-reduced-motion bo'lsa
+   hammasi to'xtaydi (pastdagi umumiy blokda).                          */
+
+/* Tepadagi tilla o'qish chizig'i */
+.site-scroll{position:fixed;top:0;left:0;height:2px;z-index:40;pointer-events:none;
+  width:100%;transform:scaleX(0);transform-origin:0 50%;
+  background:linear-gradient(90deg,var(--st-gold),var(--st-gold-3),var(--st-gold-2));
+  box-shadow:0 0 12px color-mix(in srgb,var(--st-gold) 60%,transparent)}
+[dir="rtl"] .site-scroll{transform-origin:100% 50%}
+
+/* --- Hero: ketma-ket chiqish --- */
+.js-reveal .site-hero .hero-text > *,
+.js-reveal .site-hero .hero-art{opacity:0;transform:translateY(22px)}
+.js-reveal .site-hero.lit .hero-text > *,
+.js-reveal .site-hero.lit .hero-art{opacity:1;transform:none;
+  transition:opacity .8s cubic-bezier(.22,.9,.28,1), transform .8s cubic-bezier(.22,.9,.28,1);
+  transition-delay:calc(var(--d,0) * 95ms)}
+.js-reveal .site-hero .hero-art{transform:translateY(22px) scale(.92)}
+.js-reveal .site-hero.lit .hero-art{transform:none;transition-duration:1.05s}
+
+/* Panelning o'zi ham yumshoq ochiladi */
+.js-reveal .site-hero{opacity:0;transform:translateY(16px) scale(.985)}
+.js-reveal .site-hero.lit{opacity:1;transform:none;
+  transition:opacity .7s ease, transform .9s cubic-bezier(.22,.9,.28,1)}
+
+/* Sarlavha bo'ylab sekin o'tuvchi tilla yorug'lik */
+.site-hero h1 .gold{background-size:220% 100%;background-position:0% 50%}
+.js-reveal .site-hero.lit h1 .gold{animation:stSheen 9s ease-in-out 1.2s infinite}
+@keyframes stSheen{
+  0%,100%{background-position:0% 50%}
+  50%{background-position:100% 50%}
+}
+
+/* Hoshiya chizig'i cho'ziladi */
+.js-reveal .hero-rule{width:0}
+.js-reveal .site-hero.lit .hero-rule{width:64px;
+  transition:width .9s cubic-bezier(.22,.9,.28,1) .5s}
+
+/* Medalyon: sekin suzadi, ichidagi naqsh aylanadi */
+.js-reveal .site-hero.lit .site-medal{animation:stFloat 7.5s ease-in-out 1s infinite}
+@keyframes stFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.medal-in .khatam-in{animation:stTurn 90s linear infinite}
+@keyframes stTurn{to{transform:rotate(360deg)}}
+.js-reveal .site-hero.lit .hero-ar{animation:stBreathe 6s ease-in-out 1.4s infinite}
+@keyframes stBreathe{0%,100%{opacity:.26}50%{opacity:.46}}
+
+/* Ko'rsatkichlar ketma-ket chiqadi */
+.js-reveal .hero-stats .hero-stat{opacity:0;transform:translateY(10px)}
+.js-reveal .site-hero.lit .hero-stats .hero-stat{opacity:1;transform:none;
+  transition:opacity .6s ease, transform .6s cubic-bezier(.22,.9,.28,1);
+  transition-delay:calc(700ms + var(--i,0) * 110ms)}
+
+/* --- Tugmalar: ustiga kelganda yorug'lik o'tadi --- */
+.site .btn{position:relative;overflow:hidden;
+  transition:transform .18s cubic-bezier(.22,.9,.28,1), box-shadow .22s, background .22s, border-color .22s}
+.site .btn::after{content:'';position:absolute;top:0;bottom:0;width:42%;
+  inset-inline-start:-60%;pointer-events:none;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.42),transparent);
+  transform:skewX(-18deg);opacity:0}
+.site .btn:hover{transform:translateY(-2px)}
+.site .btn:active{transform:translateY(0)}
+.js-reveal .site .btn:hover::after{opacity:1;animation:stShine .75s ease-out}
+@keyframes stShine{from{inset-inline-start:-60%}to{inset-inline-start:120%}}
+.hero-cta .btn.gold:hover{box-shadow:0 18px 40px -14px rgba(216,174,67,.95)}
+.site .btn.primary:hover{box-shadow:0 16px 34px -14px rgba(11,23,48,.9)}
+
+/* Menyu tugmalari ostida tilla chiziq */
+.site-nav .btn.ghost{position:relative}
+.site-nav .btn.ghost::before{content:'';position:absolute;left:12px;right:12px;bottom:6px;height:1.5px;
+  border-radius:2px;background:var(--st-gold);transform:scaleX(0);transform-origin:50% 50%;
+  transition:transform .28s cubic-bezier(.22,.9,.28,1)}
+.site-nav .btn.ghost:hover::before{transform:scaleX(1)}
+
+/* --- Bo'lim sarlavhasi: chiziq cho'ziladi --- */
+.js-reveal .sec-eyebrow::after{transform:scaleX(0);transform-origin:0 50%}
+.js-reveal .reveal.seen .sec-eyebrow::after{transform:scaleX(1);
+  transition:transform 1s cubic-bezier(.22,.9,.28,1) .15s}
+[dir="rtl"] .js-reveal .sec-eyebrow::after{transform-origin:100% 50%}
+
+/* --- Kartalar ketma-ket chiqadi --- */
+.js-reveal .feat-grid > *,.js-reveal .course-grid > *,
+.js-reveal .tch-grid > *,.js-reveal .slot-grid > *{opacity:0;transform:translateY(16px)}
+.js-reveal .reveal.seen .feat-grid > *,.js-reveal .reveal.seen .course-grid > *,
+.js-reveal .reveal.seen .tch-grid > *,.js-reveal .reveal.seen .slot-grid > *{
+  opacity:1;transform:none;
+  transition:opacity .6s ease, transform .6s cubic-bezier(.22,.9,.28,1);
+  transition-delay:calc(var(--i,0) * 65ms)}
+
+/* Karta ichidagi belgi ustiga kelganda jonlanadi */
+.feat-ico{transition:transform .3s cubic-bezier(.34,1.56,.64,1), box-shadow .3s}
+.feat:hover .feat-ico{transform:translateY(-3px) rotate(-6deg) scale(1.06);
+  box-shadow:0 16px 30px -12px rgba(11,23,48,.9)}
+.tch-ava{transition:transform .3s cubic-bezier(.34,1.56,.64,1), box-shadow .3s}
+.tch-card:hover .tch-ava{transform:scale(1.07);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--st-gold) 60%,transparent),
+    0 18px 34px -16px rgba(11,23,48,.9)}
+
+/* Aloqa kartasidagi qatorlar ketma-ket */
+.js-reveal .site-contact .contact-row{opacity:0;transform:translateX(-10px)}
+.js-reveal .reveal.seen .site-contact .contact-row{opacity:1;transform:none;
+  transition:opacity .5s ease, transform .5s cubic-bezier(.22,.9,.28,1);
+  transition-delay:calc(200ms + var(--i,0) * 80ms)}
+[dir="rtl"] .js-reveal .site-contact .contact-row{transform:translateX(10px)}
+
+/* Ariza yuborilgandagi belgi */
+.lead-ok-in .ok-ico{animation:stPop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes stPop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* Fon naqshi aylantirilganda sekin siljiydi (JS beradi) */
+.site-bg .khatam{transition:transform .12s linear;will-change:transform}
+
+/* --- Harakat kamaytirilgan rejim: hammasi to'xtaydi --- */
+@media (prefers-reduced-motion:reduce){
+  .site-scroll{display:none}
+  .js-reveal .site-hero,.js-reveal .site-hero .hero-text > *,
+  .js-reveal .site-hero .hero-art,.js-reveal .hero-stats .hero-stat,
+  .js-reveal .feat-grid > *,.js-reveal .course-grid > *,
+  .js-reveal .tch-grid > *,.js-reveal .slot-grid > *,
+  .js-reveal .site-contact .contact-row{opacity:1;transform:none;transition:none;animation:none}
+  .js-reveal .hero-rule{width:64px}
+  .js-reveal .sec-eyebrow::after{transform:none}
+  .site-hero h1 .gold,.medal-in .khatam-in,.hero-ar,.site-medal{animation:none}
+  .site .btn::after{display:none}
+  .site .btn:hover,.feat:hover .feat-ico,.tch-card:hover .tch-ava{transform:none}
+  .site-bg .khatam{transform:none !important}
 }
 
 /* ---------- O'qituvchi uchun davomat kartasi ---------- */
