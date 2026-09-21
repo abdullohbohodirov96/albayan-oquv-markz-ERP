@@ -526,9 +526,10 @@ async function handleLinkFlow(chatId, text, from, st) {
 
   /* 3) Guruh kodi → administratorga so'rov */
   if (st.step === 'group') {
-    const code = text.trim().toUpperCase();
+    /* Kod qanday yozilsa ham topilsin: "b 020", "B-020", "b020" → B020 */
+    const code = normCode(text);
     const groups = await listCol('groups');
-    const group = groups.filter(g => String(g.code || '').toUpperCase() === code)[0];
+    const group = groups.filter(g => g.code && normCode(g.code) === code)[0];
     if (!group) {
       await sendMessage(chatId, 'Bunday guruh kodi topilmadi: <b>' + code + '</b>\nKodni tekshirib, qayta yozing.');
       return;
@@ -557,10 +558,19 @@ async function handleLinkFlow(chatId, text, from, st) {
    o'sha o'quv guruhiga bog'lanadi. Kod topilmasa — qanday qilishni tushuntiradi.
    Ulangach guruhga "ulandim" xabari boradi.                                */
 
-/** Guruh nomidan kodga o'xshash 4 xonali raqamlarni ajratib olish */
+/** Guruh nomidan kodga o'xshash bo'laklarni ajratib olish.
+    Avval faqat 4 xonali raqam qidirilardi — shuning uchun "B020" kabi
+    kodlar topilmasdi. Endi harf-raqamli bo'laklar ham olinadi.
+
+    Eng kami 3 belgi: "A1", "B2" kabi ikki belgili bo'laklar DARAJA nomi
+    bo'lib, guruh nomlarida doim uchraydi ("Kechki A1"). Ularni kod deb
+    olsak, bot noto'g'ri guruhga ulanib qolishi mumkin edi.               */
 function codesInTitle(title) {
   const out = [];
-  String(title || '').replace(/\d{4}/g, m => { if (out.indexOf(m) < 0) out.push(m); return m; });
+  String(title || '').split(/[^A-Za-z0-9]+/).forEach(w => {
+    const c = normCode(w);
+    if (c.length >= 3 && c.length <= 12 && /\d/.test(c) && out.indexOf(c) < 0) out.push(c);
+  });
   return out;
 }
 
@@ -574,9 +584,12 @@ async function groupByTitle(title) {
   const codes = codesInTitle(title);
   if (!codes.length) return { error: 'kod-yoq' };
   const groups = await allGroups();
-  const hits = groups.filter(g => codes.indexOf(String(g.code || '')) >= 0);
+  const hits = groups.filter(g => g.code && codes.indexOf(normCode(g.code)) >= 0);
   if (!hits.length) return { error: 'topilmadi', codes };
-  if (hits.length > 1) return { error: 'kop', codes };
+  /* Bir nechta kod mos kelsa ham, hammasi BITTA guruhga tegishli bo'lsa — mayli */
+  const uniq = [];
+  hits.forEach(g => { if (uniq.indexOf(g.id) < 0) uniq.push(g.id); });
+  if (uniq.length > 1) return { error: 'kop', codes };
   return { group: hits[0] };
 }
 

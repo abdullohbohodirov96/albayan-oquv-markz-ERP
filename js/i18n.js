@@ -1183,7 +1183,17 @@
     'Yo’nalishlar': ['Направления', 'Courses', 'المسارات'],
     'daraja: A1–C2': ['уровней: A1–C2', 'levels: A1–C2', 'مستويات: A1–C2'],
     'kishilik guruh': ['человек в группе', 'per group', 'طالباً في المجموعة'],
-    'kun ish rejimi': ['дней в неделю', 'days a week', 'أيام عمل']
+    'kun ish rejimi': ['дней в неделю', 'days a week', 'أيام عمل'],
+
+    /* --- Shaxsiy va guruh kodlari --- */
+    'Shaxsiy kod (4 ta raqam)': ['Личный код (4 цифры)', 'Personal code (4 digits)', 'الرمز الشخصي (٤ أرقام)'],
+    'Bot va kabinetga shu kod bilan kiriladi. O’zgartirsangiz eski kod ishlamay qoladi.': ['С этим кодом входят в бота и в кабинет. Если изменить, старый код перестанет работать.', 'This code is used to sign in to the bot and the cabinet. If you change it, the old code stops working.', 'يُستخدم هذا الرمز للدخول إلى البوت والصفحة. إذا غيّرته، يتوقف الرمز القديم.'],
+    'bo’sh qoldirsangiz o’zi beriladi': ['оставьте пустым — код выдаст система', 'leave empty — a code will be issued', 'اتركه فارغاً — سيُمنح رمز تلقائياً'],
+    'O’quvchi botda shu kodni yozadi. Masalan: B020. Kod o’zgarmaydi — bir marta bergan kodingiz shundayligicha qoladi.': ['Ученик пишет этот код в боте. Например: B020. Код не меняется — однажды выданный код остаётся прежним.', 'The student types this code in the bot. For example: B020. The code does not change — once given, it stays the same.', 'يكتب الطالب هذا الرمز في البوت. مثلاً: B020. الرمز لا يتغير — يبقى كما مُنح أول مرة.'],
+    'Kod kamida 3 ta belgidan iborat bo’lsin (A1, B2 — daraja nomi).': ['Код должен быть не короче 3 символов (A1, B2 — это уровни).', 'The code must be at least 3 characters (A1, B2 are level names).', 'يجب ألا يقل الرمز عن ٣ رموز (A1 و B2 أسماء مستويات).'],
+    'Kod 12 ta belgidan uzun bo’lmasin.': ['Код не длиннее 12 символов.', 'The code must not exceed 12 characters.', 'ألا يزيد الرمز عن ١٢ رمزاً.'],
+    'Kod 4 ta raqamdan iborat bo’lsin.': ['Код должен состоять из 4 цифр.', 'The code must be 4 digits.', 'يجب أن يتكون الرمز من ٤ أرقام.'],
+    'Shaxsiy kod (4 raqam)': ['Личный код (4 цифры)', 'Personal code (4 digits)', 'الرمز الشخصي (٤ أرقام)']
   };
 
   /* Ichida o'zgaruvchi bo'lgan iboralar uchun bo'lak tarjimalari */

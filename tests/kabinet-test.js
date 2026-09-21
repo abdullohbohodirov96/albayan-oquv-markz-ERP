@@ -58,6 +58,9 @@ async function login(l, p) {
 
 const R = 'k' + Date.now().toString(36);        // har bir ishga tushirish uchun alohida ID
 const ID = n => R + '_' + n;
+/* Guruh kodi endi takrorlanmasligi shart (server tekshiradi),
+   shuning uchun har bir ishga tushirishda alohida kod olinadi. */
+const GCODE = 'K' + R.slice(-5).toUpperCase();
 
 (async () => {
   const dir = await login('admin', PASS);
@@ -69,7 +72,7 @@ const ID = n => R + '_' + n;
   await put('rooms/' + ID('r1'), { id: ID('r1'), name: '3-xona', capacity: 12 }, dir);
   await put('courses/' + ID('c1'), { id: ID('c1'), name: 'Arab tili', monthlyFee: 400000, active: true }, dir);
   await put('groups/' + ID('g1'), {
-    id: ID('g1'), code: 'K001', name: 'Kabinet guruhi', courseId: ID('c1'), teacherId: ID('t1'),
+    id: ID('g1'), code: GCODE, name: 'Kabinet guruhi', courseId: ID('c1'), teacherId: ID('t1'),
     roomId: ID('r1'), days: [1, 3], startTime: '09:00', endTime: '10:30', startDate: '2026-09-01',
     fee: 400000, feeHistory: [{ fee: 400000, from: '2026-09' }], limit: 10, status: 'faol'
   }, dir);
@@ -91,14 +94,41 @@ const ID = n => R + '_' + n;
   ok('Ikkinchisida kod bor: ' + st2.code, /^\d{4}$/.test(String(st2.code)), JSON.stringify(st2.code));
   ok('Kodlar har xil', st1.code !== st2.code, st1.code + ' / ' + st2.code);
 
-  section('   Kod o’zgarmaydi va mijoz uni almashtira olmaydi');
+  section('   Kod o’z-o’zidan o’zgarmaydi, lekin markaz uni bera oladi');
   await put('students/' + ID('s1'),
     Object.assign({}, st1, { firstName: 'Abdulloh', note: 'tahrir' }), dir);
   const again = (await get('students/' + ID('s1'), dir)).json.data;
   eq('Tahrirdan keyin ham o’sha kod', again.code, st1.code);
-  await put('students/' + ID('s1'), Object.assign({}, st1, { code: '9999' }), dir);
-  const forced = (await get('students/' + ID('s1'), dir)).json.data;
-  eq('Qo’lda yozilgan kod qabul qilinmadi', forced.code, st1.code);
+
+  /* Kod yuborilmasa ham eskisi qoladi */
+  const bare = Object.assign({}, again); delete bare.code;
+  await put('students/' + ID('s1'), bare, dir);
+  const kept = (await get('students/' + ID('s1'), dir)).json.data;
+  eq('Kod yuborilmasa ham saqlanadi', kept.code, st1.code);
+
+  /* Markaz rahbari kodni ataylab bera oladi (band bo'lmasa) */
+  const wantCode = String(1000 + ((Number(st1.code) + 137) % 8999));
+  const free = wantCode !== String(st2.code);
+  if (free) {
+    const setRes = await put('students/' + ID('s1'), Object.assign({}, kept, { code: wantCode }), dir);
+    const changed = (await get('students/' + ID('s1'), dir)).json.data;
+    ok('Markaz kodni o’zi bera oladi',
+      setRes.status === 200 && changed.code === wantCode,
+      'status ' + setRes.status + ', kod ' + changed.code);
+    /* Orqaga qaytaramiz — keyingi sinovlar eski kod bilan ishlaydi */
+    await put('students/' + ID('s1'), Object.assign({}, changed, { code: st1.code }), dir);
+    const back = (await get('students/' + ID('s1'), dir)).json.data;
+    eq('Eski kodga qaytarildi', back.code, st1.code);
+  }
+
+  /* Band kod rad etiladi va egasi o'zgarmaydi */
+  const busy = await put('students/' + ID('s1'),
+    Object.assign({}, kept, { code: String(st2.code) }), dir);
+  eq('Band kod rad etildi', busy.status, 400);
+  const afterBusy = (await get('students/' + ID('s1'), dir)).json.data;
+  eq('Rad etilgandan keyin kod o’zgarmadi', afterBusy.code, st1.code);
+  const owner = (await get('students/' + ID('s2'), dir)).json.data;
+  eq('Kod egasi ham o’zgarmadi', owner.code, st2.code);
 
   /* ---------- 2. Kabinet ---------- */
   DIRC = dir;

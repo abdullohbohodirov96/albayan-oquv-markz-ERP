@@ -17,6 +17,7 @@
     source: ['manba', 'qayerdan', 'источник', 'откуда', 'source', 'المصدر'],
     note: ['izoh', 'izohi', 'qoshimcha', 'комментарий', 'примечание', 'note', 'comment', 'ملاحظة'],
     status: ['holat', 'holati', 'статус', 'status', 'الحالة'],
+    code: ['kod', 'kodi', 'shaxsiy kod', 'kabinet kodi', 'oquvchi kodi', 'код', 'личный код', 'code', 'student code', 'الرمز'],
     nextContact: ['keyingi aloqa', 'bogla', 'bоglanish', 'следующий контакт', 'next contact']
   };
 
@@ -163,6 +164,7 @@
       { id: 'parentName', label: 'Ota-ona ismi' },
       { id: 'parentPhone', label: 'Ota-ona telefoni' },
       { id: 'birthDate', label: 'Tug’ilgan sana' },
+      { id: 'code', label: 'Shaxsiy kod (4 raqam)' },
       { id: 'group', label: 'Guruh (kod yoki nom)' },
       { id: 'note', label: 'Izoh' }
     ],
@@ -275,6 +277,8 @@
           rec.parentName = g('parentName');
           rec.parentPhone = A.normPhone(g('parentPhone')) || rec.phone;
           rec.birthDate = cellDate(g('birthDate'));
+          /* Tayyor shaxsiy kod — faylda bo'lsa o'shasi olinadi va o'zgarmaydi */
+          rec.code = String(g('code') || '').replace(/\D/g, '').slice(0, 4);
           rec.group = g('group');
           rec.note = g('note');
           if (!rec.lastName && !rec.firstName && !rec.phone) return;
@@ -343,11 +347,13 @@
   async function doImport(kind, recs, skipDup, App, funnelId) {
     var added = 0, skipped = 0, enrolled = 0, problems = [];
     var existingPhones = {};
+    var takenCodes = {};
     if (kind === 'students') {
       D.all('students').forEach(function (s) {
         [s.phone, s.parentPhone].forEach(function (p) {
           var d = A.phoneDigits(p); if (d) existingPhones[d] = s.id;
         });
+        if (s.code) takenCodes[String(s.code)] = s.id;
       });
     } else {
       D.all('leads').forEach(function (l) {
@@ -379,6 +385,17 @@
             birthDate: r.birthDate || '', status: 'faol',
             note: r.note || '', createdAt: A.nowStamp(), imported: true
           };
+          /* Fayldagi tayyor shaxsiy kod — band bo'lmasa o'shasi olinadi.
+             Band bo'lsa yoki yo'q bo'lsa, kodni server o'zi beradi.        */
+          if (/^\d{4}$/.test(String(r.code || ''))) {
+            if (takenCodes[r.code]) {
+              problems.push((r.lastName || '') + ' ' + (r.firstName || '') +
+                ' — "' + r.code + '" kodi band, yangi kod berildi');
+            } else {
+              st.code = r.code;
+              takenCodes[r.code] = st.id;
+            }
+          }
           if (!st.lastName && !st.firstName) st.lastName = 'Noma’lum';
           await D.save('students', st);
           added++;

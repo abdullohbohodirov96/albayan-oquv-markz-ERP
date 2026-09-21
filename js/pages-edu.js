@@ -332,12 +332,17 @@
       {
         name: 'code', label: 'Guruh kodi', required: true,
         value: g.code || A.nextGroupCode((courses[0] || {}).name, D.all('groups')),
-        help: 'O’quvchi botda shu kodni yozadi. Masalan: B020',
+        help: 'O’quvchi botda shu kodni yozadi. Masalan: B020. ' +
+          'Kod o’zgarmaydi — bir marta bergan kodingiz shundayligicha qoladi.',
         validate: function (v) {
+          var c = String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          if (c.length < 3) return 'Kod kamida 3 ta belgidan iborat bo’lsin (A1, B2 — daraja nomi).';
+          if (c.length > 12) return 'Kod 12 ta belgidan uzun bo’lmasin.';
           var dup = D.all('groups').filter(function (x) {
-            return x.id !== g.id && String(x.code || '').toUpperCase() === String(v).toUpperCase();
+            return x.id !== g.id &&
+              String(x.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === c;
           });
-          return dup.length ? 'Bu kod boshqa guruhda ishlatilgan.' : null;
+          return dup.length ? 'Bu kod boshqa guruhda: ' + dup[0].name : null;
         }
       },
       {

@@ -358,11 +358,13 @@ async function ensureSeed() {
   const nq = await levels.ensureBank(store, { stamp });
   if (nq) console.log('  Daraja testi savollari yaratildi (' + nq + ' ta)');
 
-  // Eski guruhlarga kod berish (Telegram guruhiga ulash uchun kerak)
+  /* Kodsiz qolgan guruhlarga kod berish.
+     DIQQAT: mavjud kodga TEGILMAYDI. Avval bu yerda 4 xonali bo'lmagan
+     har qanday kod almashtirilardi — shuning uchun "B020" yo'qolib ketardi. */
   for (const r of await store.list('groups/')) {
     if (r.path.split('/').length !== 2) continue;
     const g = r.data;
-    if (!g || /^\d{4}$/.test(String(g.code || ''))) continue;
+    if (!g || normGroupCode(g.code)) continue;
     g.code = await freeGroupCode(g.id);
     await store.set('groups/' + g.id, g);
   }
@@ -407,18 +409,43 @@ async function ensureSeed() {
 }
 
 /** Guruh uchun band bo'lmagan 4 xonali kod. Kod Telegram guruh nomiga yoziladi. */
+/* Guruh kodi: harf va raqam, 2–12 belgi (B020, A1, 4821 — hammasi bo'ladi).
+   Katta harfga keltiriladi, chunki bot kodni katta-kichikka qaramay topadi. */
+function normGroupCode(v) {
+  const c = String(v == null ? '' : v).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  /* Eng kami 3 belgi: "A1", "B2" — bular DARAJA nomi, guruh nomlarida doim
+     uchraydi. Ularni kod sifatida qabul qilsak, bot guruh nomidan kodni
+     ajratganda noto'g'ri guruhga ulanib qolishi mumkin.                   */
+  return /^[A-Z0-9]{3,12}$/.test(c) ? c : '';
+}
+
+/** Shu kod bilan boshqa guruh bormi (exceptId dan boshqa) */
+async function groupByCode(code, exceptId) {
+  const c = normGroupCode(code);
+  if (!c) return null;
+  const rows = await store.list('groups/');
+  for (const r of rows) {
+    if (r.path.split('/').length !== 2) continue;
+    const d = r.data;
+    if (!d || d.id === exceptId) continue;
+    if (normGroupCode(d.code) === c) return d;
+  }
+  return null;
+}
+
+/** Kod yozilmagan guruh uchun taklif: G001, G002 … (band bo'lmagani) */
 async function freeGroupCode(exceptId) {
   const rows = await store.list('groups/');
   const busy = {};
   rows.filter(r => r.path.split('/').length === 2).forEach(r => {
     const d = r.data;
-    if (d && d.id !== exceptId && /^\d{4}$/.test(String(d.code || ''))) busy[d.code] = 1;
+    if (d && d.id !== exceptId && d.code) busy[normGroupCode(d.code)] = 1;
   });
-  for (let i = 0; i < 400; i++) {
-    const c = String(1000 + crypto.randomInt(9000));
+  for (let i = 1; i < 1000; i++) {
+    const c = 'G' + String(i).padStart(3, '0');
     if (!busy[c]) return c;
   }
-  return String(1000 + crypto.randomInt(9000));
+  return 'G' + String(crypto.randomInt(100000));
 }
 
 /* ---------------- Yozuv navbati (bir vaqtda bitta amal) ---------------- */
@@ -931,18 +958,36 @@ async function guardWrite(user, p, method, next) {
     const data = Object.assign({}, next);
     // Telegram bog'lanishini mijoz o'zgartira olmaydi — faqat /api/student/link* yo'llari
     if (old && old.telegram) data.telegram = old.telegram; else delete data.telegram;
-    if (old && kabinet.validCode(old.code)) {
-      data.code = old.code;                       // mijoz kodni o'zgartira olmaydi
-    } else if (!kabinet.validCode(data.code)) {
-      const c = await kabinet.ensureCode(store, Object.assign({ id: seg[1] }, data));
-      if (c) data.code = c;
-    } else {
-      // yangi o'quvchi kod bilan kelgan bo'lsa — band emasligini tekshiramiz
-      const busy = await kabinet.byCode(store, data.code);
-      if (busy && busy.id !== seg[1]) {
+    /* Shaxsiy kod — markaz o'zi beradi va u O'ZGARMAYDI.
+         — yangi o'quvchida kod yozilgan bo'lsa, o'shasi olinadi (Excel'dan
+           import qilinganda ham shu yo'l ishlaydi);
+         — yozilmagan bo'lsa, server bo'sh kod tanlaydi;
+         — keyin kodni almashtirish faqat student.edit huquqi bilan va faqat
+           kod bo'sh bo'lmasa: shunda ham eski kod bilan ishlagan havola va
+           sessiyalar yopiladi (pastda, saqlangandan keyin).
+       Kod hech qachon o'z-o'zidan o'zgarmaydi.                            */
+    const want = kabinet.normCode(data.code);
+    const hadOld = old && kabinet.validCode(old.code);
+
+    if (!kabinet.validCode(want)) {
+      /* Kod yozilmagan yoki noto'g'ri: eskisi bo'lsa qoladi, yo'q bo'lsa beriladi */
+      if (hadOld) data.code = old.code;
+      else {
         const c = await kabinet.ensureCode(store, Object.assign({ id: seg[1] }, data, { code: '' }));
         if (c) data.code = c;
       }
+    } else if (hadOld && want === String(old.code)) {
+      data.code = old.code;                        // o'zgarmadi
+    } else {
+      /* Yangi kod berilmoqda — band emasligini tekshiramiz */
+      const busy = await kabinet.byCode(store, want);
+      if (busy && busy.id !== seg[1]) {
+        return { code: 400, error: 'Bu kod boshqa o’quvchida: ' + want };
+      }
+      if (hadOld && !A.can(user, 'student.edit')) {
+        return { code: 403, error: 'Kodni o’zgartirish uchun ruxsat yo’q.' };
+      }
+      data.code = want;
     }
     return { data };
   }
@@ -957,8 +1002,19 @@ async function guardWrite(user, p, method, next) {
     } else {
       delete data.tgChat; delete data.tgTitle; delete data.tgAt;
     }
-    if (old && /^\d{4}$/.test(String(old.code || ''))) data.code = old.code;
-    else data.code = await freeGroupCode(seg[1]);
+    /* Guruh kodi — MARKAZ o'zi yozadi va u o'zgarmaydi.
+       Avval server kodni majburan 4 xonali raqamga almashtirardi, shuning
+       uchun "B020" deb yozilgan kod kirib chiqqandan keyin yo'qolardi.
+       Endi: yozilgan kod qanday bo'lsa, shundayligicha saqlanadi.
+       Faqat bo'sh qolsa yoki band bo'lsa server o'zi taklif qiladi.        */
+    const want = normGroupCode(data.code);
+    if (!want) {
+      data.code = (old && old.code) || await freeGroupCode(seg[1]);
+    } else {
+      const busy = await groupByCode(want, seg[1]);
+      if (busy) return { code: 400, error: 'Bu kod boshqa guruhda: ' + (busy.name || busy.code) };
+      data.code = want;
+    }
     return { data };
   }
 

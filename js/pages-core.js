@@ -1230,6 +1230,25 @@
       },
       { name: 'birthDate', label: 'Tug’ilgan sana (ixtiyoriy)', type: 'date', value: draft.birthDate },
       {
+        /* Shaxsiy kod — markaz o'zi beradi. Bo'sh qoldirilsa server tanlaydi.
+           Berilgan kod o'zgarmaydi: bot ham, kabinet ham shu kod bilan ishlaydi. */
+        name: 'code', label: 'Shaxsiy kod (4 ta raqam)', value: draft.code,
+        placeholder: isNew ? 'bo’sh qoldirsangiz o’zi beriladi' : '',
+        inputmode: 'numeric', maxlength: 4,
+        help: 'Bot va kabinetga shu kod bilan kiriladi. O’zgartirsangiz eski kod ishlamay qoladi.',
+        validate: function (v) {
+          var c = String(v || '').replace(/\D/g, '');
+          if (!c) return null;                       // bo'sh — server beradi
+          if (c.length !== 4) return 'Kod 4 ta raqamdan iborat bo’lsin.';
+          var dup = D.all('students').filter(function (x) {
+            return x.id !== (student && student.id) && String(x.code || '') === c;
+          });
+          return dup.length
+            ? 'Bu kod band: ' + dup[0].lastName + ' ' + dup[0].firstName
+            : null;
+        }
+      },
+      {
         name: 'status', label: 'Holat', type: 'select', value: draft.status || 'faol',
         options: [{ value: 'faol', label: 'Faol' }, { value: 'toxtatgan', label: 'Vaqtincha to’xtatgan' }, { value: 'arxiv', label: 'Arxivlangan' }]
       },
@@ -1281,8 +1300,11 @@
             UI.busy(btn, async function () {
               var v = f.values();
               var rec = Object.assign({}, isNew ? {} : student, v, {
-                phone: A.normPhone(v.phone), parentPhone: A.normPhone(v.parentPhone)
+                phone: A.normPhone(v.phone), parentPhone: A.normPhone(v.parentPhone),
+                /* Kod faqat raqam; bo'sh bo'lsa serverga qoldiriladi */
+                code: String(v.code || '').replace(/\D/g, '')
               });
+              if (!rec.code) delete rec.code;
               delete rec._fromLead; delete rec._courseId; delete rec._groupId;
               if (isNew) { rec.id = A.uid('stu'); rec.createdAt = A.nowStamp(); }
               await D.save('students', rec);

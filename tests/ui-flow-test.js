@@ -382,7 +382,9 @@ async function typeIn(page, sel, val) {
     };
   });
   ok('Guruhda Telegram kartasi bor', !!tgInfo.hasCard, JSON.stringify(tgInfo).slice(0, 120));
-  ok('Guruh kodi 4 raqam', /^\d{4}$/.test(tgInfo.code || ''), tgInfo.code);
+  /* Kod endi markaz o'zi yozgan ko'rinishda qoladi (B020, 4821, W1ZL…) —
+     avval server uni majburan 4 xonali raqamga almashtirardi. */
+  ok('Guruh kodi ko’rsatilgan', /^[A-Z0-9]{3,12}$/.test(tgInfo.code || ''), tgInfo.code);
   ok('Nima qilish kerakligi yozilgan', /guruh nomiga/i.test(tgInfo.text || ''), (tgInfo.text || '').slice(0, 80));
   await dctx.close();
 
