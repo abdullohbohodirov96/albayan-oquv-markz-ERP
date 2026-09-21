@@ -15,6 +15,12 @@ const kabinet = require('./kabinet');
 const link = require('./link');
 const kabsess = require('./kabsess');
 const levels = require('./levels');
+const files = require('./files');
+const curriculum = require('./curriculum');
+const lms = require('./lms');
+const quiz = require('./quiz');
+const progress = require('./progress');
+const parents = require('./parents');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
 function backupReadSafe(name) {
@@ -67,12 +73,22 @@ function send(res, code, body, headers) {
   }, headers || {}));
   res.end(data);
 }
-function readBody(req) {
+/* So'rov tanasi. `max` — ruxsat etilgan eng katta hajm (bayt).
+   Fayl yuklash uchun kattaroq beriladi: base64 asl fayldan ~1.37 barobar
+   katta bo'ladi, shuning uchun 10 MB fayl ≈ 14 MB so'rov.              */
+const BODY_MAX = Number(process.env.BODY_MAX_BYTES || 4e6);
+const BODY_MAX_FILE = Number(process.env.BODY_MAX_FILE_BYTES || 16e6);
+function readBody(req, max) {
+  const cap = Number(max) || BODY_MAX;
   return new Promise((resolve, reject) => {
     let d = '';
     req.on('data', c => {
       d += c;
-      if (d.length > 4e6) { reject(new Error('So’rov juda katta')); req.destroy(); }
+      if (d.length > cap) {
+        const e = new Error('So’rov juda katta');
+        e.tooBig = true;
+        reject(e); req.destroy();
+      }
     });
     req.on('end', () => {
       if (!d) return resolve({});
@@ -713,6 +729,60 @@ async function notifyDirectors(text) {
   } catch (e) { /* xabar yetmasa ham ish to'xtamaydi */ }
 }
 
+/** Guruh ustoziga ichki suhbat orqali xabar (savol kelganda) */
+async function notifyTeacherOfGroup(group, text) {
+  try {
+    if (!group || !group.teacherId) return;
+    const users = (await store.list('users/')).map(x => x.data);
+    const who = users.filter(u => u && u.active !== false && u.staffId === group.teacherId);
+    for (const d of who) {
+      const id = 'sys__' + d.id;
+      const doc = (await store.get('chats/' + id)) ||
+        { id, type: 'direct', title: 'Tizim xabarlari', members: [d.id], messages: [], readAt: {} };
+      doc.messages = (doc.messages || []).concat([{
+        id: 'msg_' + Date.now().toString(36), from: 'system',
+        text: (group.name ? group.name + ': ' : '') + text, at: stamp()
+      }]).slice(-50);
+      doc.updatedAt = stamp();
+      await store.set('chats/' + id, doc);
+    }
+  } catch (e) { /* xabar yetmasa ham ish to'xtamaydi */ }
+}
+
+/**
+ * Fayl shu o'quvchiga ko'rinadimi?
+ * Faqat uning guruhidagi dars yozuvi, materiali yoki vazifasiga biriktirilgan
+ * fayl, yoki o'zi yuborgan fayl ochiladi. Boshqa hech narsa.
+ */
+async function fileVisibleToStudents(rec, studentIds) {
+  if (!rec) return false;
+  const ids = (studentIds || []).map(String);
+  if (rec.byKind === 'oquvchi' && ids.indexOf(String(rec.by)) >= 0) return true;
+
+  const ref = String(rec.refPath || '');
+  if (!ref) return false;
+  const mems = (await store.list('memberships/'))
+    .map(r => r.data).filter(m => m && ids.indexOf(String(m.studentId)) >= 0 && m.status !== 'chiqdi');
+  const gids = {};
+  mems.forEach(m => { gids[String(m.groupId)] = 1; });
+
+  const [col, key] = ref.split('/');
+  if (col === 'lessonlog') return !!gids[String(key || '').split('__')[0]];
+  if (col === 'materials' || col === 'homework') {
+    const doc = await store.get(ref);
+    if (!doc || !doc.topicId) return false;
+    /* Dastur materiali: o'quvchining guruhida o'sha mavzu o'tilgan bo'lsa */
+    const logs = (await store.list('lessonlog/')).map(r => r.data)
+      .filter(l => l && l.topicId === doc.topicId && gids[String(l.groupId)]);
+    return logs.length > 0;
+  }
+  if (col === 'asks') {
+    const doc = await store.get(ref);
+    return !!(doc && ids.indexOf(String(doc.studentId)) >= 0);
+  }
+  return false;
+}
+
 function startAutoInvoice() {
   const t = setInterval(() => {
     autoInvoiceTick().catch(e => console.error('auto invoice:', e.message));
@@ -767,6 +837,15 @@ function payrollLocked(item) {
  * Ruxsat nomi yetarli emas: yozuv kimga tegishli ekani va holat o'zgarishi ham tekshiriladi.
  * Natija: { code, error } — rad etilgan bo'lsa; yoki { data } — saqlanadigan (tozalangan) ma'lumot.
  */
+/* Mijoz to'g'ridan-to'g'ri yoza olmaydigan to'plamlar: ular faqat
+   maxsus API yo'llari orqali, huquq tekshirilgandan keyin yoziladi. */
+const SERVER_ONLY = {
+  lessonlog: 1, holidays: 1, pauses: 1, makeups: 1,
+  questions: 1, feedback: 1,
+  quizzes: 1, quizq: 1, quizsess: 1, quizres: 1, asks: 1,
+  parents: 1, files: 1
+};
+
 async function guardWrite(user, p, method, next) {
   const seg = p.split('/');
   const col = seg[0];
@@ -777,6 +856,41 @@ async function guardWrite(user, p, method, next) {
      Aks holda o'quvchi o'ziga "C2" yozib qo'yardi yoki javoblarni ko'rardi. --- */
   if (col === 'testq' || col === 'testsess' || col === 'placements') {
     return no('Daraja testi yozuvlarini faqat tizim o’zgartiradi.');
+  }
+
+  /* --- O'quv qismi: quyidagilarni FAQAT server yo'llari yozadi ---
+     Sabab: natija, kod, anonimlik va fayl ma'lumotnomasi mijozdan
+     kelgan JSON bilan o'zgartirilmasligi kerak.                        */
+  if (SERVER_ONLY[col]) {
+    return no('Bu yozuvni faqat tizim o’zgartiradi (to’g’ri yo’ldan foydalaning).');
+  }
+
+  /* --- Dastur: modul, dars, material, vazifa --- */
+  if (col === 'modules' || col === 'topics' || col === 'materials' || col === 'homework') {
+    if (!A.can(user, 'curriculum.edit')) return no('Dasturni tahrirlash huquqi yo’q.');
+    const data = Object.assign({}, next, { id: seg[1] });
+    if (col === 'modules' && !curriculum.validLevel(data.level)) {
+      return { code: 400, error: 'Daraja noto’g’ri (A1…C2).' };
+    }
+    if (col === 'topics' && !data.moduleId) {
+      return { code: 400, error: 'Dars moduli ko’rsatilmagan.' };
+    }
+    if ((col === 'materials' || col === 'homework') && !data.topicId) {
+      return { code: 400, error: 'Dars ko’rsatilmagan.' };
+    }
+    if (!old) {
+      const field = col === 'modules' ? 'level' : (col === 'topics' ? 'moduleId' : 'topicId');
+      const value = col === 'modules' ? data.level : (col === 'topics' ? data.moduleId : data.topicId);
+      if (data.order == null || !Number.isFinite(Number(data.order))) {
+        data.order = await curriculum.nextOrder(store, col + '/', field, value);
+      }
+      data.createdAt = stamp();
+    } else {
+      data.createdAt = old.createdAt || stamp();
+    }
+    data.at = stamp();
+    data.by = user.id;
+    return { data };
   }
 
   /* --- O'quvchi: shaxsiy kodni server beradi va u o'zgarmaydi --- */
@@ -971,7 +1085,11 @@ async function filterReadDoc(user, p, data) {
 /* ---------------- API ---------------- */
 const COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students', 'groups', 'memberships',
   'leads', 'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin',
-  'invoices', 'payments', 'expenses', 'payroll', 'audit', 'placements'];
+  'invoices', 'payments', 'expenses', 'payroll', 'audit', 'placements',
+  /* O'quv qismi */
+  'modules', 'topics', 'materials', 'homework', 'lessonlog',
+  'holidays', 'pauses', 'makeups', 'questions', 'feedback',
+  'quizzes', 'quizres', 'asks', 'parents', 'files'];
 
 async function apiBootstrap(user) {
   const all = await store.all();
@@ -1022,6 +1140,24 @@ async function handleApi(req, res, url) {
       return send(res, 400, { error: 'Kod ' + kabinet.CODE_LEN + ' ta raqamdan iborat.' });
     }
     const student = await kabinet.byCode(store, code);
+
+    /* Kod o'quvchiniki bo'lmasa — ota-ona kodimi? Ota-onaning kodi o'zinikidir,
+       farzandining kodi emas; shuning uchun kodlar bir-biri bilan to'qnashmaydi. */
+    if (!student) {
+      const par = await parents.byCode(store, code);
+      if (par) {
+        kabinetOk(ip);
+        const ses = await kabsess.create(store, {
+          kind: 'parent', parentId: par.id, studentIds: par.studentIds || [], via: 'kod', stamp
+        });
+        const sum = await parents.summary(store, par, progress);
+        await writeAudit(null, 'Kabinet: ota-ona kirdi', par.name || '', ip);
+        return send(res, 200, Object.assign({ csrf: ses.csrf }, sum), {
+          'Set-Cookie': kabsess.cookieHeader(ses.cookie, kabsess.TTL_MS / 1000)
+        });
+      }
+    }
+
     const okPhone = !STRICT_KAB || kabinet.phoneTailOk(student, body.phone4);
     if (!student || !okPhone) {
       const f = kabinetFail(ip);
@@ -1047,7 +1183,7 @@ async function handleApi(req, res, url) {
     const ses = await kabsess.create(store, { studentId: student.id, kind: 'student', via: 'kod', stamp });
     await writeAudit(null, 'Kabinet: kod bilan kirildi',
       (student.lastName || '') + ' ' + (student.firstName || ''), ip);
-    return send(res, 200, Object.assign({ csrf: ses.csrf }, sum), {
+    return send(res, 200, Object.assign({ csrf: ses.csrf, kind: 'student' }, sum), {
       'Set-Cookie': kabsess.cookieHeader(ses.cookie, kabsess.TTL_MS / 1000)
     });
   }
@@ -1084,18 +1220,177 @@ async function handleApi(req, res, url) {
   if (route === 'kabinet/me' && req.method === 'GET') {
     const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
     if (!ses) return send(res, 401, { error: 'Kirish kerak.' });
+    if (ses.kind === 'parent') {
+      const par = await store.get(parents.COL + ses.parentId);
+      if (!par || par.active === false) {
+        return send(res, 401, { error: 'Kirish kerak.' }, { 'Set-Cookie': kabsess.clearHeader() });
+      }
+      const sum = await parents.summary(store, par, progress);
+      return send(res, 200, Object.assign({ csrf: ses.csrf }, sum));
+    }
     const st = await store.get('students/' + ses.studentId);
     if (!st || st.status === 'o’chirilgan') {
       return send(res, 401, { error: 'Kirish kerak.' }, { 'Set-Cookie': kabsess.clearHeader() });
     }
     const sum = await kabinet.summary(store, st);
-    return send(res, 200, Object.assign({ csrf: ses.csrf }, sum));
+    return send(res, 200, Object.assign({ csrf: ses.csrf, kind: 'student' }, sum));
   }
 
   if (route === 'kabinet/logout' && req.method === 'POST') {
     const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
     if (ses) await kabsess.revoke(store, ses.id, { stamp });
     return send(res, 200, { ok: true }, { 'Set-Cookie': kabsess.clearHeader() });
+  }
+
+  /* ================= KABINETDAGI O'QUV QISMI =================
+     Hamma yo'l sessiya bilan ishlaydi. O'zgartiruvchi so'rovlar CSRF
+     sirini talab qiladi (cookie SameSite=Lax ustiga qo'shimcha himoya).
+     Ota-ona O'QIYDI, lekin farzandi nomidan vazifa bajarmaydi va test
+     ishlamaydi — natija bolaning o'z mehnatidan chiqishi kerak.        */
+  if (route.indexOf('kabinet/') === 0) {
+    const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
+    if (!ses) return send(res, 401, { error: 'Kirish kerak.' });
+    const isParent = ses.kind === 'parent';
+    const sub = route.slice('kabinet/'.length);
+
+    /* O'zgartiruvchi so'rov uchun CSRF */
+    function csrfOk() {
+      const got = String(req.headers['x-kab-csrf'] || '');
+      return got && ses.csrf && got === ses.csrf;
+    }
+    const writing = req.method !== 'GET';
+    if (writing && !csrfOk()) return send(res, 403, { error: 'So’rov tasdiqlanmadi. Sahifani yangilang.' });
+
+    /** Shu sessiya ko'rishi mumkin bo'lgan o'quvchi id lari */
+    const mine = isParent
+      ? (Array.isArray(ses.studentIds) ? ses.studentIds.map(String) : [])
+      : [String(ses.studentId)];
+    function allowStudent(sid) { return mine.indexOf(String(sid)) >= 0; }
+
+    /* ---- O'quv sahifasi: vazifa, test, savol, material ---- */
+    if (sub === 'learning' && req.method === 'GET') {
+      const sid = String(url.searchParams.get('studentId') || mine[0] || '');
+      if (!allowStudent(sid)) return send(res, 403, { error: 'Bu o’quvchi sizga tegishli emas.' });
+      const [homework, quizzes, asks, prog] = await Promise.all([
+        lms.homeworkForStudent(store, sid, 15),
+        quiz.quizzesForStudent(store, sid),
+        quiz.asksForStudent(store, sid),
+        progress.forStudent(store, sid)
+      ]);
+      const mems = (await lms.listCol(store, 'memberships/'))
+        .filter(m => m.studentId === sid && m.status !== 'chiqdi');
+      const questions = [];
+      for (const m of mems) {
+        (await lms.questionsOfGroup(store, m.groupId, 20)).forEach(q => {
+          questions.push({
+            id: q.id, groupId: q.groupId, text: q.text, at: q.at,
+            mine: q.studentId === sid,
+            answers: (q.answers || []).map(a => ({ byName: a.byName, byKind: a.byKind, text: a.text, at: a.at }))
+          });
+        });
+      }
+      const makeups = (await lms.listCol(store, lms.MKP))
+        .filter(m => m.studentId === sid && m.status !== 'bekor')
+        .sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 10);
+      return send(res, 200, {
+        kind: isParent ? 'parent' : 'student',
+        canSubmit: !isParent,
+        homework, quizzes, asks, questions, makeups,
+        progress: prog ? {
+          level: prog.level, attendance: prog.attendance, quizzes: prog.quizzes,
+          homework: prog.homework, makeups: prog.makeups
+        } : null
+      });
+    }
+
+    /* ---- Test ishlash (faqat o'quvchi) ---- */
+    if (sub === 'quiz/start' && req.method === 'POST') {
+      if (isParent) return send(res, 403, { error: 'Testni o’quvchining o’zi ishlaydi.' });
+      const body = await readBody(req);
+      const r = await quiz.start(store, String(body.quizId || ''), mine[0], { stamp });
+      if (!r.ok) return send(res, r.reason === 'topilmadi' ? 404 : 403, { error: 'Testni ochib bo’lmadi.' });
+      return send(res, 200, { id: r.id, quiz: r.quiz, total: r.total, questions: r.questions });
+    }
+    if (sub === 'quiz/submit' && req.method === 'POST') {
+      if (isParent) return send(res, 403, { error: 'Testni o’quvchining o’zi ishlaydi.' });
+      const body = await readBody(req);
+      const r = await quiz.submit(store, {
+        stamp, sessionId: body.sessionId, answers: body.answers, studentId: mine[0]
+      });
+      if (!r.ok) {
+        return send(res, r.reason === 'ishlatilgan' ? 409 : 400, {
+          error: r.reason === 'ishlatilgan' ? 'Bu test allaqachon topshirilgan.'
+            : r.reason === 'muddati' ? 'Vaqt tugadi, qaytadan boshlang.' : 'So’rov noto’g’ri.'
+        });
+      }
+      return send(res, 200, { result: r.result });
+    }
+
+    /* ---- Alohida savolga javob (faqat o'quvchi) ---- */
+    if (sub === 'ask/answer' && req.method === 'POST') {
+      if (isParent) return send(res, 403, { error: 'Javobni o’quvchining o’zi yozadi.' });
+      const body = await readBody(req);
+      const r = await quiz.answerAsk(store, String(body.askId || ''), mine[0], body.text, { stamp });
+      if (!r.ok) {
+        return send(res, r.reason === 'topilmadi' ? 404 : 400, {
+          error: r.reason === 'javob-berilgan' ? 'Javob allaqachon yuborilgan.' : 'Javob yozilmadi.'
+        });
+      }
+      return send(res, 200, { ok: true, ask: r.rec });
+    }
+
+    /* ---- Guruhga savol berish (faqat o'quvchi) ---- */
+    if (sub === 'question' && req.method === 'POST') {
+      if (isParent) return send(res, 403, { error: 'Savolni o’quvchining o’zi beradi.' });
+      const body = await readBody(req);
+      const r = await lms.askQuestion(store, {
+        groupId: body.groupId, studentId: mine[0], text: body.text, topicId: body.topicId
+      }, { stamp });
+      if (!r.ok) {
+        return send(res, r.reason === 'guruh-emas' ? 403 : 400, { error: 'Savol yuborilmadi.' });
+      }
+      const g = await store.get('groups/' + String(body.groupId || ''));
+      await notifyTeacherOfGroup(g, 'Yangi savol: ' + String(body.text || '').slice(0, 200));
+      return send(res, 200, { ok: true, question: r.rec });
+    }
+
+    /* ---- Dars haqida fikr (faqat o'quvchi) ---- */
+    if (sub === 'feedback' && req.method === 'POST') {
+      if (isParent) return send(res, 403, { error: 'Fikrni o’quvchining o’zi bildiradi.' });
+      const body = await readBody(req);
+      const r = await lms.giveFeedback(store, {
+        groupId: body.groupId, studentId: mine[0], rating: body.rating,
+        text: body.text, anon: body.anon, date: body.date, topicId: body.topicId
+      }, { stamp });
+      if (!r.ok) {
+        return send(res, r.reason === 'takror' ? 409 : (r.reason === 'guruh-emas' ? 403 : 400), {
+          error: r.reason === 'takror' ? 'Bu dars uchun fikr allaqachon yuborilgan.'
+            : r.reason === 'baho' ? 'Bahoni 1 dan 5 gacha tanlang.' : 'Fikr yozilmadi.'
+        });
+      }
+      return send(res, 200, { ok: true });
+    }
+
+    /* ---- Material yoki vazifa fayli ---- */
+    if (sub === 'file' && req.method === 'GET') {
+      const fid = String(url.searchParams.get('id') || '');
+      const rec = await files.meta(store, fid);
+      if (!rec) return send(res, 404, { error: 'Fayl topilmadi.' });
+      const allowed = await fileVisibleToStudents(rec, mine);
+      if (!allowed) return send(res, 403, { error: 'Bu fayl sizga tegishli emas.' });
+      const buf = files.readBody(rec);
+      if (!buf) return send(res, 404, { error: 'Fayl topilmadi.' });
+      res.writeHead(200, {
+        'Content-Type': rec.type,
+        'Content-Length': buf.length,
+        'Content-Disposition': 'inline; filename="' + encodeURIComponent(rec.name) + '"',
+        'Cache-Control': 'private, max-age=300',
+        'X-Content-Type-Options': 'nosniff'
+      });
+      return res.end(buf);
+    }
+
+    return send(res, 404, { error: 'Topilmadi.' });
   }
 
   /* ---------- Daraja aniqlash testi (A1…C2) ----------
@@ -1106,10 +1401,15 @@ async function handleApi(req, res, url) {
     const ip = clientIp(req);
     const gate = testGate(ip);
     if (!gate.ok) return send(res, 429, { error: 'Juda ko’p urinish. ' + gate.wait + ' daqiqadan keyin urinib ko’ring.' });
-    const t = await levels.start(store, { stamp, ip });
+    const body = await readBody(req);
+    const lg = levels.lang(body && body.lang);
+    const t = await levels.start(store, { stamp, ip, lang: lg });
     if (!t) return send(res, 503, { error: 'Savollar hali tayyor emas.' });
     testFail(ip);
-    return send(res, 200, { id: t.id, total: t.total, questions: t.questions, levels: levels.LEVELS });
+    return send(res, 200, {
+      id: t.id, total: t.total, questions: t.questions,
+      lang: t.lang, rtl: t.rtl, levels: levels.levelList(lg)
+    });
   }
 
   if (route === 'test/submit' && req.method === 'POST') {
@@ -1140,8 +1440,9 @@ async function handleApi(req, res, url) {
     }
     await writeAudit(null, 'Daraja testi topshirildi', r.level, r.score + '/' + r.total);
     return send(res, 200, {
-      level: r.level, info: levels.levelInfo(r.level),
-      score: r.score, total: r.total, perLevel: r.perLevel, resultId: r.resultId
+      level: r.level, info: levels.levelInfo(r.level, r.lang), lang: r.lang,
+      score: r.score, total: r.total, perLevel: r.perLevel, resultId: r.resultId,
+      levels: levels.levelList(r.lang)
     });
   }
 
@@ -1348,6 +1649,295 @@ async function handleApi(req, res, url) {
 
   if (route === 'me') return send(res, 200, { user: safeUser(user) });
   if (route === 'bootstrap') return send(res, 200, await apiBootstrap(user));
+
+  /* ================= O'QUV QISMI (xodimlar tomoni) ================= */
+  const nope = (m) => send(res, 403, { error: m || 'Sizda bu amal uchun ruxsat yo’q.' });
+
+  /** O'qituvchi faqat o'z guruhi bilan ishlaydi */
+  async function ownsGroup(gid) {
+    if (A.can(user, 'group.edit') || A.can(user, 'settings.edit')) return true;
+    if (user.role !== 'oqituvchi') return A.can(user, 'group.view');
+    const g = await store.get('groups/' + String(gid || ''));
+    return !!(g && g.teacherId && g.teacherId === user.staffId);
+  }
+
+  /* ---- Dastur ---- */
+  if (route === 'curriculum' && req.method === 'GET') {
+    if (!A.can(user, 'curriculum.view') && !A.can(user, 'group.view')) return nope();
+    return send(res, 200, { levels: levels.LEVELS, tree: await curriculum.tree(store) });
+  }
+  if (route === 'curriculum/topic' && req.method === 'GET') {
+    if (!A.can(user, 'curriculum.view') && !A.can(user, 'group.view')) return nope();
+    const t = await curriculum.topicFull(store, String(url.searchParams.get('id') || ''));
+    if (!t) return send(res, 404, { error: 'Dars topilmadi.' });
+    return send(res, 200, t);
+  }
+  if (route === 'curriculum/next' && req.method === 'GET') {
+    if (!A.can(user, 'group.view')) return nope();
+    const gid = String(url.searchParams.get('groupId') || '');
+    if (!await ownsGroup(gid)) return nope('Bu guruh sizga tegishli emas.');
+    return send(res, 200, { next: await curriculum.nextTopic(store, gid) });
+  }
+  if (route === 'curriculum/delete' && req.method === 'POST') {
+    if (!A.can(user, 'curriculum.edit')) return nope();
+    const body = await readBody(req);
+    const kind = String(body.kind || ''), id = String(body.id || '');
+    if (kind !== 'module' && kind !== 'topic') return send(res, 400, { error: 'Nima o’chiriladi?' });
+    const gone = await curriculum.cascadeDelete(store, kind, id);
+    await writeAudit(user, 'Dasturdan o’chirildi', kind + ' ' + id, gone.length + ' ta yozuv');
+    return send(res, 200, { ok: true, removed: gone.length });
+  }
+
+  /* ---- Fayl ombori ---- */
+  if (route === 'file' && req.method === 'POST') {
+    if (!A.can(user, 'curriculum.edit') && !A.can(user, 'lesson.log')) return nope();
+    const body = await readBody(req, BODY_MAX_FILE);
+    const r = await files.save(store, {
+      name: body.name, type: body.type, dataBase64: body.data,
+      purpose: body.purpose, refPath: body.refPath,
+      byUserId: user.id, byKind: 'xodim', stamp
+    });
+    if (!r.ok) {
+      return send(res, 400, {
+        error: r.reason === 'turi' ? 'Bu turdagi fayl qabul qilinmaydi.'
+          : r.reason === 'kattaligi' ? 'Fayl juda katta (' + Math.round(files.MAX_BYTES / 1048576) + ' MB gacha).'
+            : 'Fayl bo’sh.'
+      });
+    }
+    await writeAudit(user, 'Fayl yuklandi', r.file.name, r.file.bytes + ' bayt');
+    return send(res, 200, { ok: true, file: r.file });
+  }
+  if (route === 'file' && req.method === 'GET') {
+    if (!A.can(user, 'group.view') && !A.can(user, 'student.view')) return nope();
+    const rec = await files.meta(store, String(url.searchParams.get('id') || ''));
+    if (!rec) return send(res, 404, { error: 'Fayl topilmadi.' });
+    const buf = files.readBody(rec);
+    if (!buf) return send(res, 404, { error: 'Fayl topilmadi.' });
+    res.writeHead(200, {
+      'Content-Type': rec.type,
+      'Content-Length': buf.length,
+      'Content-Disposition': 'inline; filename="' + encodeURIComponent(rec.name) + '"',
+      'Cache-Control': 'private, max-age=300',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    return res.end(buf);
+  }
+  if (route === 'file/delete' && req.method === 'POST') {
+    if (!A.can(user, 'curriculum.edit')) return nope();
+    const body = await readBody(req);
+    const okd = await files.remove(store, String(body.id || ''));
+    return send(res, okd ? 200 : 404, okd ? { ok: true } : { error: 'Fayl topilmadi.' });
+  }
+
+  /* ---- Bayram va tanaffus ---- */
+  if (route === 'holiday' && req.method === 'POST') {
+    if (!A.can(user, 'holiday.manage')) return nope();
+    const body = await readBody(req);
+    const r = await lms.saveHoliday(store, body, { byUserId: user.id, stamp });
+    if (!r.ok) return send(res, 400, { error: r.reason === 'sana' ? 'Sana noto’g’ri.' : 'Guruh tanlanmagan.' });
+    await writeAudit(user, 'Dam olish kuni saqlandi', r.rec.name, r.rec.from + ' → ' + r.rec.to);
+    return send(res, 200, { ok: true, holiday: r.rec });
+  }
+  if (route === 'holiday/delete' && req.method === 'POST') {
+    if (!A.can(user, 'holiday.manage')) return nope();
+    const body = await readBody(req);
+    const id = String(body.id || '');
+    if (!await store.get(lms.HOL + id)) return send(res, 404, { error: 'Topilmadi.' });
+    if (store.del) await store.del(lms.HOL + id);
+    await writeAudit(user, 'Dam olish kuni o’chirildi', id, '');
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'pause' && req.method === 'POST') {
+    if (!A.can(user, 'student.edit')) return nope();
+    const body = await readBody(req);
+    const r = await lms.savePause(store, body, { byUserId: user.id, stamp });
+    if (!r.ok) return send(res, r.reason === 'topilmadi' ? 404 : 400, { error: 'Tanaffus saqlanmadi.' });
+    await writeAudit(user, 'O’quvchi tanaffusi', r.rec.studentId, r.rec.from + ' → ' + (r.rec.to || '—'));
+    return send(res, 200, { ok: true, pause: r.rec });
+  }
+  if (route === 'dayoff' && req.method === 'GET') {
+    if (!A.can(user, 'schedule.view')) return nope();
+    const d = String(url.searchParams.get('date') || '');
+    const g = String(url.searchParams.get('groupId') || '');
+    return send(res, 200, await lms.dayOff(store, d, g));
+  }
+
+  /* ---- Qo'shimcha dars ---- */
+  if (route === 'makeup' && req.method === 'POST') {
+    if (!A.can(user, 'makeup.manage')) return nope();
+    const body = await readBody(req);
+    if (!await ownsGroup(body.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    const r = await lms.offerMakeup(store, body, { byUserId: user.id, stamp });
+    if (!r.ok) {
+      const msg = {
+        'kelmagan-emas': 'O’sha kunda bu o’quvchi kelmagan deb belgilanmagan.',
+        'dam-kuni': 'Tanlangan kun dam olish kuni.',
+        'takror': 'Bu dars uchun qo’shimcha allaqachon belgilangan.',
+        'sana': 'Sana noto’g’ri.', 'vaqt': 'Vaqt noto’g’ri.'
+      }[r.reason] || 'Qo’shimcha dars belgilanmadi.';
+      return send(res, r.reason === 'takror' ? 409 : 400, { error: msg });
+    }
+    await writeAudit(user, 'Qo’shimcha dars belgilandi', r.rec.studentId, r.rec.missedDate + ' → ' + r.rec.date);
+    return send(res, 200, { ok: true, makeup: r.rec });
+  }
+  if (route === 'makeup/status' && req.method === 'POST') {
+    if (!A.can(user, 'makeup.manage')) return nope();
+    const body = await readBody(req);
+    const cur = await store.get(lms.MKP + String(body.id || ''));
+    if (cur && !await ownsGroup(cur.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    const r = await lms.setMakeupStatus(store, body.id, String(body.status || ''), { byUserId: user.id, stamp });
+    if (!r.ok) {
+      return send(res, r.reason === 'topilmadi' ? 404 : 400, {
+        error: r.reason === 'yopiq' ? 'Bajarilgan darsni o’zgartirib bo’lmaydi.' : 'Holat noto’g’ri.'
+      });
+    }
+    return send(res, 200, { ok: true, makeup: r.rec });
+  }
+
+  /* ---- Dars jurnali ---- */
+  if (route === 'lesson/log' && req.method === 'POST') {
+    if (!A.can(user, 'lesson.log')) return nope();
+    const body = await readBody(req);
+    if (!await ownsGroup(body.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    const r = await lms.saveLessonLog(store, body, { byUserId: user.id, stamp });
+    if (!r.ok) return send(res, 400, { error: 'Dars yozuvi saqlanmadi.' });
+    await writeAudit(user, 'Dars yozuvi', r.rec.groupId, r.rec.date + ' ' + (r.rec.title || ''));
+    return send(res, 200, { ok: true, log: r.rec });
+  }
+  if (route === 'lesson/log' && req.method === 'GET') {
+    if (!A.can(user, 'group.view')) return nope();
+    const gid = String(url.searchParams.get('groupId') || '');
+    if (!await ownsGroup(gid)) return nope('Bu guruh sizga tegishli emas.');
+    return send(res, 200, { logs: await lms.logsOfGroup(store, gid, 40) });
+  }
+
+  /* ---- Savol-javob va fikr ---- */
+  if (route === 'questions' && req.method === 'GET') {
+    if (!A.can(user, 'group.view')) return nope();
+    const gid = String(url.searchParams.get('groupId') || '');
+    if (!await ownsGroup(gid)) return nope('Bu guruh sizga tegishli emas.');
+    return send(res, 200, { questions: await lms.questionsOfGroup(store, gid, 100) });
+  }
+  if (route === 'question/answer' && req.method === 'POST') {
+    if (!A.can(user, 'qa.answer')) return nope();
+    const body = await readBody(req);
+    const q = await store.get(lms.QST + String(body.id || ''));
+    if (!q) return send(res, 404, { error: 'Savol topilmadi.' });
+    if (!await ownsGroup(q.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    const r = await lms.answerQuestion(store, body.id, { text: body.text }, {
+      byUserId: user.id, byName: user.name || user.login, byKind: 'xodim', stamp
+    });
+    if (!r.ok) return send(res, 400, { error: 'Javob yozilmadi.' });
+    return send(res, 200, { ok: true, question: r.rec });
+  }
+  if (route === 'feedback' && req.method === 'GET') {
+    if (!A.can(user, 'feedback.view')) return nope();
+    const gid = String(url.searchParams.get('groupId') || '');
+    const tid = String(url.searchParams.get('teacherId') || '');
+    if (gid && !await ownsGroup(gid)) return nope('Bu guruh sizga tegishli emas.');
+    /* O'qituvchi faqat O'ZI haqidagi fikrni ko'radi */
+    if (user.role === 'oqituvchi' && !A.can(user, 'settings.edit')) {
+      return send(res, 200, await lms.feedbackSummary(store, { groupId: gid, teacherId: user.staffId }));
+    }
+    return send(res, 200, await lms.feedbackSummary(store, { groupId: gid, teacherId: tid }));
+  }
+
+  /* ---- Dars testlari ---- */
+  if (route === 'quiz' && req.method === 'POST') {
+    if (!A.can(user, 'quiz.manage')) return nope();
+    const body = await readBody(req);
+    if (body.groupId && !await ownsGroup(body.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    const r = await quiz.saveQuiz(store, body, { byUserId: user.id, stamp });
+    if (!r.ok) {
+      const msg = {
+        nom: 'Test nomini yozing.', 'savol-yoq': 'Kamida bitta savol kerak.',
+        variant: 'Har savolda kamida ikkita variant bo’lsin.',
+        javob: 'To’g’ri javob tanlanmagan.', kop: 'Savollar juda ko’p.'
+      }[r.reason] || 'Test saqlanmadi.';
+      return send(res, 400, { error: msg });
+    }
+    await writeAudit(user, 'Dars testi saqlandi', r.rec.title, r.rec.count + ' ta savol');
+    return send(res, 200, { ok: true, quiz: r.rec });
+  }
+  if (route === 'quiz' && req.method === 'GET') {
+    if (!A.can(user, 'quiz.manage')) return nope();
+    const q = await quiz.quizWithAnswers(store, String(url.searchParams.get('id') || ''));
+    if (!q) return send(res, 404, { error: 'Test topilmadi.' });
+    if (q.quiz.groupId && !await ownsGroup(q.quiz.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    return send(res, 200, q);
+  }
+  if (route === 'quiz/delete' && req.method === 'POST') {
+    if (!A.can(user, 'quiz.manage')) return nope();
+    const body = await readBody(req);
+    const q = await store.get(quiz.QZ + String(body.id || ''));
+    if (q && q.groupId && !await ownsGroup(q.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    const okd = await quiz.removeQuiz(store, String(body.id || ''));
+    return send(res, okd ? 200 : 404, okd ? { ok: true } : { error: 'Test topilmadi.' });
+  }
+  if (route === 'ask' && req.method === 'POST') {
+    if (!A.can(user, 'quiz.manage')) return nope();
+    const body = await readBody(req);
+    if (body.groupId && !await ownsGroup(body.groupId)) return nope('Bu guruh sizga tegishli emas.');
+    const r = await quiz.sendAsk(store, body, {
+      byUserId: user.id, byName: user.name || user.login, stamp
+    });
+    if (!r.ok) return send(res, r.reason === 'topilmadi' ? 404 : 400, { error: 'Savol yuborilmadi.' });
+    return send(res, 200, { ok: true, ask: r.rec });
+  }
+
+  /* ---- Ota-ona hisobi ---- */
+  if (route === 'parent' && req.method === 'POST') {
+    if (!A.can(user, 'parent.manage')) return nope();
+    const body = await readBody(req);
+    const r = await parents.save(store, body, { byUserId: user.id, stamp });
+    if (!r.ok) return send(res, 400, { error: 'Ota-ona ismi kerak.' });
+    await writeAudit(user, 'Ota-ona hisobi saqlandi', r.rec.name, (r.rec.studentIds || []).length + ' ta farzand');
+    return send(res, 200, { ok: true, parent: r.rec });
+  }
+  if (route === 'parent/code' && req.method === 'POST') {
+    if (!A.can(user, 'parent.manage')) return nope();
+    const body = await readBody(req);
+    const r = await parents.newCode(store, String(body.id || ''), { stamp });
+    if (!r.ok) return send(res, 404, { error: 'Ota-ona topilmadi.' });
+    await kabsess.revokeForStudent(store, '__parent__' + r.rec.id, { stamp });
+    await writeAudit(user, 'Ota-ona kodi yangilandi', r.rec.name, '');
+    return send(res, 200, { ok: true, code: r.rec.code });
+  }
+  if (route === 'parent/delete' && req.method === 'POST') {
+    if (!A.can(user, 'parent.manage')) return nope();
+    const body = await readBody(req);
+    const id = String(body.id || '');
+    if (!await store.get(parents.COL + id)) return send(res, 404, { error: 'Topilmadi.' });
+    if (store.del) await store.del(parents.COL + id);
+    await writeAudit(user, 'Ota-ona hisobi o’chirildi', id, '');
+    return send(res, 200, { ok: true });
+  }
+
+  /* ---- Hisobotlar ---- */
+  if (route === 'report/student' && req.method === 'GET') {
+    if (!A.can(user, 'reports.learning') && !A.can(user, 'student.view')) return nope();
+    const r = await progress.forStudent(store, String(url.searchParams.get('id') || ''), {
+      from: url.searchParams.get('from'), to: url.searchParams.get('to')
+    });
+    if (!r) return send(res, 404, { error: 'O’quvchi topilmadi.' });
+    return send(res, 200, r);
+  }
+  if (route === 'report/group' && req.method === 'GET') {
+    if (!A.can(user, 'reports.learning') && !A.can(user, 'group.view')) return nope();
+    const gid = String(url.searchParams.get('id') || '');
+    if (!await ownsGroup(gid)) return nope('Bu guruh sizga tegishli emas.');
+    const r = await progress.forGroup(store, gid, {
+      from: url.searchParams.get('from'), to: url.searchParams.get('to')
+    });
+    if (!r) return send(res, 404, { error: 'Guruh topilmadi.' });
+    return send(res, 200, r);
+  }
+  if (route === 'report/overview' && req.method === 'GET') {
+    if (!A.can(user, 'reports.learning')) return nope();
+    return send(res, 200, await progress.overview(store, {
+      from: url.searchParams.get('from'), to: url.searchParams.get('to')
+    }));
+  }
 
   /* O'quvchining shaxsiy kodini yangilash (kod boshqaga ma'lum bo'lib qolsa) */
   if (route === 'student/code' && req.method === 'POST') {
@@ -1793,8 +2383,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname.indexOf('/api/') === 0) return await handleApi(req, res, url);
     return serveStatic(req, res, url.pathname);
   } catch (e) {
+    if (e && e.tooBig) {
+      try { return send(res, 413, { error: 'So’rov juda katta.' }); } catch (x) { return; }
+    }
     console.error(e);
-    send(res, 500, { error: e.message || 'Server xatosi' });
+    try { send(res, 500, { error: e.message || 'Server xatosi' }); } catch (x) { /* ulanish yopilgan */ }
   }
 });
 

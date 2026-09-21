@@ -127,7 +127,11 @@
   /* ---------------- Ma'lumotlar qatlami ---------------- */
   var COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students', 'groups', 'memberships', 'leads',
     'funnels', 'tasks', 'chats', 'botreq', 'botout', 'botin',
-    'invoices', 'payments', 'expenses', 'payroll', 'audit', 'placements'];
+    'invoices', 'payments', 'expenses', 'payroll', 'audit', 'placements',
+    /* O'quv qismi */
+    'modules', 'topics', 'materials', 'homework', 'lessonlog',
+    'holidays', 'pauses', 'makeups', 'questions', 'feedback',
+    'quizzes', 'quizres', 'asks', 'parents', 'files'];
   var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 
@@ -159,6 +163,33 @@
         method: method,
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
+        credentials: 'same-origin'
+      });
+      var data = null;
+      try { data = await res.json(); } catch (e) { data = null; }
+      if (!res.ok) {
+        var err = new Error((data && data.error) || ('Server xatosi (' + res.status + ')'));
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    },
+    /* Kabinetdagi o'zgartiruvchi so'rovlar: CSRF siri sarlavhada ketadi.
+       Sirni kabinet ma'lumoti bilan birga server beradi.                */
+    kabCsrf: '',
+    async kabPost(path, body) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        var off = new Error('Internet yo’q. Ma’lumot saqlanmadi.');
+        off.offline = true;
+        throw off;
+      }
+      var res = await fetch(path, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Kab-Csrf': this.kabCsrf || ''
+        },
+        body: JSON.stringify(body || {}),
         credentials: 'same-origin'
       });
       var data = null;

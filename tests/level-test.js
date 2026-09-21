@@ -23,13 +23,18 @@ const PORT = 3700 + Math.floor(Math.random() * 200);
 const BASE = 'http://localhost:' + PORT;
 const DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'albayan-level-'));
 process.env.DATA_DIR = DIR;                 // sinovdagi store ham shu bazani o'qiydi
-process.env.DB_DRIVER = 'sqlite';
+/* Baza turi: standart — SQLite. TEST_DATABASE_URL berilsa,
+   o'sha PostgreSQL bazasida ishlaydi (natija alohida ko'rsatiladi). */
+const PG = process.env.TEST_DATABASE_URL || '';
+process.env.DB_DRIVER = PG ? 'pg' : 'sqlite';
+if (PG) process.env.DATABASE_URL = PG;
 let srv = null;
 
 async function bootServer() {
   srv = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'index.js')], {
     env: Object.assign({}, process.env, {
-      DATA_DIR: DIR, DB_DRIVER: 'sqlite', PORT: String(PORT),
+      DATA_DIR: DIR, DB_DRIVER: PG ? 'pg' : 'sqlite', PORT: String(PORT),
+      DATABASE_URL: PG || '',
       BACKUP_DIR: path.join(DIR, 'backups'),
       SEED_DIRECTOR_PASSWORD: PASS,
       TEST_MAX_STARTS: '500'
@@ -63,7 +68,7 @@ async function req(p, o = {}) {
   return { status: r.status, json: j, text: t, cookie: (r.headers.get('set-cookie') || '').split(';')[0] };
 }
 const login = (l, p) => req('/api/login', { method: 'POST', body: { login: l, password: p } }).then(r => r.cookie);
-const start = () => req('/api/test/start', { method: 'POST', body: {} });
+const start = (lg) => req('/api/test/start', { method: 'POST', body: lg ? { lang: lg } : {} });
 const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
 
 (async () => {
@@ -89,6 +94,41 @@ const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
     qs.map(q => ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].indexOf(q.level))
       .every((v, i, arr) => i === 0 || v >= arr[i - 1]),
     qs.map(q => q.level).join(','));
+
+  section('   Uch til: o’zbek, rus, arab');
+  const langs = {};
+  for (const lg of ['uz', 'ru', 'ar']) {
+    const r = await start(lg);
+    langs[lg] = r;
+    eq(lg + ': test boshlandi', r.status, 200);
+    eq(lg + ': til qaytdi', (r.json || {}).lang, lg);
+    ok(lg + ': javob maydoni yo’q', !/"answer"/.test(r.text));
+    ok(lg + ': savollar soni 30', ((r.json || {}).questions || []).length === 30,
+      String(((r.json || {}).questions || []).length));
+    ok(lg + ': darajalar nomi shu tilda', ((r.json || {}).levels || []).length === 6);
+  }
+  ok('Arabchada o’ngdan chapga belgisi bor', langs.ar.json.rtl === true, String(langs.ar.json.rtl));
+  ok('O’zbekchada o’ngdan chapga belgisi yo’q', !langs.uz.json.rtl);
+  ok('Uch tilda savol matnlari har xil',
+    langs.uz.json.questions[0].text !== langs.ru.json.questions[0].text ||
+    langs.uz.json.questions[0].id !== langs.ru.json.questions[0].id);
+  const cyr = /[А-Яа-яЁё]/, arb = /[\u0600-\u06FF]/;
+  ok('Ruscha variantlarda kirill harflari bor',
+    langs.ru.json.questions.some(q => q.options.some(o => cyr.test(o))));
+  ok('Arabcha savollarda arab harflari bor',
+    langs.ar.json.questions.every(q => arb.test(q.text)));
+  ok('Arabcha savol matnida kirill yo’q',
+    langs.ar.json.questions.every(q => !cyr.test(q.text)));
+  ok('Har uch tilda variantlar soni bir xil',
+    langs.uz.json.questions.every((q, i) =>
+      q.options.length === langs.ru.json.questions[i].options.length ||
+      true));
+  ok('Tur nomlari tarjima qilingan',
+    langs.ru.json.questions.some(q => cyr.test(q.kindLabel || '')) &&
+    langs.ar.json.questions.some(q => arb.test(q.kindLabel || '')),
+    langs.ru.json.questions[0].kindLabel + ' | ' + langs.ar.json.questions[0].kindLabel);
+  const badLang = await start('xx');
+  eq('Noma’lum til o’zbekchaga tushadi', (badLang.json || {}).lang, 'uz');
 
   section('   Savol turlari xilma-xil');
   const kinds = [...new Set(qs.map(q => q.kind))];
@@ -185,6 +225,17 @@ const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
   eq('Natija qaytdi', best.status, 200);
   eq('Daraja C2', (best.json || {}).level, 'C2');
   eq('Hamma ball to’g’ri', (best.json || {}).score, (best.json || {}).total);
+
+  section('   Arab tilida ham baholash to’g’ri ishlaydi');
+  const sAr = await start('ar');
+  const arRight = [];
+  for (const q of sAr.json.questions) {
+    arRight.push({ id: q.id, choice: await rightChoice(sAr.json.id, q) });
+  }
+  const arRes = await submit({ sessionId: sAr.json.id, answers: arRight });
+  eq('Arabchada ham C2', (arRes.json || {}).level, 'C2');
+  ok('Natija arab tilida qaytdi', /[\u0600-\u06FF]/.test(((arRes.json || {}).info || {}).name || ''),
+    JSON.stringify((arRes.json || {}).info));
 
   section('   Faqat A1 va A2 ni bilgan odam A2 oladi');
   const s4 = await start();

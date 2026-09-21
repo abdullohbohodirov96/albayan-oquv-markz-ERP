@@ -12,7 +12,7 @@
       keyin (SKIP_WAITING) ishga tushadi.                                    */
 'use strict';
 
-const VERSION = 'albayan-c918fa8c6bd3';
+const VERSION = 'albayan-533be4f8ba8c';
 const SHELL = [
   './index.html',
   './css/app.css',
@@ -26,6 +26,7 @@ const SHELL = [
   './js/pages-edu.js',
   './js/pages-fin.js',
   './js/pages-team.js',
+  './js/pages-lms.js',
   './js/bot.js',
   './js/import.js',
   './js/seed.js',

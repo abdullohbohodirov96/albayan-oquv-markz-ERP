@@ -526,6 +526,11 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 /* Daraja aniqlash testi (A1…C2) */
 .login.test-box{max-width:620px}
 .test-body{display:flex;flex-direction:column;gap:10px}
+.test-lang{display:flex;flex-direction:column;gap:12px;align-items:stretch}
+.test-lang-row{display:flex;gap:8px;flex-wrap:wrap}
+.test-lang-row .btn{flex:1;min-width:120px;justify-content:center}
+.test-box[dir="rtl"] .test-opt{text-align:right}
+.test-box[dir="rtl"] .test-q{text-align:right}
 .test-bar{height:5px;border-radius:999px;background:var(--line);overflow:hidden}
 .test-bar span{display:block;height:100%;background:var(--accent);
   transition:width .25s ease}
@@ -1020,3 +1025,59 @@ details.more[open]>summary::before{content:'−'}
   padding:12px 2px 2px;border-top:1px solid var(--line);margin-top:8px}
 .tbl-more .btn{min-height:40px}
 @media (max-width:760px){.tbl-more .btn{flex:1;min-height:44px}}
+
+/* ================= O'QUV QISMI ================= */
+/* Dastur: modul → dars ro'yxati */
+.cur-list{display:flex;flex-direction:column;gap:6px}
+.cur-topic{display:flex;align-items:center;gap:8px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface-2)}
+.cur-title{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;
+  text-align:start;background:none;border:0;padding:0;font:inherit;color:var(--text);cursor:pointer}
+button.cur-title:hover b{text-decoration:underline}
+.cur-topic .row-actions{flex-wrap:nowrap}
+.sec-h{font-size:13px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);margin:14px 0 6px}
+
+/* Test tuzgich */
+.qz-list{display:flex;flex-direction:column;gap:10px;margin:10px 0}
+.qz-q{border:1px solid var(--line);border-radius:var(--r-lg);padding:10px;
+  background:var(--surface-2);display:flex;flex-direction:column;gap:8px}
+.qz-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.qz-q input[type=text]{width:100%;padding:8px 10px;border:1px solid var(--line);
+  border-radius:var(--r-md);background:var(--surface);color:var(--text);font:inherit}
+.qz-opts{display:flex;flex-direction:column;gap:6px}
+.qz-opt{display:flex;align-items:center;gap:8px}
+.qz-opt input[type=radio]{flex:none;width:18px;height:18px}
+
+/* Savol-javob va fikr */
+.qa-item{display:flex;flex-direction:column;gap:6px;padding:10px;
+  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface-2)}
+.qa-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.qa-text{margin:0;line-height:1.5}
+.qa-answers{display:flex;flex-direction:column;gap:6px;
+  padding-inline-start:10px;border-inline-start:2px solid var(--line)}
+.qa-answer{display:flex;flex-direction:column;gap:2px}
+.fb-sum{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
+.fb-sum b{font-size:34px;line-height:1}
+.fb-bars{display:flex;flex-direction:column;gap:5px}
+.fb-bar{display:flex;align-items:center;gap:8px}
+.fb-track{flex:1;height:8px;border-radius:999px;background:var(--line);overflow:hidden}
+.fb-track span{display:block;height:100%;background:var(--accent)}
+
+/* Ota-ona: farzandlar ro'yxati */
+.par-kids{display:flex;flex-direction:column;gap:4px;max-height:240px;overflow:auto;
+  border:1px solid var(--line);border-radius:var(--r-lg);padding:8px}
+.par-kid{display:flex;align-items:center;gap:8px;cursor:pointer}
+
+/* Kabinetdagi o'quv qismi */
+.kab-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.kab-sec{display:flex;flex-direction:column;gap:8px}
+.kab-item{display:flex;flex-direction:column;gap:3px;padding:9px 11px;
+  border:1px solid var(--line);border-radius:var(--r-lg);background:var(--surface-2)}
+.kab-item b{line-height:1.35}
+.kab-kid{border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:10px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px}
+@media (max-width:560px){
+  .cur-topic{flex-direction:column;align-items:stretch}
+  .fb-sum b{font-size:28px}
+}

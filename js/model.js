@@ -23,16 +23,22 @@
       'attendance.view', 'attendance.mark',
       'finance.payments', 'finance.debts',
       'payment.create', 'invoice.create',
-      'reports.basic',
+      'reports.basic', 'reports.learning',
       'chat.use', 'task.view', 'task.assign',
-      'bot.broadcast'
+      'bot.broadcast',
+      'nav.curriculum', 'curriculum.view', 'curriculum.edit',
+      'lesson.log', 'quiz.manage', 'qa.answer', 'feedback.view',
+      'makeup.manage', 'holiday.manage', 'parent.manage'
     ],
     oqituvchi: [
       'nav.dashboard', 'nav.groups', 'nav.schedule', 'nav.attendance', 'nav.students',
       'nav.chat', 'nav.tasks',
       'student.view', 'group.view', 'schedule.view',
       'attendance.view', 'attendance.mark',
-      'chat.use', 'task.view'
+      'chat.use', 'task.view',
+      'nav.curriculum', 'curriculum.view',
+      'lesson.log', 'quiz.manage', 'qa.answer', 'feedback.view',
+      'makeup.manage', 'reports.learning'
     ],
     buxgalter: [
       'nav.dashboard', 'nav.students', 'nav.groups', 'nav.finance', 'nav.staff', 'nav.reports',
@@ -43,7 +49,8 @@
       'payment.create', 'payment.void', 'invoice.create',
       'expense.edit', 'payroll.manage', 'staff.view',
       'reports.basic', 'reports.finance',
-      'chat.use', 'task.view'
+      'chat.use', 'task.view',
+      'curriculum.view'
     ]
   };
   // Standart holatda faqat direktorda: payroll.approve, settings.edit, users.manage,
@@ -81,6 +88,20 @@
       ]
     },
     {
+      key: 'curriculum', label: 'O’quv dasturi', perms: [
+        { id: 'nav.curriculum', label: 'Bo’limni ko’rish' },
+        { id: 'curriculum.view', label: 'Dasturni ko’rish' },
+        { id: 'curriculum.edit', label: 'Modul, dars va material tahriri' },
+        { id: 'lesson.log', label: 'Dars yozuvi va uy vazifasi' },
+        { id: 'quiz.manage', label: 'Dars testlari va savollar' },
+        { id: 'qa.answer', label: 'O’quvchi savoliga javob berish' },
+        { id: 'feedback.view', label: 'Fikrlarni ko’rish' },
+        { id: 'makeup.manage', label: 'Qo’shimcha dars belgilash' },
+        { id: 'holiday.manage', label: 'Bayram va tanaffus' },
+        { id: 'parent.manage', label: 'Ota-ona hisobi' }
+      ]
+    },
+    {
       key: 'attendance', label: 'Davomat', perms: [
         { id: 'nav.attendance', label: 'Bo’limni ko’rish' },
         { id: 'attendance.view', label: 'Davomatni ko’rish' },
@@ -113,7 +134,8 @@
       key: 'reports', label: 'Hisobotlar', perms: [
         { id: 'nav.reports', label: 'Bo’limni ko’rish' },
         { id: 'reports.basic', label: 'Umumiy hisobotlar' },
-        { id: 'reports.finance', label: 'Moliyaviy hisobotlar' }
+        { id: 'reports.finance', label: 'Moliyaviy hisobotlar' },
+        { id: 'reports.learning', label: 'O’quv natijalari hisoboti' }
       ]
     },
     {

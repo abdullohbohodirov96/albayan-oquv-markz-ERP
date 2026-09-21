@@ -17,7 +17,8 @@ const BASE = 'http://localhost:' + PORT;
     const page = await ctx.newPage();
     page.on('pageerror', e => errors.push('PAGEERROR ' + e.message));
     page.on('console', m => { if (m.type() === 'error' && !/TUNNEL|fonts/.test(m.text())) errors.push(m.text()); });
-    await page.goto(BASE);
+    /* Ildiz manzil ochiq saytni ko'rsatadi — kirish oynasi "#kirish" da */
+    await page.goto(BASE + '/#kirish');
     return { ctx, page };
   }
   async function login(page, u, p) {
@@ -84,20 +85,20 @@ const BASE = 'http://localhost:' + PORT;
   await page.keyboard.press('Escape');
 
   /* 6. O'qituvchi hisobini yaratish va cheklovni tekshirish */
+  /* Parolni FAQAT server hisoblaydi — mijoz hash yubora olmaydi.
+     Shuning uchun hisob saveUser() orqali, parol alohida yuboriladi. */
   await page.evaluate(async () => {
-    const A = window.A, D = A.Data;
-    const salt = 'srv' + Math.random().toString(36).slice(2, 8);
-    const hash = await A.sha256('ustoz::1234::' + salt);
-    await D.save('users', {
+    const D = window.A.Data;
+    await D.saveUser({
       id: 'usr_ustoz2', login: 'ustoz', name: 'Ustoz Bir', role: 'oqituvchi',
-      staffId: 'stf_1', salt, hash, active: true
-    });
+      staffId: 'stf_1', active: true
+    }, 'Ustoz12345');
   });
   await page.waitForTimeout(600);
   await ctx.close();
 
   const { ctx: c2, page: p2 } = await open({ width: 1320, height: 900 });
-  await login(p2, 'ustoz', '1234');
+  await login(p2, 'ustoz', 'Ustoz12345');
   const navItems = await p2.locator('#nav button').allInnerTexts();
   steps.push('O’qituvchi menyusi: ' + navItems.map(s => s.trim()).join(', '));
   const blocked = await p2.evaluate(async () => {

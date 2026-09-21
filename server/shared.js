@@ -36,7 +36,14 @@ function writePermFor(docPath) {
     tasks: 'task.view',
     chats: 'chat.use',
     botout: 'bot.broadcast',
-    botreq: 'nav.bot'
+    botreq: 'nav.bot',
+    /* O'quv dasturi — alohida huquq bilan tahrirlanadi */
+    modules: 'curriculum.edit',
+    topics: 'curriculum.edit',
+    materials: 'curriculum.edit',
+    homework: 'curriculum.edit'
+    /* Qolgan o'quv to'plamlari ro'yxatda yo'q — ular '__server__' bo'lib
+       qoladi, ya'ni faqat maxsus API yo'llari orqali yoziladi.          */
   };
   if (col === 'meta') {
     if (p === 'meta/settings') return 'settings.edit';
@@ -55,6 +62,8 @@ function readBlocked(docPath, user) {
   /* Daraja testi: savollar ichida TO'G'RI JAVOB bor — hech kimga berilmaydi.
      Boshlangan test sessiyasi ham (savol ro'yxati) mijozga chiqmaydi.       */
   if (col === 'testq' || col === 'testsess') return true;
+  /* Dars testlari ham shunday: savol matni javobi bilan turadi. */
+  if (col === 'quizq' || col === 'quizsess') return true;
   /* Test natijalari — faqat murojaat/o'quvchi bilan ishlaydiganlarga */
   if (col === 'placements' && !A.can(user, 'lead.view')) return true;
   if (col === 'payroll' && !A.can(user, 'finance.payroll')) return true;
@@ -133,6 +142,19 @@ function visibleData(user, all) {
       /* Daraja testi natijalari — murojaatlar bilan ishlaydiganlarga.
          Savollar ('testq') va sessiyalar ('testsess') hech kimga chiqmaydi. */
       case 'placements': return A.can(user, 'lead.view');
+      /* O'quv dasturi — ko'rish hamma xodimga, tahrir alohida huquq bilan */
+      case 'modules': case 'topics': case 'materials': case 'homework':
+        return A.can(user, 'curriculum.view') || A.can(user, 'group.view');
+      case 'lessonlog': case 'holidays': case 'pauses': case 'makeups':
+        return A.can(user, 'group.view') || A.can(user, 'schedule.view');
+      case 'quizzes': case 'quizres': case 'asks':
+        return A.can(user, 'group.view') || A.can(user, 'student.view');
+      case 'questions': case 'feedback':
+        return A.can(user, 'group.view');
+      /* Ota-ona hisobi — o'quvchi bilan ishlaydiganlarga */
+      case 'parents': return A.can(user, 'student.view');
+      /* Fayl ma'lumotnomasi (mazmuni emas) — /api/file orqali olinadi */
+      case 'files': return A.can(user, 'group.view') || A.can(user, 'student.view');
       case 'invoices': case 'payments': return A.can(user, 'finance.payments') || A.can(user, 'finance.debts');
       case 'expenses': return A.can(user, 'finance.expenses');
       case 'payroll': return A.can(user, 'finance.payroll');

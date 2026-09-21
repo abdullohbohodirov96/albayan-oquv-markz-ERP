@@ -119,9 +119,12 @@
     { id: 'groups', label: 'Guruhlar', icon: 'layers', perm: 'nav.groups' },
     { id: 'schedule', label: 'Jadval', icon: 'calendar', perm: 'nav.schedule' },
     { id: 'attendance', label: 'Davomat', icon: 'check', perm: 'nav.attendance' },
+    { id: 'curriculum', label: 'O’quv dasturi', icon: 'layers', perm: 'nav.curriculum' },
+    { id: 'learning', label: 'Dars jarayoni', icon: 'task', perm: 'lesson.log' },
     { id: 'finance', label: 'Moliya', icon: 'wallet', perm: 'nav.finance' },
     { id: 'staff', label: 'Xodimlar', icon: 'badge', perm: 'nav.staff' },
     { id: 'reports', label: 'Hisobotlar', icon: 'chart', perm: 'nav.reports' },
+    { id: 'progress', label: 'O’quv natijalari', icon: 'chart', perm: 'reports.learning' },
     { id: 'chat', label: 'Suhbat', icon: 'chat', perm: 'nav.chat' },
     { id: 'tasks', label: 'Vazifalar', icon: 'task', perm: 'nav.tasks' },
     { id: 'bot', label: 'Telegram bot', icon: 'bot', perm: 'nav.bot' },
@@ -331,7 +334,7 @@
         h('img', { class: 'logo', src: LOGO, alt: '' }),
         h('div', {}, [
           h('h1', { id: 'kab-center' }, centerNameNow()),
-          h('div', { class: 'sub' }, 'O’quvchi kabineti')
+          h('div', { class: 'sub', id: 'kab-sub' }, 'Shaxsiy kabinet')
         ])
       ]),
       info, err, result,
@@ -370,6 +373,7 @@
       }
       try {
         var d = await D.api('GET', 'api/kabinet/me');
+        D.kabCsrf = d.csrf || '';
         info.hidden = true;
         showInfo(d);
       } catch (ex) {
@@ -420,6 +424,7 @@
         btn.disabled = true; btn.textContent = 'Tekshirilmoqda…'; err.hidden = true;
         try {
           var d = await D.api('POST', 'api/kabinet', { code: code });
+          D.kabCsrf = d.csrf || '';
           showInfo(d);
         } catch (ex) {
           btn.disabled = false; btn.textContent = 'Kirish';
@@ -438,8 +443,13 @@
       try { input.focus(); } catch (e) { }
     }
 
+    /* Kabinet ikki xil bo'ladi: o'quvchi va ota-ona.
+       Ota-onaga farzandlari ro'yxati chiqadi. */
     function showInfo(d) {
+      if (d && d.kind === 'parent') return showParent(d);
       UI.clear(result);
+      var sub0 = document.getElementById('kab-sub');
+      if (sub0) sub0.textContent = 'O’quvchi kabineti';
       var st = d.student, fin = d.finance, att = d.attendance;
 
       var money = fin.debt > 0
@@ -505,6 +515,9 @@
         h('div', { class: 'small muted', style: 'margin-top:10px' },
           'Savol bo’lsa markazga murojaat qiling' + (d.center.phone ? ': ' + d.center.phone : '.')),
 
+        /* O'quv bo'limi: vazifa, test, savol-javob */
+        learnSection(st.id, true),
+
         /* Umumiy (birovning) kompyuterida kabinetni yopish uchun. */
         h('div', { class: 'kab-out' }, [
           h('button', {
@@ -519,6 +532,234 @@
       ]));
       A.I18N.apply(result);
     }
+
+    /* ---- Ota-ona kabineti: farzandlar ro'yxati ---- */
+    function showParent(d) {
+      UI.clear(result);
+      var sub = document.getElementById('kab-sub');
+      if (sub) sub.textContent = 'Ota-ona kabineti';
+      var kids = d.children || [];
+      result.appendChild(h('div', { class: 'kab-card' }, [
+        h('div', { class: 'kab-head' }, [
+          UI.avatar(d.parent.name),
+          h('div', { class: 'main-col' }, [
+            h('b', {}, d.parent.name),
+            h('span', { class: 'small muted' },
+              'Ota-ona kabineti' + (d.parent.relation ? ' · ' + d.parent.relation : ''))
+          ])
+        ]),
+        kids.length ? null : h('p', { class: 'muted small' },
+          'Sizga hali farzand biriktirilmagan. Markazga murojaat qiling.'),
+        h('div', { class: 'kab-sec' }, kids.map(function (k) {
+          var fin = k.finance || {}, att = k.attendance || {};
+          return h('div', { class: 'kab-kid' }, [
+            h('b', {}, k.student.name),
+            h('span', { class: 'small muted' },
+              (k.groups || []).map(function (g) { return g.name; }).join(', ') || 'Guruhga yozilmagan'),
+            h('div', { class: 'kab-line' }, [
+              h('span', {}, 'To’lov'),
+              h('b', {}, fin.debt > 0 ? A.somFull(fin.debt) + ' qarz' : 'Qarz yo’q')
+            ]),
+            h('div', { class: 'kab-line' }, [
+              h('span', {}, 'Davomat'),
+              h('b', {}, att.total
+                ? (att.percent != null ? att.percent + '%' : att.attended + '/' + att.total)
+                : 'Yozuv yo’q')
+            ]),
+            k.quizzes && k.quizzes.count ? h('div', { class: 'kab-line' }, [
+              h('span', {}, 'Testlar'),
+              h('b', {}, k.quizzes.count + ' ta · o’rtacha ' + (k.quizzes.avgPercent || 0) + '%')
+            ]) : null,
+            k.level ? h('div', { class: 'kab-line' }, [
+              h('span', {}, 'Daraja'), h('b', {}, k.level)
+            ]) : null,
+            learnSection(k.student.id, false)
+          ]);
+        })),
+        h('div', { class: 'small muted', style: 'margin-top:10px' },
+          'Savol bo’lsa markazga murojaat qiling' + (d.center.phone ? ': ' + d.center.phone : '.')),
+        h('div', { class: 'kab-out' }, [
+          h('button', {
+            class: 'btn sm', type: 'button',
+            onclick: async function () {
+              try { await D.api('POST', 'api/kabinet/logout', {}); } catch (e) { }
+              err.hidden = true;
+              showForm();
+            }
+          }, 'Chiqish')
+        ])
+      ]));
+    }
+
+    /* ---- O'quv bo'limi (ikkala kabinetda ham) ---- */
+    function learnSection(studentId, canAct) {
+      var wrapEl = h('div', { class: 'kab-sec' },
+        h('p', { class: 'small muted' }, 'O’quv ma’lumoti yuklanmoqda…'));
+      (async function () {
+        var d;
+        try {
+          d = await D.api('GET', 'api/kabinet/learning?studentId=' + encodeURIComponent(studentId));
+        } catch (ex) { UI.clear(wrapEl); return; }
+        UI.clear(wrapEl);
+        var act = canAct && d.canSubmit;
+
+        /* Uy vazifalari */
+        if ((d.homework || []).length) {
+          wrapEl.appendChild(h('h3', {}, 'Uy vazifasi'));
+          d.homework.slice(0, 5).forEach(function (w) {
+            wrapEl.appendChild(h('div', { class: 'kab-item' }, [
+              h('b', {}, w.title || 'Vazifa'),
+              w.text ? h('span', {}, w.text) : null,
+              h('span', { class: 'small muted' },
+                A.dateLabel(w.date) + (w.dueDate ? ' · muddat: ' + A.dateLabel(w.dueDate) : '') +
+                (w.group ? ' · ' + w.group : ''))
+            ]));
+          });
+        }
+
+        /* Testlar */
+        if ((d.quizzes || []).length) {
+          wrapEl.appendChild(h('h3', {}, 'Testlar'));
+          d.quizzes.slice(0, 8).forEach(function (q) {
+            wrapEl.appendChild(h('div', { class: 'kab-item' }, [
+              h('b', {}, q.title),
+              h('span', { class: 'small muted' },
+                q.done ? ('Natija: ' + q.score + '/' + q.total + ' (' + q.percent + '%)')
+                  : (q.count + ' savol' + (q.due ? ' · muddat: ' + A.dateLabel(q.due) : ''))),
+              (act && !q.done) ? h('button', {
+                class: 'btn sm primary', type: 'button',
+                onclick: function () { runQuiz(q, studentId); }
+              }, 'Testni ishlash') : null
+            ]));
+          });
+        }
+
+        /* Qo'shimcha darslar */
+        if ((d.makeups || []).length) {
+          wrapEl.appendChild(h('h3', {}, 'Qo’shimcha dars'));
+          d.makeups.forEach(function (m) {
+            wrapEl.appendChild(h('div', { class: 'kab-item' }, [
+              h('b', {}, A.dateLabel(m.date) + (m.time ? ' ' + m.time : '')),
+              h('span', { class: 'small muted' },
+                'Qoldirilgan dars: ' + A.dateLabel(m.missedDate) + ' · ' + m.status +
+                (m.room ? ' · ' + m.room : ''))
+            ]));
+          });
+        }
+
+        /* Savol-javob */
+        wrapEl.appendChild(h('h3', {}, 'Savol-javob'));
+        if (act) {
+          var gid = ((d.progress && d.progress.groups) || [])[0];
+          wrapEl.appendChild(h('button', {
+            class: 'btn sm', type: 'button',
+            onclick: function () { askForm(studentId); }
+          }, 'Ustozga savol berish'));
+        }
+        if ((d.questions || []).length) {
+          d.questions.slice(0, 8).forEach(function (q) {
+            wrapEl.appendChild(h('div', { class: 'kab-item' }, [
+              h('b', {}, q.text),
+              h('span', { class: 'small muted' }, q.at + (q.mine ? ' · siz so’radingiz' : '')),
+              (q.answers || []).length
+                ? h('span', {}, 'Javob: ' + q.answers[q.answers.length - 1].text)
+                : h('span', { class: 'small muted' }, 'Javob kutilmoqda')
+            ]));
+          });
+        } else {
+          wrapEl.appendChild(h('p', { class: 'small muted' }, 'Savol yo’q.'));
+        }
+      })();
+      return wrapEl;
+    }
+
+    /* Kabinetda test ishlash */
+    function runQuiz(q, studentId) {
+      (async function () {
+        var t;
+        try { t = await D.kabPost('api/kabinet/quiz/start', { quizId: q.id }); }
+        catch (ex) { UI.toast(ex.message || 'Testni ochib bo’lmadi.', 'bad'); return; }
+        var pos = 0, chosen = {};
+        var qbody = h('div', { class: 'test-body' });
+        var m = UI.modal({ title: t.quiz.title || 'Test', body: qbody, actions: [{ label: 'Yopish' }] });
+
+        function draw() {
+          UI.clear(qbody);
+          var qq = t.questions[pos];
+          if (!qq) return send();
+          qbody.appendChild(h('div', {}, [
+            h('div', { class: 'test-bar' },
+              h('span', { style: 'width:' + Math.round(pos / t.questions.length * 100) + '%' })),
+            h('div', { class: 'test-meta' }, [
+              h('span', { class: 'test-kind' }, ''),
+              h('span', { class: 'test-count small muted', dir: 'ltr' },
+                (pos + 1) + ' / ' + t.questions.length)
+            ]),
+            h('p', { class: 'test-q', dir: 'auto' }, qq.text),
+            h('div', { class: 'test-opts' }, qq.options.map(function (o, i) {
+              return h('button', {
+                class: 'test-opt', type: 'button', dir: 'auto',
+                onclick: function () { chosen[qq.id] = i; pos++; draw(); }
+              }, o);
+            }))
+          ]));
+        }
+        async function send() {
+          UI.clear(qbody);
+          qbody.appendChild(h('p', { class: 'small muted' }, 'Hisoblanmoqda…'));
+          try {
+            var r = await D.kabPost('api/kabinet/quiz/submit', {
+              sessionId: t.id,
+              answers: Object.keys(chosen).map(function (id) { return { id: id, choice: chosen[id] }; })
+            });
+            UI.clear(qbody);
+            qbody.appendChild(h('div', { class: 'test-res' }, [
+              h('div', { class: 'test-level' }, [
+                h('span', { class: 'small muted' }, 'Natijangiz'),
+                h('b', {}, r.result.percent + '%'),
+                h('span', {}, r.result.score + ' / ' + r.result.total)
+              ]),
+              h('p', { class: 'small muted' },
+                r.result.passed ? 'Test topshirildi.' : 'O’tish foiziga yetmadi.')
+            ]));
+            setTimeout(function () { m.close(true); start(); }, 2500);
+          } catch (ex) {
+            UI.clear(qbody);
+            qbody.appendChild(h('p', { class: 'err-msg' }, ex.message || 'Xato.'));
+          }
+        }
+        draw();
+      })();
+    }
+
+    /* Ustozga savol */
+    function askForm(studentId) {
+      (async function () {
+        var d;
+        try { d = await D.api('GET', 'api/kabinet/learning?studentId=' + encodeURIComponent(studentId)); }
+        catch (ex) { return; }
+        var groups = (d.questions || []).map(function (q) { return q.groupId; });
+        var gid = groups[0] || (d.progress && d.progress.groups && d.progress.groups[0] &&
+          d.progress.groups[0].id) || '';
+        var ta = h('textarea', { rows: 4, placeholder: 'Savolingizni yozing' });
+        UI.modal({
+          title: 'Ustozga savol',
+          body: h('div', { class: 'f' }, [ta]),
+          actions: [{ label: 'Bekor qilish' }, {
+            label: 'Yuborish', cls: 'primary', onClick: function (close, btn) {
+              var text = String(ta.value || '').trim();
+              if (!text) { UI.toast('Savolni yozing.', 'bad'); return; }
+              UI.busy(btn, async function () {
+                try {
+                  await D.kabPost('api/kabinet/question', { groupId: gid, text: text });
+                  close(true); UI.toast('Savol yuborildi.', 'ok'); start();
+                } catch (ex) { UI.toast(ex.message || 'Yuborilmadi.', 'bad'); }
+              });
+            }
+          }]
+        });
+      })();
+    }
   }
   A.renderKabinet = renderKabinet;
 
@@ -527,6 +768,62 @@
      Kirishsiz ishlaydi. Savollar serverdan JAVOBSIZ keladi, natijani ham
      server hisoblaydi — shuning uchun brauzerda "to'g'ri javob" yo'q va
      darajani o'zboshimchalik bilan yozib bo'lmaydi. */
+  /* Test sahifasining o'z matnlari — uch tilda (savollar serverdan keladi) */
+  var TEST_T = {
+    uz: {
+      title: 'Daraja aniqlash testi', sub: 'A1 · A2 · B1 · B2 · C1 · C2',
+      pick: 'Test tilini tanlang', start: 'Testni boshlash',
+      loading: 'Savollar yuklanmoqda…', back: 'Orqaga', skip: 'Bilmayman',
+      home: 'Bosh sahifa', done: 'Savollar tugadi. Natijani ko’rish uchun tugmani bosing.',
+      hint: 'Ism va telefonni yozsangiz, markaz siz uchun mos guruhni taklif qiladi. Yozmasangiz ham natija ko’rinadi.',
+      name: 'Ismingiz (ixtiyoriy)', phone: 'Telefon (ixtiyoriy)',
+      see: 'Natijani ko’rish', calc: 'Hisoblanmoqda…',
+      your: 'Sizning darajangiz', total: 'Umumiy natija',
+      note: 'Bu natija taxminiy. Aniq daraja ustoz bilan qisqa suhbatdan keyin belgilanadi.',
+      apply: 'Ariza qoldirish', again: 'Qayta topshirish',
+      errStart: 'Testni boshlab bo’lmadi.', errSend: 'Natijani olishda xato.',
+      changeLang: 'Tilni almashtirish'
+    },
+    ru: {
+      title: 'Тест на определение уровня', sub: 'A1 · A2 · B1 · B2 · C1 · C2',
+      pick: 'Выберите язык теста', start: 'Начать тест',
+      loading: 'Загрузка вопросов…', back: 'Назад', skip: 'Не знаю',
+      home: 'На главную', done: 'Вопросы закончились. Нажмите кнопку, чтобы увидеть результат.',
+      hint: 'Если укажете имя и телефон, центр предложит подходящую группу. Без них результат тоже виден.',
+      name: 'Ваше имя (необязательно)', phone: 'Телефон (необязательно)',
+      see: 'Посмотреть результат', calc: 'Подсчёт…',
+      your: 'Ваш уровень', total: 'Общий результат',
+      note: 'Результат приблизительный. Точный уровень определяется после короткой беседы с преподавателем.',
+      apply: 'Оставить заявку', again: 'Пройти заново',
+      errStart: 'Не удалось начать тест.', errSend: 'Ошибка при получении результата.',
+      changeLang: 'Сменить язык'
+    },
+    ar: {
+      title: 'اختبار تحديد المستوى', sub: 'A1 · A2 · B1 · B2 · C1 · C2',
+      pick: 'اختر لغة الاختبار', start: 'ابدأ الاختبار',
+      loading: 'جارٍ تحميل الأسئلة…', back: 'السابق', skip: 'لا أعرف',
+      home: 'الصفحة الرئيسية', done: 'انتهت الأسئلة. اضغط الزر لعرض النتيجة.',
+      hint: 'إذا كتبت اسمك ورقمك اقترح عليك المركز المجموعة المناسبة. وتظهر النتيجة من دونهما أيضاً.',
+      name: 'الاسم (اختياري)', phone: 'الهاتف (اختياري)',
+      see: 'عرض النتيجة', calc: 'جارٍ الحساب…',
+      your: 'مستواك', total: 'النتيجة الإجمالية',
+      note: 'هذه النتيجة تقريبية. يُحدَّد المستوى بدقّة بعد حديث قصير مع الأستاذ.',
+      apply: 'أرسل طلباً', again: 'أعد الاختبار',
+      errStart: 'تعذّر بدء الاختبار.', errSend: 'خطأ في جلب النتيجة.',
+      changeLang: 'تغيير اللغة'
+    }
+  };
+  var TEST_LANGS = [
+    { id: 'uz', label: 'O’zbekcha' },
+    { id: 'ru', label: 'Русский' },
+    { id: 'ar', label: 'العربية' }
+  ];
+
+  /* ================= DARAJA ANIQLASH TESTI (A1 → C2) =================
+     Kirishsiz ishlaydi. Savollar serverdan JAVOBSIZ keladi, natijani ham
+     server hisoblaydi — shuning uchun brauzerda "to'g'ri javob" yo'q va
+     darajani o'zboshimchalik bilan yozib bo'lmaydi.
+     Uch til: o'zbek, rus, arab (arabchada sahifa o'ngdan chapga). */
   function renderTest() {
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
@@ -535,43 +832,81 @@
     wrap.className = 'screen';
     UI.clear(wrap);
 
-    var err = h('div', { class: 'err-msg', hidden: true });
-    var body = h('div', { class: 'test-body' },
-      h('p', { class: 'small muted' }, 'Savollar yuklanmoqda…'));
+    /* Boshlang'ich til: saytdagi til mos kelsa — o'sha, aks holda o'zbekcha */
+    var cur = (A.I18N && A.I18N.lang) || 'uz';
+    var LANG = TEST_T[cur] ? cur : 'uz';
+    var T = function () { return TEST_T[LANG]; };
+    var rtl = function () { return LANG === 'ar'; };
 
-    var box = h('div', { class: 'login test-box' }, [
-      h('div', { class: 'brandline' }, [
-        h('img', { class: 'logo', src: LOGO, alt: '' }),
-        h('div', {}, [
-          h('h1', {}, 'Daraja aniqlash testi'),
-          h('div', { class: 'sub' }, 'A1 · A2 · B1 · B2 · C1 · C2')
-        ])
-      ]),
-      err, body,
-      h('div', { class: 'login-alt' }, [
-        h('button', {
-          class: 'btn sm', type: 'button',
-          onclick: function () { location.hash = ''; renderLanding(); }
-        }, 'Bosh sahifa')
-      ])
+    var err = h('div', { class: 'err-msg', hidden: true });
+    var body = h('div', { class: 'test-body' });
+    var head = h('div', {}, []);
+
+    var homeBtn = h('button', {
+      class: 'btn sm', type: 'button',
+      onclick: function () { location.hash = ''; renderLanding(); }
+    }, T().home);
+    var box = h('div', { class: 'login test-box' }, [head, err, body,
+      h('div', { class: 'login-alt' }, [homeBtn])
     ]);
     wrap.appendChild(box);
 
     var SES = null, QS = [], LVLS = [], pos = 0, picked = {};
 
-    start();
+    paintHead();
+    pickLang();
+
+    function paintHead() {
+      UI.clear(head);
+      box.setAttribute('dir', rtl() ? 'rtl' : 'ltr');
+      homeBtn.textContent = T().home;
+      head.appendChild(h('div', { class: 'brandline' }, [
+        h('img', { class: 'logo', src: LOGO, alt: '' }),
+        h('div', {}, [
+          h('h1', {}, T().title),
+          h('div', { class: 'sub' }, T().sub)
+        ])
+      ]));
+    }
+
+    /* 1-qadam: til tanlash */
+    function pickLang() {
+      UI.clear(body);
+      err.hidden = true;
+      body.appendChild(h('div', { class: 'test-lang' }, [
+        h('p', { class: 'small muted' }, T().pick),
+        h('div', { class: 'test-lang-row' }, TEST_LANGS.map(function (l) {
+          return h('button', {
+            class: 'btn' + (l.id === LANG ? ' primary' : ''), type: 'button',
+            lang: l.id, dir: l.id === 'ar' ? 'rtl' : 'ltr',
+            onclick: function () { LANG = l.id; paintHead(); pickLang(); }
+          }, l.label);
+        })),
+        h('button', {
+          class: 'btn primary lg', type: 'button',
+          onclick: function () { start(); }
+        }, T().start)
+      ]));
+    }
 
     async function start() {
+      UI.clear(body);
+      body.appendChild(h('p', { class: 'small muted' }, T().loading));
       try {
-        var d = await D.api('POST', 'api/test/start', {});
+        var d = await D.api('POST', 'api/test/start', { lang: LANG });
         SES = d.id; QS = d.questions || []; LVLS = d.levels || [];
+        LANG = TEST_T[d.lang] ? d.lang : LANG;
+        paintHead();
         pos = 0; picked = {};
-        if (!QS.length) throw new Error('Savollar topilmadi.');
+        if (!QS.length) throw new Error(T().errStart);
         step();
       } catch (ex) {
         UI.clear(body);
         err.hidden = false;
-        err.textContent = ex.message || 'Testni boshlab bo’lmadi.';
+        err.textContent = ex.message || T().errStart;
+        body.appendChild(h('button', {
+          class: 'btn', type: 'button', onclick: function () { pickLang(); }
+        }, T().changeLang));
       }
     }
 
@@ -595,21 +930,20 @@
         bar,
         h('div', { class: 'test-meta' }, [
           h('span', { class: 'test-kind' }, q.kindLabel || q.kind || ''),
-          h('span', { class: 'test-count small muted' }, (pos + 1) + ' / ' + QS.length)
+          h('span', { class: 'test-count small muted', dir: 'ltr' }, (pos + 1) + ' / ' + QS.length)
         ]),
-        /* Savol matni o'zbekcha — chapdan o'ngga. Ichidagi arabcha
-           parchalar baribir to'g'ri (o'ngdan chapga) ko'rinadi. */
-        h('p', { class: 'test-q', dir: 'ltr' }, q.text),
+        /* Savol matni tanlangan tilda; arabchada o'ngdan chapga */
+        h('p', { class: 'test-q', dir: rtl() ? 'rtl' : 'ltr' }, q.text),
         opts,
         h('div', { class: 'test-nav' }, [
           pos > 0 ? h('button', {
             class: 'btn sm', type: 'button',
             onclick: function () { pos--; step(); }
-          }, 'Orqaga') : null,
+          }, T().back) : null,
           h('button', {
             class: 'btn sm ghost', type: 'button',
             onclick: function () { delete picked[q.id]; pos++; step(); }
-          }, 'Bilmayman')
+          }, T().skip)
         ])
       ]));
     }
@@ -617,23 +951,21 @@
     /* Oxirida: ism/telefon (ixtiyoriy) va yuborish */
     function finish() {
       UI.clear(body);
-      var nameI = h('input', { id: 'test-name', type: 'text', placeholder: 'Ismingiz (ixtiyoriy)', maxlength: '80' });
-      var phoneI = h('input', { id: 'test-phone', type: 'tel', placeholder: 'Telefon (ixtiyoriy)', maxlength: '30' });
-      var btn = h('button', { class: 'btn primary', type: 'submit' }, 'Natijani ko’rish');
+      var nameI = h('input', { id: 'test-name', type: 'text', placeholder: T().name, maxlength: '80' });
+      var phoneI = h('input', { id: 'test-phone', type: 'tel', placeholder: T().phone, maxlength: '30' });
+      var btn = h('button', { class: 'btn primary', type: 'submit' }, T().see);
 
       body.appendChild(h('form', {
         class: 'test-end',
         onsubmit: function (e) { e.preventDefault(); send(); }
       }, [
-        h('p', {}, 'Savollar tugadi. Natijani ko’rish uchun tugmani bosing.'),
-        h('p', { class: 'small muted' },
-          'Ism va telefonni yozsangiz, markaz siz uchun mos guruhni taklif qiladi. ' +
-          'Yozmasangiz ham natija ko’rinadi.'),
+        h('p', {}, T().done),
+        h('p', { class: 'small muted' }, T().hint),
         nameI, phoneI, btn
       ]));
 
       async function send() {
-        btn.disabled = true; btn.textContent = 'Hisoblanmoqda…'; err.hidden = true;
+        btn.disabled = true; btn.textContent = T().calc; err.hidden = true;
         var ans = Object.keys(picked).map(function (id) { return { id: id, choice: picked[id] }; });
         try {
           var r = await D.api('POST', 'api/test/submit', {
@@ -642,9 +974,9 @@
           });
           show(r);
         } catch (ex) {
-          btn.disabled = false; btn.textContent = 'Natijani ko’rish';
+          btn.disabled = false; btn.textContent = T().see;
           err.hidden = false;
-          err.textContent = ex.message || 'Natijani olishda xato.';
+          err.textContent = ex.message || T().errSend;
         }
       }
     }
@@ -652,7 +984,8 @@
     function show(r) {
       UI.clear(body);
       var info = r.info || {};
-      var rows = (LVLS.length ? LVLS : []).map(function (l) {
+      var list = (r.levels && r.levels.length) ? r.levels : LVLS;
+      var rows = list.map(function (l) {
         var p = (r.perLevel || {})[l.code] || { ok: 0, total: 0 };
         var okAll = p.total && p.ok >= 3;
         return h('div', { class: 'test-row' + (okAll ? ' ok' : '') }, [
@@ -664,25 +997,24 @@
 
       body.appendChild(h('div', { class: 'test-res' }, [
         h('div', { class: 'test-level' }, [
-          h('span', { class: 'small muted' }, 'Sizning darajangiz'),
+          h('span', { class: 'small muted' }, T().your),
           h('b', {}, r.level),
           h('span', {}, info.name || '')
         ]),
         info.about ? h('p', { class: 'small' }, info.about) : null,
         h('div', { class: 'test-score small muted' },
-          'Umumiy natija: ' + r.score + ' / ' + r.total),
+          T().total + ': ' + r.score + ' / ' + r.total),
         h('div', { class: 'test-rows' }, rows),
-        h('p', { class: 'small muted' },
-          'Bu natija taxminiy. Aniq daraja ustoz bilan qisqa suhbatdan keyin belgilanadi.'),
+        h('p', { class: 'small muted' }, T().note),
         h('div', { class: 'test-nav' }, [
           h('button', {
             class: 'btn primary', type: 'button',
             onclick: function () { location.hash = ''; renderLanding(); setTimeout(function () { scrollTo('ariza'); }, 60); }
-          }, 'Ariza qoldirish'),
+          }, T().apply),
           h('button', {
             class: 'btn sm', type: 'button',
-            onclick: function () { start(); }
-          }, 'Qayta topshirish')
+            onclick: function () { pickLang(); }
+          }, T().again)
         ])
       ]));
     }

@@ -1539,7 +1539,14 @@
   A.Pages.settings = function (view, route, App) {
     App.guard('settings.edit');
     var tab = route.tab || 'general';
-    view.appendChild(UI.pageHead('Sozlamalar', 'Markaz ma’lumotlari, foydalanuvchilar va tizim tarixi'));
+    view.appendChild(UI.pageHead('Sozlamalar', 'Markaz ma’lumotlari, foydalanuvchilar va tizim tarixi', [
+      App.can('holiday.manage') ? h('button', {
+        class: 'btn', onclick: function () { App.go('holidays'); }
+      }, 'Bayram va tanaffus') : null,
+      App.can('parent.manage') ? h('button', {
+        class: 'btn', onclick: function () { App.go('parents'); }
+      }, 'Ota-onalar') : null
+    ]));
     view.appendChild(UI.tabs([
       { id: 'general', label: 'Markaz' },
       { id: 'funnels', label: 'Sotuv voronkalari' },

@@ -41,6 +41,11 @@ async function create(store, opts) {
     kind: String((opts && opts.kind) || 'student'),      // 'student' | 'parent'
     studentId: String((opts && opts.studentId) || ''),
     parentId: String((opts && opts.parentId) || ''),
+    /* Ota-ona sessiyasi: qaysi farzandlarni ko'rishi mumkin.
+       Bu ro'yxat SESSIYADA qotib qoladi — keyin ota-onaga yangi bola
+       biriktirilsa, u qayta kirgandan so'ng ko'rinadi.                */
+    studentIds: Array.isArray(opts && opts.studentIds)
+      ? opts.studentIds.map(String).slice(0, 20) : [],
     createdAt: nowStamp(opts),
     via: String((opts && opts.via) || 'havola'),
     expiresAt: Date.now() + (Number(opts && opts.ttlMs) || TTL_MS),
