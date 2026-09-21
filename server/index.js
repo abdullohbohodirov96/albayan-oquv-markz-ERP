@@ -783,6 +783,39 @@ async function fileVisibleToStudents(rec, studentIds) {
   return false;
 }
 
+/* ---------------- Kunlik tozalash ----------------
+   Baza cheksiz o'smasligi uchun kuniga bir marta:
+     — muddati o'tgan test urinishlari (daraja testi va dars testlari);
+     — ishlatilgan/eskirgan bir martalik havolalar;
+     — muddati tugagan kabinet sessiyalari;
+     — bazadagi ma'lumotnomasi yo'q "yetim" fayllar (diskda joy bo'shaydi).
+   Natijalar (quizres, placements) va tarix TEGILMAYDI.                   */
+async function maintenanceTick() {
+  const done = {};
+  try { done.testSess = await levels.cleanup(store); } catch (e) { /* muhim emas */ }
+  try { done.quizSess = await quiz.cleanup(store); } catch (e) { }
+  try { done.links = await link.cleanup(store); } catch (e) { }
+  try { done.sessions = await kabsess.cleanup(store); } catch (e) { }
+  try { done.files = await files.sweep(store); } catch (e) { }
+  const total = Object.values(done).reduce((a, b) => a + (Number(b) || 0), 0);
+  if (total) {
+    console.log('  Tozalandi: ' + Object.entries(done)
+      .filter(([, v]) => v).map(([k, v]) => k + '=' + v).join(', '));
+  }
+  return done;
+}
+
+function startMaintenance() {
+  const t = setInterval(() => {
+    maintenanceTick().catch(e => console.error('tozalash:', e.message));
+  }, Number(process.env.MAINTENANCE_MS || 24 * 60 * 60 * 1000));
+  if (t.unref) t.unref();
+  /* Ishga tushgandan 1 daqiqa keyin birinchi marta — start sekinlashmasin */
+  const first = setTimeout(() => { maintenanceTick().catch(() => { }); }, 60 * 1000);
+  if (first.unref) first.unref();
+  return t;
+}
+
 function startAutoInvoice() {
   const t = setInterval(() => {
     autoInvoiceTick().catch(e => console.error('auto invoice:', e.message));
@@ -2408,6 +2441,9 @@ const server = http.createServer(async (req, res) => {
 
   // Oylik hisoblarni avtomatik yaratish (sozlamalarda yoqilsa)
   startAutoInvoice();
+
+  // Kunlik tozalash — baza va disk cheksiz o'smasin
+  startMaintenance();
 
   if (process.env.TELEGRAM_BOT_TOKEN) {
     require('./bot').start({ store, stamp, A });

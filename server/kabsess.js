@@ -104,4 +104,27 @@ function clearHeader() {
   return COOKIE + '=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0';
 }
 
-module.exports = { create, read, revoke, revokeForStudent, cookieHeader, clearHeader, COOKIE, COL, TTL_MS };
+/** Muddati o'tgan va bekor qilingan sessiyalarni o'chirish (baza o'smasin).
+    30 kunlik muddat tugagandan keyin yana 7 kun turadi — shikoyat bo'lsa
+    tarixda ko'rinsin. Undan keyin o'chadi. */
+async function cleanup(store) {
+  if (!store.del) return 0;
+  const rows = await store.list(COL);
+  const keep = 7 * 864e5;
+  let n = 0;
+  for (const r of rows) {
+    const d = r.data;
+    if (!d) continue;
+    const ended = Number(d.expiresAt) || 0;
+    const dead = (ended && Date.now() - ended > keep) ||
+      (d.revokedAt && ended && Date.now() - ended > keep);
+    if (!dead) continue;
+    await store.del(r.path); n++;
+  }
+  return n;
+}
+
+module.exports = {
+  create, read, revoke, revokeForStudent, cleanup,
+  cookieHeader, clearHeader, COOKIE, COL, TTL_MS
+};
