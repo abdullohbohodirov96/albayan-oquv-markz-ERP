@@ -50,13 +50,19 @@ async function api(p, opts = {}) {
       data: Object.assign({}, st, {
         phone: '+998 71 200 70 07', address: 'Toshkent, Chilonzor 9-kvartal',
         about: 'AlBayan Cairo — arab tilini Misr uslubida o’rgatadigan markaz.',
+        /* Ish vaqtini SINOVNING O'ZI yozadi — bazada nima turgani
+           muhim emas. Kechki dars tekshiruvi shunga tayanadi.          */
+        workStart: '08:00', workEnd: '22:00', lessonMinutes: 90,
         bot: Object.assign({}, st.bot || {}, { username: 'AlBayan_cairobot', staffChats: '' })
       })
     }
   });
   await api('/api/doc?path=' + encodeURIComponent('courses/' + R + '_c1'), {
     method: 'PUT', cookie: dir,
-    body: { data: { id: R + '_c1', name: 'Arab tili — boshlang’ich', monthlyFee: 450000, active: true, note: 'A1 daraja, haftada 3 kun' } }
+    /* order: -5 — bazada boshqa kurslar bo'lsa ham SHU kurs birinchi
+       turadi. Saytdagi asosiy narx birinchi kursdan olinadi, shuning
+       uchun sinov o'zi ko'rsatadigan narxni o'zi belgilaydi.           */
+    body: { data: { id: R + '_c1', name: 'Arab tili — boshlang’ich', monthlyFee: 450000, active: true, order: -5, note: 'A1 daraja, haftada 3 kun' } }
   });
 
   /* ================= 1. Ochiq ma'lumot ================= */
@@ -81,13 +87,22 @@ async function api(p, opts = {}) {
   ok('Markaz nomi ko’rinadi', /AlBayan/.test(txt), txt.slice(0, 120));
   ok('Markaz haqida matn ko’rinadi', /Misr uslubida/.test(txt), txt.slice(0, 300));
   ok('Logotip bor', await page.evaluate(() => !!document.querySelector('.site-brand img') && !!document.querySelector('.hero-art img')));
-  /* Kurslar serverdan keyin keladi — kartalar chiqishini kutamiz.
-     Yangi dizaynda ular "bosqich" kartalari (.tier).                   */
-  await page.waitForSelector('.tier', { timeout: 15000 });
+  /* Yangi tuzilish: KURS bitta, DARAJA oltita.
+     Darajalar serverdan keladi (server/levels.js), narx esa markazning
+     kurs kartochkasidan.                                               */
+  await page.waitForSelector('.lvl', { timeout: 15000 });
+  await page.waitForSelector('.price-card', { timeout: 15000 });
   const txt2 = await page.evaluate(() => document.body.innerText);
-  ok('Bosqich kartasi bor', (await page.evaluate(() => document.querySelectorAll('.tier').length)) > 0);
+  eq('Oltita daraja kartasi', await page.evaluate(() => document.querySelectorAll('.lvl').length), 6);
+  ok('Daraja kodlari ko’rinadi',
+    /A1/.test(txt2) && /C2/.test(txt2), txt2.slice(0, 500));
+  ok('Daraja izohi ko’rinadi', /Harflar, salomlashish/.test(txt2), txt2.slice(0, 900));
+  ok('Bitta narx kartasi bor',
+    (await page.evaluate(() => document.querySelectorAll('.price-card').length)) === 1);
   ok('Kurs nomi ko’rinadi', /boshlang/i.test(txt2), txt2.slice(0, 400));
   ok('Narx ko’rsatilgan', /450 000/.test(txt2), txt2.slice(0, 900));
+  ok('Narx daraja bilan o’zgarmasligi yozilgan',
+    /A1 ham, C2 ham bir xil/.test(txt2), txt2.slice(0, 1200));
   ok('Telefon va manzil bor', /200 70 07/.test(txt) && /Chilonzor/.test(txt));
   ok('Parol maydoni yo’q', !(await page.evaluate(() => !!document.getElementById('login-pass'))));
   await page.screenshot({ path: path.join(SHOTS, 'sayt-1280.png'), fullPage: true });
@@ -112,7 +127,12 @@ async function api(p, opts = {}) {
   await page.fill('#lead-phone', PHONE);
   /* Forma namunaga moslandi: erkin "izoh" o'rniga daraja (chip) va
      qulay vaqt (ro'yxat) tanlanadi. */
-  await page.selectOption('#lead-course', { index: 1 }).catch(() => { });
+  /* Markazda narx bitta, shuning uchun "Qaysi kurs" savoli YO'Q.
+     Ariza kursga dasturning o'zi biriktiradi — quyida tekshiriladi.   */
+  ok('«Qaysi kurs» savoli yo’q',
+    !(await page.evaluate(() => !!document.getElementById('lead-course'))));
+  ok('Bir nechta narx ro’yxati yo’q',
+    (await page.evaluate(() => document.querySelectorAll('.tier-extra').length)) === 0);
   await page.selectOption('#lead-time', { index: 1 }).catch(() => { });
   const chipOk = await page.evaluate(() => {
     const c = document.querySelectorAll('.chip-row .chip');
@@ -159,6 +179,44 @@ async function api(p, opts = {}) {
   const leads2 = await api('/api/collection?name=leads', { cookie: dir });
   eq('Lead soni oshmadi',
     Object.values(leads2.json.items || {}).filter(l => (l.name || '').indexOf(R) >= 0).length, 1);
+
+  /* --- Daraja kartasi → ariza formasi ---
+     Karta bosilganda forma "B1 — O'rta" degan yorliq bilan to'ladi va
+     ariza aynan shu KOD bilan ketadi. Kod ro'yxati serverda yopiq:
+     mijoz o'z matnini yozib yubora olmaydi.                            */
+  section('   Daraja kartasidan ariza');
+  const R2 = R + 'L';
+  const PHONE2 = '+99890' + String(Date.now()).slice(-7);
+  await page.goto(BASE);
+  await page.waitForSelector('.lvl', { timeout: 20000 });
+  await page.evaluate(() => document.querySelectorAll('.lvl')[2].click());
+  await page.waitForTimeout(600);
+  const pill = await page.evaluate(() => {
+    const p = document.getElementById('lead-level-pill');
+    return p && !p.hidden ? p.innerText : '';
+  });
+  ok('Yorliqda daraja ko’rindi', /B1/.test(pill) && /O’rta/.test(pill), JSON.stringify(pill));
+  await page.fill('#lead-name', 'Daraja Mijoz ' + R2);
+  await page.fill('#lead-phone', PHONE2);
+  await page.click('.lead-form button[type=submit]');
+  await page.waitForTimeout(1600);
+  const leads3 = await api('/api/collection?name=leads', { cookie: dir });
+  const mine2 = Object.values(leads3.json.items || {}).filter(l => (l.name || '').indexOf(R2) >= 0)[0];
+  ok('Ariza yaratildi', !!mine2, JSON.stringify(Object.keys(leads3.json.items || {}).length));
+  eq('Daraja kodi saqlandi', (mine2 || {}).startLevel, 'B1 — O’rta');
+  ok('Izohga ham tushdi', /B1/.test((mine2 || {}).note || ''), (mine2 || {}).note);
+
+  section('   Yopiq ro’yxat: o’zboshimcha daraja qabul qilinmaydi');
+  const evilPhone = '+99890' + String(Date.now() + 7).slice(-7);
+  const evil = await api('/api/lead', {
+    method: 'POST',
+    body: { name: 'Yopiq Sinov ' + R2, phone: evilPhone, startLevel: '<b>Professor</b>' }
+  });
+  eq('So’rov o’tdi (lekin daraja tozalandi)', evil.status, 200);
+  const leads4 = await api('/api/collection?name=leads', { cookie: dir });
+  const evilRec = Object.values(leads4.json.items || {}).filter(l => (l.name || '').indexOf('Yopiq Sinov') >= 0)[0];
+  eq('O’zboshimcha daraja yozilmadi', (evilRec || {}).startLevel, '');
+  ok('Izohda ham yo’q', !/Professor/.test((evilRec || {}).note || ''), (evilRec || {}).note);
 
   section('   Noto’g’ri ma’lumot qabul qilinmaydi');
   eq('Ismsiz rad etildi', (await api('/api/lead', { method: 'POST', body: { name: '', phone: '+998901112233' } })).status, 400);

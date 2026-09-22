@@ -1579,6 +1579,17 @@
         }
       },
       {
+        /* Hero ostidagi ishonch qatori. Bo'sh bo'lsa ko'rinmaydi. */
+        name: 'heroProof', label: 'Ishonch qatori (ixtiyoriy)', value: s.heroProof,
+        placeholder: 'masalan: 500+ o’quvchi bizni tanladi',
+        help: 'Hero tugmalari ostida kichik qator bo’lib chiqadi. ' +
+          'Bo’sh qoldirsangiz ko’rinmaydi. Sonini o’zingiz bilgan haqiqiy ' +
+          'songa qarab yozing — dastur uni bazadan sanab chiqarmaydi.',
+        validate: function (v) {
+          return String(v || '').length > 60 ? 'Ko’pi bilan 60 belgi.' : null;
+        }
+      },
+      {
         /* Hero ostidagi ko'rsatkichlar: "qiymat | izoh" */
         name: 'stats', label: 'Saytdagi ko’rsatkichlar', type: 'textarea', value: s.stats, full: true,
         placeholder: '6 bosqich | daraja A1–C2 to’liq dastur\n8–12 o’quvchi | kichik guruh',

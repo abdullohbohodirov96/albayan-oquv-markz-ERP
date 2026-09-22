@@ -1550,9 +1550,13 @@ async function handleApi(req, res, url) {
       out.telegram = String((s.bot && s.bot.username) || '');
       out.instagram = String(s.instagram || '');
       // Kurslar: faqat nomi va (ruxsat berilgan bo'lsa) oylik narxi
+      /* Tartibni MARKAZ belgilaydi: `order` kichik bo'lgani birinchi
+         turadi. Saytda asosiy narx shu birinchi kursdan olinadi.       */
       const courses = (await store.list('courses/'))
         .filter(r => r.path.split('/').length === 2)
-        .map(r => r.data).filter(c => c && c.active !== false);
+        .map(r => r.data).filter(c => c && c.active !== false)
+        .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) ||
+          String(a.name || '').localeCompare(String(b.name || '')));
       out.courses = courses.slice(0, 12).map(c => ({
         id: c.id, name: c.name,
         fee: (c.publicPrice === false || s.publicPrices === false) ? null : Math.round(c.monthlyFee || 0),
@@ -1596,6 +1600,18 @@ async function handleApi(req, res, url) {
         return { v: String(p[0] || '').trim().slice(0, 14),
                  t: String(p[1] || '').trim().slice(0, 60) };
       }).filter(x => x.v).slice(0, 4);
+      /* Hero ostidagi ishonch qatori: "500+ o'quvchi bizni tanladi".
+         Bu ham markazning O'Z gapi — Sozlamada yoziladi. Biz hech qanday
+         son o'ylab topmaymiz va bazadan sanab chiqarmaymiz (o'quvchilar
+         soni ichki ma'lumot, u kirishsiz ochilmaydi).                    */
+      out.heroProof = String(s.heroProof || '').slice(0, 60);
+      /* Darajalar — CEFR (A1…C2). Bu markazning da'vosi emas, tizimda
+         allaqachon bor ro'yxat (server/levels.js): daraja testi ham,
+         o'quv dasturi ham shu darajalar ustiga qurilgan. Shuning uchun
+         sayt uni o'zi o'ylab topmaydi, bir joydan oladi.                 */
+      out.levels = levels.levelList('uz').map(l => ({
+        code: String(l.code), name: String(l.name), about: String(l.about)
+      }));
       /* Savol-javob. Har juftlik: savol qatori, keyin javob qatori,
          juftliklar bo'sh qator bilan ajratiladi.                         */
       out.faq = String(s.faq || '').split(/\n\s*\n/).map(function (blk) {
@@ -1647,6 +1663,12 @@ async function handleApi(req, res, url) {
     /* Saytdagi formadan qo'shimcha: hozirgi daraja va qulay vaqt.
        Ro'yxat yopiq — mijoz o'z matnini yubora olmaydi.                  */
     const LEVELS = { noldan: 'Noldan (alifbo)', oqiy: 'O’qiy olaman', gram: 'Grammatikani bilaman' };
+    /* Saytdagi daraja kartasidan kelgan CEFR kodi ham qabul qilinadi
+       (A1…C2). Ro'yxat server/levels.js dan olinadi — ya'ni bu yerda ham
+       yopiq ro'yxat, mijoz o'z matnini yozib yubora olmaydi.             */
+    levels.levelList('uz').forEach(function (l) {
+      LEVELS[l.code] = l.code + ' — ' + l.name;
+    });
     const startLevel = LEVELS[String(body.startLevel || '')] || '';
     const wantTime = String(body.wantTime || '').slice(0, 40);
     if (name.length < 2) return send(res, 400, { error: 'Ismingizni yozing.' });

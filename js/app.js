@@ -1199,6 +1199,59 @@
     }, { threshold: 1 }).observe(probe);
   }
 
+  /** O'q ikonkasi — tugma ustiga kelganda oldinga siljiydi (CSS: .ico-go). */
+  function goIcon() {
+    var i = UI.icon('right');
+    i.classList.add('ico-go');
+    return i;
+  }
+
+  /** Bosilganini sezdirish: tugma bosilganda rangi o'zgaradi va bosilgan
+      joydan tilla to'lqin tarqaladi.
+
+      Nega JS bilan: to'lqin bosilgan NUQTADAN chiqishi kerak, buni faqat
+      CSS bilan qilib bo'lmaydi. Rang o'zgarishi esa CSS'da (:active) —
+      ya'ni JS ishlamasa ham bosilganini ko'rinadi.
+
+      "Harakatni kamaytirish" yoqilgan bo'lsa to'lqin qo'shilmaydi.       */
+  function siteTouch(host) {
+    if (!host || !host.addEventListener || !host.querySelectorAll) return;
+    var SEL = '.btn, .chip, .faq-q, .tch-card, .lvl, .soc-btn, .site-phone, .hero-tel, .foot-link';
+    var slow = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function hit(e) {
+      var t = e.target && e.target.closest ? e.target.closest(SEL) : null;
+      if (!t || t.disabled || !host.contains(t)) return;
+      t.classList.add('pressing');
+      if (slow) return;
+      var r = t.getBoundingClientRect();
+      if (!r.width) return;
+      var d = Math.max(r.width, r.height) * 2.1;
+      var s = document.createElement('span');
+      s.className = 'rip';
+      s.style.width = s.style.height = Math.round(d) + 'px';
+      s.style.left = Math.round((e.clientX || (r.left + r.width / 2)) - r.left - d / 2) + 'px';
+      s.style.top = Math.round((e.clientY || (r.top + r.height / 2)) - r.top - d / 2) + 'px';
+      t.appendChild(s);
+      setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 620);
+    }
+    function off() {
+      Array.prototype.forEach.call(host.querySelectorAll('.pressing'), function (x) {
+        x.classList.remove('pressing');
+      });
+    }
+    host.addEventListener('pointerdown', hit, { passive: true });
+    window.addEventListener('pointerup', off, { passive: true });
+    window.addEventListener('pointercancel', off, { passive: true });
+    /* Klaviatura bilan bosilganda ham sezilsin */
+    host.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var t = e.target && e.target.closest ? e.target.closest(SEL) : null;
+      if (t) t.classList.add('pressing');
+    });
+    host.addEventListener('keyup', off);
+  }
+
   /* Hero'da yozilib turadigan qatorlar.
      Markaz Sozlamalarda o'z iboralarini yozadi; yozmagan bo'lsa standart
      ro'yxat ishlatiladi. Iboralar markaz ma'lumoti — tarjima qilinmaydi.
@@ -1300,20 +1353,20 @@
         ])
       ]),
       h('nav', { class: 'site-nav' }, [
+        navBtn('Darajalar', 'bosqichlar'),
+        navBtn('Narx', 'narx'),
         navBtn('Ustozlar', 'ustozlar'),
-        navBtn('Bosqichlar', 'bosqichlar'),
-        navBtn('Imkoniyatlar', 'imkoniyatlar'),
         navBtn('Savollar', 'savollar'),
         h('a', { class: 'site-phone', id: 'site-call', href: '#ariza' },
           [UI.icon('phone'), h('span', { id: 'site-call-text' }, 'Bog’lanish')]),
         h('button', {
           class: 'btn sm ghost', type: 'button',
           onclick: function () { location.hash = 'test'; renderTest(); }
-        }, 'Daraja testi'),
+        }, [UI.icon('task'), 'Daraja testi']),
         h('button', {
           class: 'btn sm', type: 'button',
           onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
-        }, 'O’quvchi kabineti'),
+        }, [UI.icon('users'), 'O’quvchi kabineti']),
         h('button', {
           class: 'btn sm primary', type: 'button',
           onclick: function () { location.hash = 'kirish'; renderLogin(null); }
@@ -1343,7 +1396,17 @@
           h('button', {
             class: 'btn on-dark lg', type: 'button',
             onclick: function () { location.hash = 'test'; renderTest(); }
-          }, ['Darajangizni aniqlang', UI.icon('right')])
+          }, ['Darajangizni aniqlang', goIcon()])
+        ]),
+        /* Ishonch qatori. Doiralar — NAQSH, odam surati emas: biz
+           o'quvchilarning suratini saytga qo'ymaymiz. Yozuvni markaz
+           Sozlamada o'zi yozadi, bo'sh bo'lsa butun qator ko'rinmaydi. */
+        h('div', { class: 'hero-proof', id: 'hero-proof', hidden: true }, [
+          h('span', { class: 'proof-dots', 'aria-hidden': 'true' },
+            ['أ', 'ب', 'ج'].map(function (ch) {
+              return h('span', { class: 'proof-dot' }, ch);
+            })),
+          h('span', { class: 'proof-text', id: 'hero-proof-text' }, '')
         ]),
         h('div', { class: 'hero-meta' }, [
           h('a', { class: 'hero-tel', id: 'hero-tel', href: '#ariza' },
@@ -1360,50 +1423,70 @@
           ])
         ]),
         h('div', { class: 'hero-badge' }, [h('b', {}, 'AlBayan'), h('span', {}, 'Cairo')])
-      ]),
-      statsBox
-    ]);
-
-    /* ---------- Afzalliklar ---------- */
-    function feat(icon, t, d) {
-      return h('div', { class: 'feat' }, [
-        h('div', { class: 'feat-ico' }, UI.icon(icon)),
-        h('b', {}, t), h('p', {}, d)
-      ]);
-    }
-    var feats = h('section', { class: 'site-sec reveal', id: 'imkoniyatlar' }, [
-      h('div', { class: 'sec-split' }, [
-        h('div', {}, [
-          h('div', { class: 'sec-eyebrow' }, 'Imkoniyatlar'),
-          h('h2', {}, 'Nega aynan AlBayan Cairo?')
-        ]),
-        h('p', { class: 'sec-note' },
-          'Har bir bosqich aniq maqsad bilan tuzilgan: alifbodan boshlab erkin suhbatgacha. ' +
-          'Darslar amaliy — o’quvchi birinchi kundan gapira boshlaydi.')
-      ]),
-      h('div', { class: 'feat-grid' }, [
-        feat('layers', 'Bosqichma-bosqich dastur',
-          'Alifbodan C2 gacha — har bosqich oldingisiga qurilgan, sakrab o’tish yo’q.'),
-        feat('users', 'Kichik guruhlar',
-          'Har bir o’quvchiga vaqt yetadi — 8–12 kishilik guruhlar.'),
-        feat('badge', 'Tajribali ustozlar',
-          'Arab tilini Misrda o’rgangan va yillar davomida dars bergan ustozlar.'),
-        feat('check', 'Davomat va natija',
-          'Har dars davomat olinadi, ota-ona va o’quvchi kabinetdan ko’rib turadi.')
       ])
     ]);
 
-    /* ---------- Bosqichlar va narx ---------- */
-    var tierBox = h('div', { class: 'tier-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
-    var tiers = h('section', { class: 'site-sec reveal', id: 'bosqichlar' }, [
-      h('div', { class: 'sec-mid' }, [
-        h('div', { class: 'sec-eyebrow center' }, 'O’quv dasturlari'),
-        h('h2', {}, 'Bosqichma-bosqich til o’rganish tizimi'),
-        h('p', { class: 'sec-note center' },
-          'Noldan boshlab erkin suhbatgacha — xalqaro CEFR darajalariga mos bosqichlar.')
-      ]),
-      tierBox
+    /* Ko'rsatkichlar — hero ostida alohida to'q tasma.
+       Sozlamada yozilmagan bo'lsa butun tasma ko'rinmaydi.              */
+    var statsBand = h('section', { class: 'stat-band reveal', id: 'stat-band', hidden: true }, statsBox);
+
+    /* ---------- Nega biz: chapda naqshli panel, o'ngda ro'yxat ---------- */
+    function whyRow(t) {
+      return h('li', {}, [UI.icon('check'), h('span', {}, t)]);
+    }
+    var feats = h('section', { class: 'site-sec reveal', id: 'imkoniyatlar' }, [
+      h('div', { class: 'why-wrap' }, [
+        h('div', { class: 'why-art' }, [
+          khatamSvg('khatam-in'),
+          h('div', { class: 'why-art-in' }, [
+            h('span', { class: 'why-ar', 'aria-hidden': 'true' }, 'البيان'),
+            h('img', { src: LOGO, alt: '' }),
+            h('div', { class: 'why-badge' }, [
+              h('b', { id: 'why-badge-v' }, 'A1–C2'),
+              h('span', {}, 'to’liq dastur')
+            ])
+          ])
+        ]),
+        h('div', { class: 'why-text' }, [
+          h('div', { class: 'sec-eyebrow' }, 'Nega biz'),
+          h('h2', {}, 'Biz til o’rgatamiz — imtihon uchun emas, gapirish uchun'),
+          h('p', { class: 'sec-note' },
+            'Har bir daraja aniq maqsad bilan tuzilgan: alifbodan boshlab erkin suhbatgacha. ' +
+            'Darslar amaliy — o’quvchi birinchi kundan gapira boshlaydi.'),
+          h('ul', { class: 'why-list' }, [
+            whyRow('Bir dastur, olti daraja — sakrab o’tish yo’q'),
+            whyRow('Kichik guruh: har bir o’quvchiga vaqt yetadi'),
+            whyRow('Misrda tahsil olgan ustozlar'),
+            whyRow('Har dars davomat — ota-ona kabinetdan ko’rib turadi'),
+            whyRow('Uy vazifasi va natija kabinetda saqlanadi')
+          ]),
+          h('button', {
+            class: 'btn primary lg', type: 'button',
+            onclick: function () { scrollTo('ustozlar'); }
+          }, ['Ustozlar bilan tanishing', goIcon()])
+        ])
+      ])
     ]);
+
+    /* ---------- Darajalar ----------
+       Kurslar har xil emas — DARAJA har xil. Ro'yxat serverdan keladi
+       (server/levels.js), daraja testi ham xuddi shu ro'yxat bilan
+       ishlaydi. Ya'ni sayt hech narsa o'ylab topmaydi.                 */
+    var lvlGrid = h('div', { class: 'lvl-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
+    var levelsSec = h('section', { class: 'site-sec reveal', id: 'bosqichlar' }, [
+      h('div', { class: 'sec-mid' }, [
+        h('div', { class: 'sec-eyebrow center' }, 'O’quv dasturi'),
+        h('h2', {}, 'Bitta dastur — olti daraja'),
+        h('p', { class: 'sec-note center' },
+          'Guruhlar darajasi bilan farq qiladi, narx esa hamma daraja uchun bir xil. ' +
+          'Qaysi darajadan boshlashni bepul daraja testi aniqlaydi.')
+      ]),
+      lvlGrid
+    ]);
+
+    /* ---------- Bitta narx ---------- */
+    var priceBox = h('div', { class: 'price-wrap' });
+    var priceSec = h('section', { class: 'site-sec reveal', id: 'narx' }, [priceBox]);
 
     /* ---------- Ustozlar ---------- */
     var teachBox = h('div', { class: 'tch-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
@@ -1434,10 +1517,10 @@
       label: 'Telefon raqamingiz', id: 'lead-phone', required: true,
       placeholder: '+998 90 123 45 67', inputmode: 'tel'
     });
-    var fCourse = UI.field({
-      label: 'Qaysi kurs', id: 'lead-course', type: 'select',
-      options: [{ value: '', label: 'Tanlanmagan' }]
-    });
+    /* "Qaysi kurs" savoli yo'q: markazda bitta yo'nalish bor, narx ham
+       bitta. Shuning uchun ariza kursga O'ZI biriktiriladi — odamdan
+       ortiqcha savol so'ralmaydi.                                      */
+    var leadCourse = '';
     var fTime = UI.field({
       label: 'Dars uchun qulay vaqt', id: 'lead-time', type: 'select',
       options: [{ value: '', label: 'Farqi yo’q' }]
@@ -1453,26 +1536,44 @@
       var b = h('button', { class: 'chip', type: 'button' }, o.label);
       b.addEventListener('click', function () {
         lvlPick = (lvlPick === o.id) ? '' : o.id;
+        clearPill();
         Array.prototype.forEach.call(lvlBox.children, function (x) { x.classList.remove('on'); });
         if (lvlPick) b.classList.add('on');
       });
       return b;
     }));
+    /* Daraja kartasidan kelgan tanlov shu yerda ko'rinadi. */
+    var lvlPill = h('div', { class: 'lvl-pill', id: 'lead-level-pill', hidden: true });
     var lvlWrap = h('div', { class: 'field full' }, [
-      h('label', {}, 'Hozirgi arab tili darajangiz'), lvlBox
+      h('label', {}, 'Hozirgi arab tili darajangiz'), lvlPill, lvlBox
     ]);
+    function clearPill() { lvlPill.hidden = true; UI.clear(lvlPill); }
+    function pickLevel(code, label) {
+      lvlPick = code;
+      Array.prototype.forEach.call(lvlBox.children, function (x) { x.classList.remove('on'); });
+      UI.clear(lvlPill);
+      lvlPill.hidden = false;
+      lvlPill.appendChild(h('span', { class: 'lvl-pill-in', id: 'lead-level-text' },
+        code + ' — ' + label));
+      lvlPill.appendChild(h('button', {
+        class: 'lvl-pill-x', type: 'button', 'aria-label': 'Olib tashlash',
+        onclick: function () { lvlPick = ''; clearPill(); }
+      }, '×'));
+      scrollTo('ariza');
+      if (fName.input) fName.input.focus();
+    }
 
     var err = h('div', { class: 'err-msg', hidden: true });
     var okBox = h('div', { class: 'lead-ok', hidden: true });
     var btn = h('button', { class: 'btn gold block lg', type: 'submit' },
-      ['Bepul sinov darsiga yozilish', UI.icon('right')]);
+      ['Bepul sinov darsiga yozilish', goIcon()]);
 
     var form = h('form', {
       class: 'lead-form', onsubmit: function (e) { e.preventDefault(); sendLead(); }
     }, [
       h('b', { class: 'form-title' }, 'Ro’yxatdan o’tish formasi'),
       h('p', { class: 'form-note' }, 'Ma’lumotlaringiz maxfiy, administratorimiz siz bilan bog’lanadi.'),
-      fName.wrap, fPhone.wrap, lvlWrap, fCourse.wrap, fTime.wrap, err, btn,
+      fName.wrap, fPhone.wrap, lvlWrap, fTime.wrap, err, btn,
       h('p', { class: 'form-fine' },
         'Tugmani bosish orqali siz shaxsiy ma’lumotlaringiz qayta ishlanishiga rozilik bildirasiz.')
     ]);
@@ -1520,6 +1621,19 @@
       faqBox
     ]);
 
+    /* ---------- Pastdagi chaqiruv tasmasi ---------- */
+    var ctaBand = h('section', { class: 'cta-band reveal' }, [
+      h('div', { class: 'cta-ico' }, UI.icon('calendar')),
+      h('div', { class: 'cta-text' }, [
+        h('b', {}, 'Bepul sinov darsiga yozilish'),
+        h('span', {}, 'Bir dars kelib ko’ring — guruhni, ustozni va dastur uslubini o’zingiz ko’rasiz.')
+      ]),
+      h('button', {
+        class: 'btn gold lg', type: 'button',
+        onclick: function () { scrollTo('ariza'); if (fName.input) fName.input.focus(); }
+      }, ['Ariza qoldirish', goIcon()])
+    ]);
+
     /* ---------- Pastki qism ---------- */
     var foot = h('footer', { class: 'site-foot' }, [
       h('div', { class: 'foot-cols' }, [
@@ -1532,7 +1646,8 @@
         ]),
         h('div', { class: 'foot-col' }, [
           h('b', {}, 'Bo’limlar'),
-          h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('bosqichlar'); } }, 'Bosqichlar va narx'),
+          h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('bosqichlar'); } }, 'Darajalar'),
+          h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('narx'); } }, 'Narx'),
           h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('ustozlar'); } }, 'Ustozlar'),
           h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('vaqt'); } }, 'Dars vaqtlari'),
           h('button', {
@@ -1569,10 +1684,12 @@
     wrap.appendChild(siteBackdrop());
     wrap.appendChild(top);
     wrap.appendChild(h('div', { class: 'site-wrap' },
-      [hero, feats, tiers, teachers, timetable, apply, faq, foot]));
+      [hero, statsBand, levelsSec, priceSec, feats, teachers,
+        timetable, apply, faq, ctaBand, foot]));
     A.I18N.apply(wrap);
     fillPublic();
     siteMotion(top);
+    siteTouch(wrap);
 
     function scrollTo(id) {
       var el = document.getElementById(id);
@@ -1619,15 +1736,20 @@
       }
       paintSocial(d);
       paintBadge(d.heroBadge);
-      paintStats(d.stats);
+      paintProof(d.heroProof);
+      paintStats(d.stats, d.lessonMinutes);
       startTyping(d.taglines);
-      paintTiers(d.courses || []);
+      paintLevels(d.levels || []);
+      paintPrice(d.courses || []);
       paintTeachers(d.teachers || []);
       paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
       paintFaq(d.faq || []);
-      paintCoursePick(d.courses || []);
+      setLeadCourse(d.courses || []);
       paintTimePick(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
-      if (A._siteSeen) { A._siteSeen(teachBox); A._siteSeen(slotBox); A._siteSeen(tierBox); }
+      if (A._siteSeen) {
+        A._siteSeen(teachBox); A._siteSeen(slotBox);
+        A._siteSeen(lvlGrid); A._siteSeen(statsBox);
+      }
       A.I18N.apply(wrap);
     }
 
@@ -1637,22 +1759,29 @@
       if (!txt) { el.hidden = true; return; }
       el.hidden = false;
       UI.clear(el);
-      el.appendChild(UI.icon('badge'));
+      el.appendChild(UI.icon('award'));
       el.appendChild(h('span', {}, txt));
     }
 
-    function paintStats(list) {
+    /* Ko'rsatkichlar tasmasi. Standart qatorlar — markazning da'vosi
+       emas, dasturning o'zidagi haqiqat: CEFR bo'yicha 6 daraja va
+       darsning uzunligi Sozlamadan olinadi. Qolganini markaz yozadi. */
+    var STAT_ICO = ['layers', 'users', 'calendar', 'clock'];
+    function paintStats(list, minutes) {
       UI.clear(statsBox);
       var rows = (list && list.length) ? list : [
         { v: '6', t: 'daraja: A1–C2' },
-        { v: '8–12', t: 'kishilik guruh' },
-        { v: '6', t: 'kun ish rejimi' }
+        { v: String(Math.round((minutes || 90) / 60 * 10) / 10).replace('.', ',') + ' soat',
+          t: 'har bir dars' }
       ];
-      rows.forEach(function (r) {
-        statsBox.appendChild(h('div', { class: 'hero-stat' }, [
-          h('b', {}, r.v), h('span', {}, r.t)
+      rows.forEach(function (r, i) {
+        statsBox.appendChild(h('div', { class: 'hero-stat', style: '--i:' + i }, [
+          h('span', { class: 'stat-ico' }, UI.icon(STAT_ICO[i % STAT_ICO.length])),
+          h('div', {}, [h('b', {}, r.v), h('span', {}, r.t)])
         ]));
       });
+      var band = document.getElementById('stat-band');
+      if (band) band.hidden = !statsBox.children.length;
     }
 
     function paintSocial(d) {
@@ -1661,8 +1790,8 @@
       UI.clear(box);
       var links = [];
       if (d.telegram) links.push(['bot', 'Telegram', 'https://t.me/' + String(d.telegram).replace(/^@/, '')]);
-      if (d.instagram) links.push(['link', 'Instagram', instaUrl(d.instagram)]);
-      if (d.youtube) links.push(['link', 'YouTube', ytUrl(d.youtube)]);
+      if (d.instagram) links.push(['camera', 'Instagram', instaUrl(d.instagram)]);
+      if (d.youtube) links.push(['play', 'YouTube', ytUrl(d.youtube)]);
       if (!links.length) { box.appendChild(h('span', { class: 'foot-line' }, 'Tez orada')); return; }
       links.forEach(function (l) {
         box.appendChild(h('a', {
@@ -1681,70 +1810,99 @@
       return 'https://youtube.com/' + (t.charAt(0) === '@' ? t : '@' + t);
     }
 
-    /* --- Bosqichlar: markazning kurslaridan yasaladi --- */
-    function paintTiers(list) {
-      UI.clear(tierBox);
+    /* --- Ishonch qatori --- */
+    function paintProof(txt) {
+      var el = document.getElementById('hero-proof');
+      if (!el) return;
+      el.hidden = !txt;
+      setText('hero-proof-text', txt || '');
+    }
+
+    /* --- Darajalar: A1…C2 --- */
+    var LVL_ICO = { A1: 'layers', A2: 'chat', B1: 'users', B2: 'task', C1: 'award', C2: 'edit' };
+    function paintLevels(list) {
+      UI.clear(lvlGrid);
       if (!list.length) {
-        tierBox.appendChild(h('p', { class: 'muted' },
-          'Kurslar ro’yxati tez orada. Ariza qoldiring — o’zimiz bog’lanamiz.'));
+        lvlGrid.appendChild(h('p', { class: 'muted' }, 'Darajalar ro’yxati tez orada.'));
         return;
       }
-      var main = list.slice(0, 3);
-      var mid = main.length === 3 ? 1 : -1;
-      main.forEach(function (c, i) {
-        var lines = String(c.note || '').split(/[;\n]/).map(function (x) { return x.trim(); })
-          .filter(Boolean).slice(0, 5);
-        tierBox.appendChild(h('div', { class: 'tier' + (i === mid ? ' tier-hot' : '') }, [
-          i === mid ? h('span', { class: 'tier-ribbon' }, 'Eng ko’p tanlangan') : null,
-          h('b', { class: 'tier-name' }, c.name),
-          lines.length
-            ? h('ul', { class: 'tier-list' }, lines.map(function (x) {
-              return h('li', {}, [UI.icon('check'), h('span', {}, x)]);
-            }))
-            : null,
-          c.fee ? h('div', { class: 'tier-fee' }, [
-            h('b', {}, A.som(c.fee)), h('span', {}, 'so’m / oy')
-          ]) : null,
-          h('button', {
-            class: 'btn block' + (i === mid ? ' gold' : ''), type: 'button',
-            onclick: function () {
-              if (fCourse.input) fCourse.input.value = c.id;
-              scrollTo('ariza');
-              if (fName.input) fName.input.focus();
-            }
-          }, 'Ushbu guruhga yozilish')
-        ].filter(Boolean)));
-      });
-      /* Qolgan kurslar — pastda ikki qatorli taklif sifatida */
-      list.slice(3, 7).forEach(function (c) {
-        tierBox.appendChild(h('div', { class: 'tier-extra' }, [
-          h('div', {}, [
-            h('b', {}, c.name),
-            c.note ? h('span', {}, String(c.note).slice(0, 90)) : null
+      list.slice(0, 6).forEach(function (l) {
+        lvlGrid.appendChild(h('button', {
+          class: 'lvl', type: 'button',
+          onclick: function () { pickLevel(l.code, l.name); }
+        }, [
+          h('span', { class: 'lvl-top' }, [
+            h('span', { class: 'lvl-ico' }, UI.icon(LVL_ICO[l.code] || 'layers')),
+            h('span', { class: 'lvl-code' }, l.code)
           ]),
-          c.fee ? h('div', { class: 'extra-fee' }, [
-            h('b', {}, A.som(c.fee)), h('span', {}, 'so’m / oy')
-          ]) : null,
-          h('button', {
-            class: 'btn sm', type: 'button',
-            onclick: function () {
-              if (fCourse.input) fCourse.input.value = c.id;
-              scrollTo('ariza');
-            }
-          }, 'Batafsil')
-        ].filter(Boolean)));
+          h('b', {}, l.name),
+          h('p', {}, l.about),
+          h('span', { class: 'lvl-go' }, [h('span', {}, 'Shu darajadan boshlash'), goIcon()])
+        ]));
       });
     }
 
-    function paintCoursePick(list) {
-      if (!fCourse.input) return;
-      UI.clear(fCourse.input);
-      [{ value: '', label: 'Tanlanmagan' }].concat(list.map(function (c) {
-        return { value: c.id, label: c.name };
-      })).forEach(function (o) {
-        fCourse.input.appendChild(h('option', { value: o.value }, o.label));
-      });
+    /* Uzun izohni so'z o'rtasidan kesmaymiz */
+    function shortNote(v, max) {
+      var t = String(v || '').replace(/[;\n]+/g, ' · ').trim();
+      if (t.length <= max) return t;
+      var cut = t.slice(0, max);
+      var sp = cut.lastIndexOf(' ');
+      return (sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[·,\s]+$/, '') + '…';
     }
+
+    /* --- Bitta narx --- */
+    function paintPrice(list) {
+      UI.clear(priceBox);
+      if (!list.length) {
+        priceBox.appendChild(h('p', { class: 'muted' },
+          'Narx haqida ma’lumot tez orada. Ariza qoldiring — o’zimiz bog’lanamiz.'));
+        return;
+      }
+      /* Markaz narxni bitta kursga yozadi. Bir nechta bo'lsa, birinchisi
+         asosiy narx, qolganlari pastda alohida taklif bo'lib turadi.    */
+      var main = list[0];
+      var lines = String(main.note || '').split(/[;\n]/)
+        .map(function (x) { return x.trim(); }).filter(Boolean).slice(0, 6);
+      priceBox.appendChild(h('div', { class: 'price-card' }, [
+        h('div', { class: 'price-left' }, [
+          h('div', { class: 'sec-eyebrow' }, 'Oylik to’lov'),
+          h('h2', {}, main.name),
+          main.fee
+            ? h('div', { class: 'price-big' }, [
+              h('b', {}, A.som(main.fee)), h('span', {}, 'so’m / oy')
+            ])
+            : h('p', { class: 'price-ask' }, 'Narxni telefon orqali aytamiz'),
+          h('p', { class: 'price-note' },
+            'Narx daraja bilan o’zgarmaydi — A1 ham, C2 ham bir xil.'),
+          h('button', {
+            class: 'btn gold lg', type: 'button',
+            onclick: function () {
+              leadCourse = main.id;
+              scrollTo('ariza');
+              if (fName.input) fName.input.focus();
+            }
+          }, ['Guruhga yozilish', goIcon()])
+        ]),
+        lines.length
+          ? h('ul', { class: 'price-list' }, lines.map(function (x) {
+            return h('li', {}, [UI.icon('check'), h('span', {}, x)]);
+          }))
+          : null
+      ].filter(Boolean)));
+
+      /* Qo'shimcha tarif yo'q: narx bitta. Markaz ERP'ga ikkinchi
+         yo'nalish qo'shsa ham, sayt asosiy narxni ko'rsatadi — chalkash
+         tariflar ro'yxati chiqmaydi.                                    */
+    }
+
+    function setLeadCourse(list) {
+      /* Ariza qaysi kursga tegishli ekani baribir kerak (ERP shunga
+         qarab guruh taklif qiladi), lekin buni odam emas — dastur
+         tanlaydi.                                                       */
+      leadCourse = list.length ? list[0].id : '';
+    }
+
     function paintTimePick(start, end, minutes) {
       if (!fTime.input) return;
       UI.clear(fTime.input);
@@ -1798,7 +1956,8 @@
           facts.length ? h('ul', { class: 'tch-facts-mini' }, facts.map(function (x) {
             return h('li', {}, x);
           })) : null,
-          t.bio ? h('p', { class: 'tch-bio' }, String(t.bio).slice(0, 150)) : null
+          t.bio ? h('p', { class: 'tch-bio' }, String(t.bio).slice(0, 150)) : null,
+          h('span', { class: 'tch-go' }, [h('span', {}, 'Batafsil'), goIcon()])
         ].filter(Boolean)));
       });
     }
@@ -1833,7 +1992,7 @@
         try {
           var r = await D.api('POST', 'api/lead', {
             name: name2, phone: phone,
-            courseId: fCourse.input.value,
+            courseId: leadCourse,
             startLevel: lvlPick,
             wantTime: fTime.input ? fTime.input.value : '',
             note: ''
@@ -1850,6 +2009,7 @@
                 form.hidden = false; okBox.hidden = true;
                 fName.input.value = ''; fPhone.input.value = '';
                 lvlPick = '';
+                clearPill();
                 Array.prototype.forEach.call(lvlBox.children, function (x) { x.classList.remove('on'); });
               }
             }, 'Yana ariza qoldirish')

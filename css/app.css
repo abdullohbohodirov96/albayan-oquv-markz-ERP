@@ -695,7 +695,7 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .hero-cta .btn .ico{width:17px;height:17px}
 
 /* Ko'rsatkichlar: hero panelining pastida alohida qator */
-.site-hero{position:relative;grid-template-areas:'text art' 'stats stats';
+.site-hero{position:relative;grid-template-areas:'text art';
   grid-template-columns:1.12fr .88fr;row-gap:30px}
 .site-hero .hero-text{grid-area:text}
 .site-hero .hero-art{grid-area:art}
@@ -709,10 +709,7 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 [dir="rtl"] .site-hero .hero-stat{border-right:0;border-left:1px solid rgba(255,255,255,.12)}
 [dir="rtl"] .site-hero .hero-stat:last-child{border-left:0}
 @media (max-width:900px){
-  .site-hero{grid-template-areas:'art' 'text' 'stats';grid-template-columns:1fr}
-  .site-hero .hero-stats{grid-template-columns:repeat(2,1fr);row-gap:16px}
-  .site-hero .hero-stat{padding:0 14px}
-  .site-hero .hero-stat:nth-child(2n){border-right:0}
+  .site-hero{grid-template-areas:'art' 'text';grid-template-columns:1fr}
 }
 
 /* --- Bo'lim sarlavhasi: ikki ustun va o'rtada --- */
@@ -726,7 +723,9 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 @media (max-width:820px){ .sec-split{grid-template-columns:1fr;gap:12px;align-items:start} }
 
 /* --- Bosqichlar (narx kartalari) --- */
-.tier-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:start}
+/* Kartalar bir xil balandlikda — tugmalar bir qatorga tushadi.
+   O'rtadagi (tanlangan) karta bir oz chiqib turadi.                    */
+.tier-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
 .tier{position:relative;display:flex;flex-direction:column;gap:14px;
   background:var(--st-card);border:1px solid var(--st-line);border-radius:22px;padding:26px 24px;
   transition:transform .2s cubic-bezier(.22,.8,.3,1),box-shadow .2s,border-color .2s}
@@ -772,6 +771,9 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   background:var(--st-paper-2);border:1px solid var(--st-line);border-radius:16px;padding:16px 20px}
 .tier-extra b{display:block;font-family:var(--st-serif);font-weight:600;font-size:16px;color:var(--st-ink)}
 .tier-extra span{font-size:13px;color:var(--st-mut)}
+@media (min-width:901px){
+  .tier-hot{margin-block:-12px;padding-top:42px;padding-bottom:34px}
+}
 @media (max-width:900px){ .tier-grid{grid-template-columns:1fr} .tier-hot{margin-top:10px} }
 
 /* --- Ustozlar: rasmli kartalar --- */
@@ -869,7 +871,7 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   color:var(--st-ink-2);text-align:start}
 .foot-link:hover{color:var(--st-gold)}
 .foot-line{font-size:13.5px;color:var(--st-mut);line-height:1.5}
-.foot-soc{display:flex;flex-direction:column;gap:8px;width:100%}
+.foot-soc{display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .soc-btn{display:inline-flex;align-items:center;gap:9px;padding:8px 13px;border-radius:10px;
   font-size:13px;font-weight:600;color:var(--st-ink-2);
   background:var(--st-paper-2);border:1px solid var(--st-line)}
@@ -929,7 +931,7 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 @keyframes stBreathe{0%,100%{opacity:.26}50%{opacity:.46}}
 
 /* Ko'rsatkichlar ketma-ket chiqadi */
-.js-reveal .hero-stats .hero-stat{opacity:0;transform:translateY(10px)}
+.js-reveal .site-hero .hero-stats .hero-stat{opacity:0;transform:translateY(10px)}
 .js-reveal .site-hero.lit .hero-stats .hero-stat{opacity:1;transform:none;
   transition:opacity .6s ease, transform .6s cubic-bezier(.22,.9,.28,1);
   transition-delay:calc(700ms + var(--i,0) * 110ms)}
@@ -961,11 +963,20 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   transition:transform 1s cubic-bezier(.22,.9,.28,1) .15s}
 [dir="rtl"] .js-reveal .sec-eyebrow::after{transform-origin:100% 50%}
 
+/* Ko'rsatkichlar tasmasi ham ketma-ket chiqadi */
+.js-reveal .stat-band .hero-stat{opacity:0;transform:translateY(12px)}
+.js-reveal .reveal.seen .stat-band .hero-stat,
+.js-reveal .stat-band.reveal.seen .hero-stat{opacity:1;transform:none;
+  transition:opacity .6s ease, transform .6s cubic-bezier(.22,.9,.28,1);
+  transition-delay:calc(var(--i,0) * 90ms)}
+
 /* --- Kartalar ketma-ket chiqadi --- */
 .js-reveal .feat-grid > *,.js-reveal .course-grid > *,
-.js-reveal .tch-grid > *,.js-reveal .slot-grid > *{opacity:0;transform:translateY(16px)}
+.js-reveal .tch-grid > *,.js-reveal .slot-grid > *,
+.js-reveal .lvl-grid > *{opacity:0;transform:translateY(16px)}
 .js-reveal .reveal.seen .feat-grid > *,.js-reveal .reveal.seen .course-grid > *,
-.js-reveal .reveal.seen .tch-grid > *,.js-reveal .reveal.seen .slot-grid > *{
+.js-reveal .reveal.seen .tch-grid > *,.js-reveal .reveal.seen .slot-grid > *,
+.js-reveal .reveal.seen .lvl-grid > *{
   opacity:1;transform:none;
   transition:opacity .6s ease, transform .6s cubic-bezier(.22,.9,.28,1);
   transition-delay:calc(var(--i,0) * 65ms)}
@@ -997,16 +1008,404 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 @media (prefers-reduced-motion:reduce){
   .site-scroll{display:none}
   .js-reveal .site-hero,.js-reveal .site-hero .hero-text > *,
-  .js-reveal .site-hero .hero-art,.js-reveal .hero-stats .hero-stat,
+  .js-reveal .site-hero .hero-art,.js-reveal .site-hero .hero-stats .hero-stat,
   .js-reveal .feat-grid > *,.js-reveal .course-grid > *,
   .js-reveal .tch-grid > *,.js-reveal .slot-grid > *,
-  .js-reveal .site-contact .contact-row{opacity:1;transform:none;transition:none;animation:none}
+  .js-reveal .site-contact .contact-row,
+  .js-reveal .stat-band .hero-stat,
+  .js-reveal .lvl-grid > *{opacity:1;transform:none;transition:none;animation:none}
   .js-reveal .hero-rule{width:64px}
   .js-reveal .sec-eyebrow::after{transform:none}
   .site-hero h1 .gold,.medal-in .khatam-in,.hero-ar,.site-medal{animation:none}
   .site .btn::after{display:none}
   .site .btn:hover,.feat:hover .feat-ico,.tch-card:hover .tch-ava{transform:none}
   .site-bg .khatam{transform:none !important}
+}
+
+/* ================= SAYT: DARAJALAR, NARX, NEGA BIZ =================
+   Tuzilishi: hero → ko'rsatkichlar tasmasi → darajalar → bitta narx →
+   nega biz → ustozlar → vaqt → ariza → savollar → chaqiruv tasmasi.
+   Asosiy fikr: KURS bitta, DARAJA oltita, narx hamma daraja uchun bir
+   xil.                                                                 */
+
+/* --- Hero: ishonch qatori (doiralar — naqsh, odam surati emas) --- */
+.hero-proof{display:flex;align-items:center;gap:12px;margin-top:20px}
+.proof-dots{display:flex}
+.proof-dot{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--st-ar);font-size:16px;line-height:1;color:var(--st-gold-3);
+  background:linear-gradient(150deg,var(--st-n5),var(--st-n8));
+  border:1.5px solid color-mix(in srgb,var(--st-gold) 55%,transparent);
+  margin-inline-start:-10px;box-shadow:0 6px 16px -8px rgba(0,0,0,.8)}
+.proof-dot:first-child{margin-inline-start:0}
+.proof-text{font-size:13.5px;font-weight:600;color:#c6d2e8}
+
+/* --- Ko'rsatkichlar tasmasi (hero ostida, to'q rangli) --- */
+.stat-band{position:relative;overflow:hidden;margin-top:22px;
+  border-radius:20px;padding:22px 26px;color:#fff;
+  background:linear-gradient(120deg,var(--st-n7),var(--st-n9));
+  box-shadow:var(--st-shadow-lg)}
+.stat-band::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:var(--st-khatam);background-size:112px 112px;opacity:.11}
+.stat-band .hero-stats{position:relative;display:grid;gap:18px;margin:0;padding:0;border:0;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+.stat-band .hero-stat{display:flex;align-items:center;gap:13px;
+  padding:0 20px;margin:0;border:0;
+  border-inline-end:1px solid rgba(255,255,255,.14)}
+.stat-band .hero-stat:first-child{padding-inline-start:0}
+.stat-band .hero-stat:last-child{border-inline-end:0}
+.stat-ico{width:42px;height:42px;flex:none;border-radius:12px;display:grid;place-items:center;
+  background:rgba(216,174,67,.14);border:1px solid rgba(216,174,67,.34)}
+.stat-ico .ico{width:20px;height:20px;color:var(--st-gold-2)}
+.stat-band .hero-stat b{font-size:26px}
+@media (max-width:760px){
+  .stat-band{padding:18px}
+  .stat-band .hero-stats{grid-template-columns:1fr 1fr;gap:14px}
+  .stat-band .hero-stat{padding:0;border-inline-end:0}
+  .stat-band .hero-stat b{font-size:21px}
+  .stat-ico{width:36px;height:36px}
+}
+
+/* --- Darajalar --- */
+.lvl-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.lvl{position:relative;display:flex;flex-direction:column;gap:9px;text-align:start;
+  background:var(--st-card);border:1px solid var(--st-line);border-radius:20px;
+  padding:22px;cursor:pointer;font:inherit;color:inherit;overflow:hidden;
+  transition:transform .2s cubic-bezier(.22,.8,.3,1),box-shadow .2s,border-color .2s}
+.lvl::before{content:'';position:absolute;inset:0 auto auto 0;height:3px;width:0;
+  background:linear-gradient(90deg,var(--st-gold-2),var(--st-gold));
+  transition:width .38s cubic-bezier(.22,.8,.3,1)}
+.lvl:hover{transform:translateY(-4px);box-shadow:var(--st-shadow);border-color:var(--st-line-2)}
+.lvl:hover::before{width:100%}
+.lvl.pressing{transform:translateY(-2px) scale(.985)}
+.lvl-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.lvl-ico{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;
+  background:linear-gradient(155deg,var(--st-n5),var(--st-n7));
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--st-gold) 26%,transparent),
+    0 10px 22px -12px rgba(11,23,48,.8);
+  transition:transform .3s cubic-bezier(.34,1.56,.64,1),box-shadow .3s}
+.lvl-ico .ico{width:20px;height:20px;color:var(--st-gold-3)}
+.lvl:hover .lvl-ico{transform:translateY(-3px) rotate(-6deg) scale(1.06);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--st-gold) 62%,transparent),
+    0 16px 30px -12px rgba(11,23,48,.9)}
+.lvl-code{font-family:var(--st-serif);font-weight:700;font-size:21px;letter-spacing:.02em;
+  color:var(--st-gold);font-variant-numeric:tabular-nums}
+.lvl > b{font-family:var(--st-serif);font-weight:600;font-size:18px;
+  letter-spacing:-.015em;color:var(--st-ink)}
+.lvl > p{margin:0;font-size:13.5px;color:var(--st-mut);line-height:1.6}
+.lvl-go{display:flex;align-items:center;gap:7px;margin-top:auto;padding-top:12px;
+  font-size:12.5px;font-weight:700;color:var(--st-gold)}
+.lvl-go .ico{width:15px;height:15px;transition:transform .26s cubic-bezier(.34,1.56,.64,1)}
+.lvl:hover .lvl-go .ico{transform:translateX(4px)}
+[dir="rtl"] .lvl:hover .lvl-go .ico{transform:translateX(-4px)}
+@media (max-width:1000px){ .lvl-grid{grid-template-columns:1fr 1fr} }
+@media (max-width:620px){ .lvl-grid{grid-template-columns:1fr} }
+
+/* --- Bitta narx --- */
+.price-wrap{display:flex;flex-direction:column;gap:14px}
+.price-card{position:relative;overflow:hidden;display:grid;gap:30px;
+  grid-template-columns:1.05fr .95fr;align-items:center;
+  border-radius:26px;padding:34px;color:#fff;
+  background:
+    radial-gradient(80% 60% at 8% 0%, var(--st-n5), transparent 58%),
+    linear-gradient(155deg,var(--st-n7),var(--st-n9));
+  box-shadow:var(--st-glow),var(--st-shadow-lg)}
+.price-card::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:var(--st-khatam);background-size:120px 120px;opacity:.12}
+.price-card > *{position:relative}
+.price-left{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+.price-left h2{color:#fff;font-size:clamp(22px,2.6vw,31px);margin:0}
+.price-big{display:flex;align-items:baseline;gap:9px}
+.price-big b{font-family:var(--st-serif);font-weight:600;
+  font-size:clamp(34px,5vw,52px);line-height:1;letter-spacing:-.03em;
+  color:var(--st-gold-3);font-variant-numeric:tabular-nums}
+.price-big span{font-size:14px;color:#a9b8d6}
+.price-ask{margin:0;font-size:18px;color:var(--st-gold-3);font-weight:600}
+.price-note{margin:0;font-size:13.5px;color:#c6d2e8}
+.price-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:11px}
+.price-list li{display:flex;gap:11px;align-items:flex-start;font-size:14px;
+  color:#e6ecf8;line-height:1.55}
+.price-list .ico{width:17px;height:17px;flex:none;margin-top:2px;color:var(--st-gold-2)}
+@media (max-width:880px){
+  .price-card{grid-template-columns:1fr;gap:22px;padding:24px;border-radius:20px}
+}
+
+/* --- Nega biz: chapda naqshli panel, o'ngda ro'yxat --- */
+.why-wrap{display:grid;grid-template-columns:.9fr 1.1fr;gap:34px;align-items:center}
+.why-art{position:relative;overflow:hidden;border-radius:26px;min-height:340px;
+  display:grid;place-items:center;
+  background:
+    radial-gradient(80% 70% at 30% 10%, var(--st-n5), transparent 62%),
+    linear-gradient(155deg,var(--st-n7),var(--st-n9));
+  box-shadow:var(--st-glow),var(--st-shadow-lg)}
+.why-art .khatam-in{position:absolute;inset:0;width:100%;height:100%;color:#fff;opacity:.13}
+.why-art-in{position:relative;display:grid;place-items:center;width:100%;height:100%;
+  padding:30px}
+.why-art-in img{width:min(132px,36%);height:auto;border-radius:26px;
+  box-shadow:0 0 0 1px rgba(216,174,67,.45), 0 24px 50px -20px rgba(0,0,0,.9)}
+.why-ar{position:absolute;left:0;right:0;top:12%;text-align:center;
+  font-family:var(--st-ar);font-size:clamp(26px,5vw,40px);line-height:1;
+  color:var(--st-gold-3);opacity:.28;pointer-events:none;user-select:none}
+.why-badge{position:absolute;inset-inline-end:18px;bottom:18px;
+  background:color-mix(in srgb,var(--st-card) 94%,transparent);backdrop-filter:blur(8px);
+  border:1px solid color-mix(in srgb,var(--st-gold) 40%,transparent);
+  border-radius:15px;padding:11px 16px;text-align:center;box-shadow:var(--st-shadow-lg)}
+.why-badge b{display:block;font-family:var(--st-serif);font-weight:600;font-size:19px;
+  color:var(--st-ink);letter-spacing:-.01em}
+.why-badge span{font-size:10.5px;color:var(--st-gold);letter-spacing:.14em;
+  text-transform:uppercase;font-weight:700}
+.why-text{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+.why-text h2{margin:0}
+.why-text .sec-note{margin:0}
+.why-list{list-style:none;margin:2px 0 4px;padding:0;
+  display:flex;flex-direction:column;gap:11px}
+.why-list li{display:flex;gap:11px;align-items:flex-start;font-size:14.5px;
+  color:var(--st-ink-2);line-height:1.55}
+.why-list .ico{width:18px;height:18px;flex:none;margin-top:2px;color:var(--st-gold)}
+@media (max-width:920px){
+  .why-wrap{grid-template-columns:1fr;gap:22px}
+  .why-art{min-height:260px;order:-1}
+}
+
+/* --- Pastdagi chaqiruv tasmasi --- */
+.cta-band{position:relative;overflow:hidden;display:flex;align-items:center;gap:20px;
+  flex-wrap:wrap;margin-top:44px;border-radius:24px;padding:26px 30px;color:#fff;
+  background:
+    radial-gradient(70% 120% at 100% 0%, color-mix(in srgb,var(--st-gold) 18%,transparent), transparent 60%),
+    linear-gradient(155deg,var(--st-n6),var(--st-n9));
+  box-shadow:var(--st-glow),var(--st-shadow-lg)}
+.cta-band::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background-image:var(--st-khatam);background-size:112px 112px;opacity:.12}
+.cta-band > *{position:relative}
+.cta-ico{width:56px;height:56px;flex:none;border-radius:16px;display:grid;place-items:center;
+  background:rgba(216,174,67,.15);border:1px solid rgba(216,174,67,.36)}
+.cta-ico .ico{width:26px;height:26px;color:var(--st-gold-2)}
+.cta-text{flex:1 1 300px;display:flex;flex-direction:column;gap:5px}
+.cta-text b{font-family:var(--st-serif);font-weight:600;font-size:21px;letter-spacing:-.02em}
+.cta-text span{font-size:13.5px;color:#c6d2e8;line-height:1.55}
+@media (max-width:560px){
+  .cta-band{padding:20px;gap:14px;border-radius:18px}
+  .cta-band .btn{width:100%}
+}
+
+/* --- Formadagi "tanlangan daraja" yorlig'i --- */
+.lvl-pill{display:inline-flex;align-items:center;gap:8px;align-self:flex-start;
+  padding:7px 8px 7px 14px;border-radius:999px;font-size:13px;font-weight:700;
+  color:var(--st-n6);background:color-mix(in srgb,var(--st-gold) 16%,transparent);
+  border:1px solid color-mix(in srgb,var(--st-gold) 52%,transparent)}
+.lvl-pill-x{width:22px;height:22px;flex:none;border:0;border-radius:50%;cursor:pointer;
+  display:grid;place-items:center;font:inherit;font-size:15px;line-height:1;
+  color:var(--st-n6);background:color-mix(in srgb,var(--st-gold) 34%,transparent)}
+.lvl-pill-x:hover{background:var(--st-gold);color:#1a1405}
+
+/* ================= SAYT: DETALLAR =================
+   Bosilganda sezilishi kerak: tugma bir oz bosiladi, RANGI o'zgaradi va
+   bosilgan joydan to'lqin tarqaladi. Klaviatura bilan yurganda tilla
+   halqa ko'rinadi. Ikonkalar jonlanadi (o'q siljiydi, telefon tebranadi).
+   "Harakatni kamaytirish" rejimida faqat rang o'zgaradi — pastdagi
+   blokda harakat o'chiriladi.                                          */
+
+/* --- Bosiladigan hamma narsa: to'lqin uchun joy --- */
+.site .btn,.site .chip,.site .faq-q,.site .tch-card,.site .soc-btn,
+.site .site-phone,.site .hero-tel,.site .foot-link,.site .lvl{
+  position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation}
+.site .foot-link{overflow:visible}
+
+/* --- Bosilish to'lqini (JS qo'shadi, o'zi o'chadi) --- */
+.site .rip{position:absolute;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(216,174,67,.5),rgba(216,174,67,0) 70%);
+  transform:scale(0);opacity:.9;animation:stRip .58s cubic-bezier(.22,.8,.3,1) forwards}
+@keyframes stRip{to{transform:scale(1);opacity:0}}
+/* Tilla tugmada to'lqin to'q, to'q fonda esa oq */
+.site .btn.gold .rip{background:radial-gradient(circle,rgba(26,20,5,.32),rgba(26,20,5,0) 70%)}
+.site .btn.on-dark .rip,.site .hero-tel .rip,.site .tier-hot .btn .rip{
+  background:radial-gradient(circle,rgba(255,255,255,.42),rgba(255,255,255,0) 70%)}
+
+/* --- Bosilganda: tugma bosiladi va rangi o'zgaradi --- */
+.site .btn{transition:transform .13s cubic-bezier(.22,.9,.28,1),
+  box-shadow .2s, background .18s, border-color .18s, color .18s}
+.site .btn.pressing,.site .btn:active{transform:translateY(1px) scale(.974)}
+.site .btn.gold.pressing,.site .btn.gold:active{
+  background:linear-gradient(160deg,var(--st-gold),#a8801e);color:#140f02;
+  box-shadow:0 5px 14px -9px rgba(216,174,67,.9)}
+.site .btn.on-dark.pressing,.site .btn.on-dark:active{
+  background:rgba(255,255,255,.24);border-color:rgba(255,255,255,.58);color:#fff}
+.site .btn.primary.pressing,.site .btn.primary:active{
+  background:var(--st-n9);border-color:var(--st-n9)}
+.site .btn.ghost.pressing,.site .btn.ghost:active{
+  background:color-mix(in srgb,var(--st-gold) 15%,transparent);color:var(--st-n6)}
+.site .btn:not(.gold):not(.ghost):not(.primary):not(.on-dark).pressing,
+.site .btn:not(.gold):not(.ghost):not(.primary):not(.on-dark):active{
+  border-color:var(--st-gold);background:color-mix(in srgb,var(--st-gold) 12%,transparent);
+  color:var(--st-n6)}
+.site .site-phone.pressing,.site .site-phone:active,
+.site .soc-btn.pressing,.site .soc-btn:active{
+  background:color-mix(in srgb,var(--st-gold) 14%,transparent);border-color:var(--st-gold);
+  transform:scale(.97)}
+.site .hero-tel.pressing,.site .hero-tel:active{
+  background:rgba(255,255,255,.22);border-color:rgba(255,255,255,.55);transform:scale(.97)}
+.site .foot-link.pressing,.site .foot-link:active{color:var(--st-gold)}
+
+/* --- Klaviatura: tilla halqa (sichqoncha bilan chiqmaydi) --- */
+.site .btn:focus-visible,.site .chip:focus-visible,.site .faq-q:focus-visible,
+.site .tch-card:focus-visible,.site .soc-btn:focus-visible,
+.site .foot-link:focus-visible,.site .site-phone:focus-visible,
+.site .hero-tel:focus-visible,.site .site-brand:focus-visible{
+  outline:2px solid var(--st-gold);outline-offset:3px;
+  box-shadow:0 0 0 5px color-mix(in srgb,var(--st-gold) 22%,transparent)}
+
+/* --- Maydonlar: fokusda tilla halqa --- */
+.site .field input,.site .field select,.site .field textarea{
+  transition:border-color .16s, box-shadow .2s, background .16s}
+.site .field input:focus,.site .field select:focus,.site .field textarea:focus{
+  outline:none;border-color:var(--st-gold);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--st-gold) 20%,transparent)}
+.site .field input:hover,.site .field select:hover{border-color:var(--st-line-2)}
+.site .field input::placeholder{color:color-mix(in srgb,var(--st-mut) 85%,transparent)}
+
+/* Tanlash maydoni: o'z tilla o'qimiz (brauzer o'qi har joyda boshqacha) */
+.site .field select{appearance:none;-webkit-appearance:none;
+  padding-inline-end:36px;background-color:var(--st-card);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b8901f' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 13px center;background-size:15px}
+[dir="rtl"] .site .field select{background-position:left 13px center}
+
+/* --- Ikonkalar: tugma ichida jonlanadi --- */
+.site .btn .ico{transition:transform .26s cubic-bezier(.34,1.56,.64,1)}
+/* O'q bor tugmalarda o'q oldinga siljiydi */
+.site .btn:hover .ico-go{transform:translateX(3px)}
+[dir="rtl"] .site .btn:hover .ico-go{transform:translateX(-3px)}
+.site .btn.pressing .ico-go{transform:translateX(6px)}
+[dir="rtl"] .site .btn.pressing .ico-go{transform:translateX(-6px)}
+/* Telefon ikonkasi ustiga kelganda tebranadi */
+.site .site-phone:hover .ico,.site .hero-tel:hover .ico,
+.site .contact-row:hover .ico{animation:stRing .55s ease-in-out}
+@keyframes stRing{
+  0%,100%{transform:rotate(0)}
+  20%{transform:rotate(-13deg)}45%{transform:rotate(11deg)}
+  70%{transform:rotate(-7deg)}
+}
+/* Kirish/kabinet tugmalarining ikonkasi */
+.site .btn.primary:hover .ico,.site .btn.gold:hover .ico{transform:scale(1.12)}
+
+/* --- Imkoniyat kartalari: ikonka tilla halqa ichida --- */
+.feat-ico{position:relative;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--st-gold) 26%,transparent),
+    0 10px 22px -12px rgba(11,23,48,.8)}
+.feat-ico::after{content:'';position:absolute;inset:0;border-radius:inherit;
+  background:radial-gradient(70% 70% at 30% 20%,rgba(216,174,67,.26),transparent 70%);
+  opacity:0;transition:opacity .3s}
+.feat:hover .feat-ico::after{opacity:1}
+.feat:hover .feat-ico{box-shadow:0 0 0 1px color-mix(in srgb,var(--st-gold) 62%,transparent),
+  0 16px 30px -12px rgba(11,23,48,.9)}
+.feat{cursor:default}
+.feat b{transition:color .2s}
+.feat:hover b{color:var(--st-n6)}
+
+/* --- Bosqich kartalari --- */
+.tier .btn{width:100%}
+.tier-ribbon{overflow:hidden}
+.tier-ribbon::after{content:'';position:absolute;top:0;bottom:0;width:38%;left:-50%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);
+  transform:skewX(-18deg)}
+.js-reveal .tier-hot .tier-ribbon::after{animation:stRibbon 3.6s ease-in-out 1.6s infinite}
+@keyframes stRibbon{0%{left:-50%}28%,100%{left:130%}}
+.tier-fee b{transition:color .2s}
+.tier:hover .tier-fee b{color:var(--st-gold)}
+.tier-hot:hover .tier-fee b{color:#fff}
+.tier-list li{transition:color .18s}
+.tier:hover .tier-list .ico{color:var(--st-gold-2)}
+.tier-extra{transition:border-color .18s,transform .18s}
+.tier-extra:hover{border-color:color-mix(in srgb,var(--st-gold) 45%,transparent)}
+
+/* --- Ustoz kartalari: surat yaqinlashadi, tagida "Batafsil" --- */
+.tch-photo::after{content:'';position:absolute;inset:auto 0 0 0;height:56%;pointer-events:none;
+  background:linear-gradient(to top,rgba(8,16,36,.82),transparent);opacity:.9}
+.tch-photo .tch-ava img{transition:transform .5s cubic-bezier(.22,.9,.28,1)}
+.tch-card:hover .tch-photo .tch-ava img{transform:scale(1.07)}
+.tch-card:hover .tch-photo .tch-ava{transform:none;box-shadow:none}
+.tch-ribbon{transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.tch-card:hover .tch-ribbon{transform:translateY(-2px)}
+.tch-card > b{transition:color .2s}
+.tch-card:hover > b{color:var(--st-gold)}
+.tch-card.pressing{transform:translateY(-2px) scale(.986)}
+.tch-card .tch-bio{margin-bottom:6px}
+.tch-card .tch-facts-mini:last-of-type{margin-bottom:6px}
+.tch-go{display:flex;align-items:center;gap:7px;margin-top:auto;
+  padding:12px 18px 15px;font-size:12.5px;font-weight:700;letter-spacing:.02em;
+  color:var(--st-gold);border-top:1px solid var(--st-line);margin-inline:18px;
+  padding-inline:0}
+.tch-go .ico{width:15px;height:15px;transition:transform .26s cubic-bezier(.34,1.56,.64,1)}
+.tch-card:hover .tch-go .ico{transform:translateX(4px)}
+[dir="rtl"] .tch-card:hover .tch-go .ico{transform:translateX(-4px)}
+.tch-card{cursor:pointer}
+/* Ismi bor, surati yo'q ustozda harf naqsh ustida turadi */
+.tch-photo .tch-ini{position:relative;z-index:1;
+  text-shadow:0 8px 24px rgba(0,0,0,.6)}
+
+/* --- Tanlov tugmachalari (chip): tanlanganda belgi chiqadi --- */
+.chip{position:relative;transition:background .16s,border-color .16s,color .16s,
+  transform .13s cubic-bezier(.22,.9,.28,1)}
+.chip:hover{border-color:var(--st-gold);color:var(--st-n6)}
+.chip.pressing,.chip:active{transform:scale(.955)}
+.chip.on{background:var(--st-n6);border-color:var(--st-n6);color:#fff;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--st-gold) 24%,transparent)}
+.chip.on::before{content:'';display:inline-block;width:12px;height:7px;margin-inline-end:7px;
+  border-left:2px solid var(--st-gold-2);border-bottom:2px solid var(--st-gold-2);
+  transform:rotate(-45deg) translateY(-2px);vertical-align:middle}
+
+/* --- Savol-javob --- */
+.faq-q{transition:background .18s,color .18s}
+.faq-item.open .faq-q{background:color-mix(in srgb,var(--st-gold) 7%,transparent)}
+.faq-q.pressing{background:color-mix(in srgb,var(--st-gold) 13%,transparent)}
+.faq-item{transition:border-color .18s,box-shadow .22s}
+.faq-item:hover{border-color:var(--st-line-2)}
+.faq-item.open{box-shadow:0 10px 26px -18px rgba(11,23,48,.7)}
+
+/* --- Dars vaqtlari: ustiga kelganda tilla nuqta --- */
+.slot{position:relative}
+.slot::before{content:'';position:absolute;top:12px;inset-inline-end:12px;
+  width:6px;height:6px;border-radius:50%;background:var(--st-line-2);transition:background .2s,box-shadow .2s}
+.slot:hover::before{background:var(--st-gold);box-shadow:0 0 8px var(--st-gold-2)}
+
+/* --- Pastdagi ijtimoiy tugmalar --- */
+.soc-btn{transition:background .18s,border-color .18s,color .18s,transform .13s}
+.soc-btn:hover{transform:translateX(3px)}
+[dir="rtl"] .soc-btn:hover{transform:translateX(-3px)}
+.foot-link{transition:color .18s,transform .16s}
+.foot-link:hover{transform:translateX(3px)}
+[dir="rtl"] .foot-link:hover{transform:translateX(-3px)}
+
+/* --- Markaz nomi (tepa chap) --- */
+.site-brand{transition:transform .16s cubic-bezier(.22,.9,.28,1)}
+.site-brand:active{transform:scale(.97)}
+.site-brand .logo{transition:box-shadow .25s,transform .35s cubic-bezier(.34,1.56,.64,1)}
+.site-brand:hover .logo{transform:rotate(-5deg) scale(1.06);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--st-gold) 60%,transparent)}
+
+/* --- Telefonda barmoq uchun kattaroq nishon --- */
+@media (max-width:560px){
+  .site .btn{min-height:44px}
+  .site .btn.sm{min-height:38px}
+  .chip{min-height:40px;display:inline-flex;align-items:center}
+  .faq-q{padding:16px 16px}
+  .tch-go{padding:11px 16px 14px}
+}
+
+/* --- Harakat kamaytirilgan rejim: faqat rang qoladi --- */
+@media (prefers-reduced-motion:reduce){
+  .site .rip{display:none}
+  .site .btn.pressing,.site .btn:active,.site .chip.pressing,.site .chip:active,
+  .site .tch-card.pressing,.site .soc-btn:hover,.site .foot-link:hover,
+  .site .site-phone.pressing,.site .hero-tel.pressing,
+  .site-brand:hover .logo,.site-brand:active,
+  .tch-card:hover .tch-photo .tch-ava img,.tch-card:hover .tch-ribbon,
+  .tch-card:hover .tch-go .ico,.site .btn:hover .ico,
+  .site .btn.primary:hover .ico,.site .btn.gold:hover .ico{transform:none}
+  .site .site-phone:hover .ico,.site .hero-tel:hover .ico,
+  .site .contact-row:hover .ico,.js-reveal .tier-hot .tier-ribbon::after{animation:none}
+  .site .field input,.site .field select,.site .field textarea,
+  .site .btn,.chip,.faq-q,.faq-item,.soc-btn,.foot-link,.slot::before{transition:none}
 }
 
 /* ---------- O'qituvchi uchun davomat kartasi ---------- */

@@ -390,12 +390,16 @@ async function login(l, p) {
        youtube   — ochiq YouTube kanal manzili;
        heroBadge — sayt boshidagi kichik yozuv (masalan "Misr metodikasi");
        stats     — saytda ko'rsatiladigan raqamlar (markaz o'zi yozadi);
-       faq       — saytdagi savol-javoblar (markaz o'zi yozadi).
+       faq       — saytdagi savol-javoblar (markaz o'zi yozadi);
+       heroProof — "500+ o'quvchi" qatori (markaz o'zi yozadi);
+       levels    — CEFR darajalari (A1…C2) nomi va qisqa izohi. Bu
+                   MARKAZ ma'lumoti emas — dasturning o'zidagi ro'yxat
+                   (server/levels.js), daraja testi ham shundan oladi.
      Bularning hammasi SOZLAMADA markaz qo'li bilan yoziladi va aynan
      saytda ko'rsatish uchun. Ichki ma'lumot emas. */
   const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
     'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes', 'taglines',
-    'youtube', 'heroBadge', 'stats', 'faq'];
+    'youtube', 'heroBadge', 'stats', 'faq', 'heroProof', 'levels'];
   ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
   const tKeys = ['id', 'name', 'tag', 'bio', 'levels', 'audience', 'country', 'years'];
