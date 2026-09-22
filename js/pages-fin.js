@@ -1566,6 +1566,63 @@
         name: 'about', label: 'Sayt uchun qisqa matn', type: 'textarea', value: s.about,
         help: 'Ochiq saytda markaz nomi tagida chiqadi.'
       },
+      {
+        /* Hero yonidagi kichik yorliq. Bo'sh bo'lsa ko'rinmaydi.
+           DIQQAT: bu yerga faqat HAQIQATDA to'g'ri gapni yozing —
+           saytda hamma ko'radi. */
+        name: 'heroBadge', label: 'Hero yorlig’i (ixtiyoriy)', value: s.heroBadge,
+        placeholder: 'masalan: Misr metodikasi',
+        help: 'Saytning yuqori o’ng burchagida kichik yorliq bo’lib chiqadi. ' +
+          'Bo’sh qoldirsangiz ko’rinmaydi. Faqat o’zingiz tasdiqlagan gapni yozing.',
+        validate: function (v) {
+          return String(v || '').length > 40 ? 'Ko’pi bilan 40 belgi.' : null;
+        }
+      },
+      {
+        /* Hero ostidagi ko'rsatkichlar: "qiymat | izoh" */
+        name: 'stats', label: 'Saytdagi ko’rsatkichlar', type: 'textarea', value: s.stats, full: true,
+        placeholder: '6 bosqich | daraja A1–C2 to’liq dastur\n8–12 o’quvchi | kichik guruh',
+        help: 'Har qatorda bitta ko’rsatkich: yirik yozuv, so’ng | belgisi, ' +
+          'so’ng izoh. Ko’pi bilan 4 ta. Bo’sh qoldirsangiz standart uchtasi chiqadi.',
+        validate: function (v) {
+          var rows = String(v || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+          if (rows.length > 4) return 'Ko’pi bilan 4 ta ko’rsatkich.';
+          var xato = rows.filter(function (x) { return x.indexOf('|') < 0; });
+          return xato.length ? '“|” belgisi kerak: ' + xato[0].slice(0, 30) : null;
+        }
+      },
+      {
+        /* Savol-javob: savol qatori, javob qatori, juftliklar bo'sh qator bilan */
+        name: 'faq', label: 'Savol-javob', type: 'textarea', value: s.faq, full: true,
+        placeholder: 'Qancha vaqtda o’rganaman?\nHaftada 3 dars bilan o’rtacha…\n\nAlohida guruh bormi?\nHa, bor.',
+        help: 'Birinchi qator — savol, keyingi qator — javob. Har bir juftlikni ' +
+          'bo’sh qator bilan ajrating. Ko’pi bilan 10 ta. Bo’sh bo’lsa bo’lim ko’rinmaydi.',
+        validate: function (v) {
+          var blocks = String(v || '').split(/\n\s*\n/).map(function (b2) { return b2.trim(); }).filter(Boolean);
+          if (blocks.length > 10) return 'Ko’pi bilan 10 ta savol.';
+          var yarim = blocks.filter(function (b2) {
+            return b2.split('\n').map(function (x) { return x.trim(); }).filter(Boolean).length < 2;
+          });
+          return yarim.length ? 'Javobi yozilmagan savol bor: ' + yarim[0].slice(0, 34) : null;
+        }
+      },
+      { name: 'instagram', label: 'Instagram', value: s.instagram, placeholder: '@albayan yoki havola' },
+      { name: 'youtube', label: 'YouTube', value: s.youtube, placeholder: '@albayan yoki havola' },
+      {
+        /* Hero'da harf-harf yozilib turadigan iboralar. Har qatorda bittasi. */
+        name: 'taglines', label: 'Saytda yozilib turadigan iboralar', type: 'textarea',
+        value: s.taglines, full: true,
+        placeholder: 'Arab tilini arablardan o’rganing\nImtihonga tayyorlov\nC2 sertifikatigacha',
+        help: 'Har qatorda bitta ibora. Saytda markaz nomi tagida navbat bilan ' +
+          'harf-harf yozilib turadi. Ko’pi bilan 8 ta, har biri 90 belgigacha. ' +
+          'Bo’sh qoldirsangiz standart iboralar chiqadi.',
+        validate: function (v) {
+          var rows = String(v || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean);
+          if (rows.length > 8) return 'Ko’pi bilan 8 ta ibora.';
+          var uzun = rows.filter(function (x) { return x.length > 90; });
+          return uzun.length ? 'Juda uzun ibora: “' + uzun[0].slice(0, 40) + '…”' : null;
+        }
+      },
         { name: 'phone', label: 'Telefon', value: s.phone },
         { name: 'address', label: 'Manzil', value: s.address, full: true },
         { name: 'workStart', label: 'Ish boshlanishi', type: 'time', value: s.workStart },

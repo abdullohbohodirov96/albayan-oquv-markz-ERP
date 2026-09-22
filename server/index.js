@@ -1556,7 +1556,9 @@ async function handleApi(req, res, url) {
       out.courses = courses.slice(0, 12).map(c => ({
         id: c.id, name: c.name,
         fee: (c.publicPrice === false || s.publicPrices === false) ? null : Math.round(c.monthlyFee || 0),
-        note: String(c.note || '').slice(0, 120)
+        /* Izoh bosqich kartasidagi ro'yxat uchun ishlatiladi:
+           nuqtali vergul yoki yangi qator bilan ajratiladi.            */
+        note: String(c.note || '').slice(0, 400)
       }));
       /* Ustozlar: faqat ochiq profil ma'lumoti. Telefon, oylik va
          boshqa ichki ma'lumot bu yerga umuman chiqmaydi. */
@@ -1577,6 +1579,30 @@ async function handleApi(req, res, url) {
           years: Number(t.years) || 0
         }));
       out.lessonMinutes = Number(s.lessonMinutes) || 90;
+      /* Saytning hero qismida yozilib turadigan qatorlar.
+         Markaz o'zi yozadi (Sozlamalar → Ochiq sayt). Har qatorda bitta
+         ibora. Bo'sh bo'lsa mijoz standart iboralarni ko'rsatadi.        */
+      out.taglines = String(s.taglines || '')
+        .split('\n').map(x => x.trim()).filter(Boolean).slice(0, 8)
+        .map(x => x.slice(0, 90));
+      out.youtube = String(s.youtube || '');
+      /* Hero yonidagi kichik yozuv (masalan "Al-Azhar standarti").
+         Markaz o'zi yozadi — biz hech qanday da'vo o'ylab topmaymiz.     */
+      out.heroBadge = String(s.heroBadge || '').slice(0, 40);
+      /* Hero ostidagi ko'rsatkichlar. Har qatorda "qiymat | izoh".
+         Masalan: "6 bosqich | daraja A1–C2 to'liq dastur"               */
+      out.stats = String(s.stats || '').split('\n').map(function (row) {
+        const p = row.split('|');
+        return { v: String(p[0] || '').trim().slice(0, 14),
+                 t: String(p[1] || '').trim().slice(0, 60) };
+      }).filter(x => x.v).slice(0, 4);
+      /* Savol-javob. Har juftlik: savol qatori, keyin javob qatori,
+         juftliklar bo'sh qator bilan ajratiladi.                         */
+      out.faq = String(s.faq || '').split(/\n\s*\n/).map(function (blk) {
+        const rows = blk.split('\n').map(x => x.trim()).filter(Boolean);
+        if (rows.length < 2) return null;
+        return { q: rows[0].slice(0, 160), a: rows.slice(1).join(' ').slice(0, 700) };
+      }).filter(Boolean).slice(0, 10);
     } catch (e) { /* baza javob bermasa standart ma'lumot */ }
     return send(res, 200, out);
   }
@@ -1618,6 +1644,11 @@ async function handleApi(req, res, url) {
     const phone = A.normPhone(String(body.phone || ''));
     const note = String(body.note || '').trim().slice(0, 500);
     const courseId = String(body.courseId || '').slice(0, 60);
+    /* Saytdagi formadan qo'shimcha: hozirgi daraja va qulay vaqt.
+       Ro'yxat yopiq — mijoz o'z matnini yubora olmaydi.                  */
+    const LEVELS = { noldan: 'Noldan (alifbo)', oqiy: 'O’qiy olaman', gram: 'Grammatikani bilaman' };
+    const startLevel = LEVELS[String(body.startLevel || '')] || '';
+    const wantTime = String(body.wantTime || '').slice(0, 40);
     if (name.length < 2) return send(res, 400, { error: 'Ismingizni yozing.' });
     if (A.phoneDigits(phone).length < 9) return send(res, 400, { error: 'Telefon raqamni to’liq yozing.' });
 
@@ -1639,7 +1670,9 @@ async function handleApi(req, res, url) {
       courseId: course ? course.id : '',
       source: 'Sayt', ownerStaffId: '',
       stage: stages[0] ? stages[0].id : 'yangi',
-      note: note,
+      note: [note, startLevel ? 'Daraja: ' + startLevel : '',
+             wantTime ? 'Qulay vaqt: ' + wantTime : ''].filter(Boolean).join(' · '),
+      startLevel, wantTime,
       nextContact: A.today(),
       createdAt: stamp(), viaSite: true
     });

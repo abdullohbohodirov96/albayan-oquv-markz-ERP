@@ -15,6 +15,12 @@
     workStart: '08:00',
     workEnd: '20:00',
     dueDay: 5,
+    /* Saytda harf-harf yozilib turadigan iboralar (har qatorda bittasi).
+       Markaz Sozlamalardan o'zgartiradi. */
+    taglines: 'Arab tilini arablardan o’rganing\n' +
+      'Imtihonga tayyorlov\n' +
+      'C2 sertifikatigacha\n' +
+      'Kichik guruhlar, aniq natija',
     expenseCategories: ['Ijara', 'Kommunal', 'Reklama', 'Jihozlar', 'Xo’jalik', 'Ish haqi', 'Boshqa'],
     bot: {
       username: '',

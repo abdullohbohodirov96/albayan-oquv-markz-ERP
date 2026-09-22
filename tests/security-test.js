@@ -383,8 +383,19 @@ async function login(l, p) {
   ok('Kirishsiz ham javob beradi', pub.status === 200, String(pub.status));
   ok('Markaz nomi bor', !!(pub.json && pub.json.centerName), pub.text);
   const pubKeys = Object.keys(pub.json || {});
+  /* Bu ro'yxat ATAYLAB qisqa: /api/public kirishsiz ochiladi, shuning uchun
+     har bir yangi maydon shu yerga qo'lda qo'shiladi. Tasodifan ichki
+     ma'lumot chiqib ketmasligi uchun.
+       taglines  — markaz saytda ko'rsatish uchun o'zi yozgan iboralar;
+       youtube   — ochiq YouTube kanal manzili;
+       heroBadge — sayt boshidagi kichik yozuv (masalan "Misr metodikasi");
+       stats     — saytda ko'rsatiladigan raqamlar (markaz o'zi yozadi);
+       faq       — saytdagi savol-javoblar (markaz o'zi yozadi).
+     Bularning hammasi SOZLAMADA markaz qo'li bilan yoziladi va aynan
+     saytda ko'rsatish uchun. Ichki ma'lumot emas. */
   const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
-    'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes'];
+    'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes', 'taglines',
+    'youtube', 'heroBadge', 'stats', 'faq'];
   ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
   const tKeys = ['id', 'name', 'tag', 'bio', 'levels', 'audience', 'country', 'years'];

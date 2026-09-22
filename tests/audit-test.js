@@ -115,23 +115,59 @@ const R = 'a' + Date.now().toString(36); const ID = n => R + '_' + n;
 
   /* ---- 7c. Server egalik qiladigan maydonlar ---- */
   sec('7c. Server egalik qiladigan maydonlar');
+  /* KOD — markazning o'z ma'lumoti: direktor uni QO'LDA yozishi mumkin
+     (markaz rahbari shuni so'radi). Lekin:
+       – band kod qabul qilinmaydi va rad etilganda yozuv o'zgarmaydi;
+       – Telegram bog'lanishi (telegram, tgChat) — faqat server yozadi. */
   const sid = ID('s');
   await put('students/' + sid, { id: sid, firstName: 'Soxta', lastName: 'Sinov', status: 'active' }, dir);
   const s0 = (await get('students/' + sid, dir)).json.data;
-  const code0 = s0.code;
-  await put('students/' + sid, Object.assign({}, s0, { code: '9999' }), dir);
+  ok('yangi o’quvchiga kod berildi', /^\d{4}$/.test(String(s0.code || '')), String(s0.code));
+
+  /* Bo'sh (band bo'lmagan) kodni qo'lda yozish — ruxsat */
+  const mine = '7' + String(Date.now()).slice(-3);
+  const setMine = await put('students/' + sid, Object.assign({}, s0, { code: mine }), dir);
   const s1 = (await get('students/' + sid, dir)).json.data;
-  ok('kodni qo’lda o’zgartirib bo’lmaydi', s1.code === code0, s1.code + ' vs ' + code0);
-  await put('students/' + sid, Object.assign({}, s1, { telegram: { id: '424242', name: 'Begona' } }), dir);
+  ok('direktor kodni qo’lda yozdi (' + setMine.status + ')', s1.code === mine, s1.code + ' vs ' + mine);
+
+  /* O'zgarmaslik: boshqa maydon yangilanganda kod joyida qoladi */
+  await put('students/' + sid, Object.assign({}, s1, { firstName: 'Soxta2' }), dir);
+  const s1b = (await get('students/' + sid, dir)).json.data;
+  ok('boshqa maydon yangilanganda kod o’zgarmadi', s1b.code === mine, s1b.code + ' vs ' + mine);
+
+  /* Band kod — rad etiladi va yozuv O'ZGARMAYDI */
+  const sid2 = ID('s2');
+  await put('students/' + sid2, { id: sid2, firstName: 'Soxta', lastName: 'Ikki', status: 'active' }, dir);
+  const o0 = (await get('students/' + sid2, dir)).json.data;
+  const busy = await put('students/' + sid2, Object.assign({}, o0, { code: mine }), dir);
+  const o1 = (await get('students/' + sid2, dir)).json.data;
+  ok('band kod rad etildi (' + busy.status + ')', busy.status >= 400, busy.text.slice(0, 120));
+  ok('rad etilgandan keyin kod o’zgarmadi', o1.code === o0.code, o1.code + ' vs ' + o0.code);
+
+  await put('students/' + sid, Object.assign({}, s1b, { telegram: { id: '424242', name: 'Begona' } }), dir);
   const s2 = (await get('students/' + sid, dir)).json.data;
   ok('telegram bog’lanishini qo’lda yozib bo’lmaydi', !(s2.telegram && s2.telegram.id === '424242'), JSON.stringify(s2.telegram));
+
   const gid = ID('g');
   await put('groups/' + gid, { id: gid, name: 'Sinov guruh', teacherId: tid, status: 'faol' }, dir);
   const g0 = (await get('groups/' + gid, dir)).json.data;
-  await put('groups/' + gid, Object.assign({}, g0, { code: 'AAAA', tgChat: '-100999' }), dir);
+  const gmine = 'B' + String(Date.now()).slice(-4);
+  const gset = await put('groups/' + gid, Object.assign({}, g0, { code: gmine, tgChat: '-100999' }), dir);
   const g1 = (await get('groups/' + gid, dir)).json.data;
-  ok('guruh kodini qo’lda o’zgartirib bo’lmaydi', g1.code === g0.code, g1.code + ' vs ' + g0.code);
+  ok('direktor guruh kodini qo’lda yozdi (' + gset.status + ')', g1.code === gmine, g1.code + ' vs ' + gmine);
   ok('guruh Telegram suhbatini qo’lda yozib bo’lmaydi', String(g1.tgChat || '') !== '-100999', String(g1.tgChat));
+
+  await put('groups/' + gid, Object.assign({}, g1, { name: 'Sinov guruh 2' }), dir);
+  const g1b = (await get('groups/' + gid, dir)).json.data;
+  ok('guruh nomi o’zgarganda kod o’zgarmadi', g1b.code === gmine, g1b.code + ' vs ' + gmine);
+
+  const gid2 = ID('g2');
+  await put('groups/' + gid2, { id: gid2, name: 'Sinov guruh uch', teacherId: tid, status: 'faol' }, dir);
+  const h0 = (await get('groups/' + gid2, dir)).json.data;
+  const gbusy = await put('groups/' + gid2, Object.assign({}, h0, { code: gmine }), dir);
+  const h1 = (await get('groups/' + gid2, dir)).json.data;
+  ok('band guruh kodi rad etildi (' + gbusy.status + ')', gbusy.status >= 400, gbusy.text.slice(0, 120));
+  ok('rad etilgandan keyin guruh kodi o’zgarmadi', h1.code === h0.code, h1.code + ' vs ' + h0.code);
 
   /* ---- 7d. SQL/NoSQL in'ektsiya va XSS ---- */
   sec('7d. In’ektsiya va XSS');

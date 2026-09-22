@@ -1199,6 +1199,78 @@
     }, { threshold: 1 }).observe(probe);
   }
 
+  /* Hero'da yozilib turadigan qatorlar.
+     Markaz Sozlamalarda o'z iboralarini yozadi; yozmagan bo'lsa standart
+     ro'yxat ishlatiladi. Iboralar markaz ma'lumoti — tarjima qilinmaydi.
+
+     Harakat: matn harf-harf yoziladi, bir oz turadi, keyin o'chiriladi va
+     keyingisi yoziladi. "Harakatni kamaytirish" yoqilgan bo'lsa yozilmaydi —
+     iboralar shunchaki navbat bilan almashadi.                            */
+  var TAGLINES = [
+    'Arab tilini arablardan o’rganing',
+    'Imtihonga tayyorlov',
+    'C2 sertifikatigacha',
+    'Kichik guruhlar, aniq natija'
+  ];
+  var typeTimer = null;
+
+  function startTyping(list) {
+    var el = document.getElementById('hero-type-txt');
+    if (!el) return;
+    if (typeTimer) { clearTimeout(typeTimer); typeTimer = null; }
+
+    var rows = (list && list.length ? list : TAGLINES)
+      .map(function (x) { return String(x || '').trim(); }).filter(Boolean);
+    if (!rows.length) return;
+
+    var box = el.parentNode;
+    /* Sakrab turmasligi uchun eng uzun ibora bo'yicha joy ajratamiz */
+    box.style.minHeight = '';
+    var slow = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (rows.length === 1) { el.textContent = rows[0]; box.classList.add('done'); return; }
+
+    if (slow) {
+      /* Harakatsiz rejim: 4 soniyada bir almashadi */
+      var k = 0;
+      el.textContent = rows[0];
+      box.classList.add('done');
+      var tick = function () {
+        k = (k + 1) % rows.length;
+        el.textContent = rows[k];
+        typeTimer = setTimeout(tick, 4000);
+      };
+      typeTimer = setTimeout(tick, 4000);
+      return;
+    }
+
+    var i = 0, pos = 0, del = false;
+    function step() {
+      var txt = rows[i];
+      if (!del) {
+        pos++;
+        el.textContent = txt.slice(0, pos);
+        if (pos >= txt.length) { del = true; typeTimer = setTimeout(step, 1900); return; }
+        typeTimer = setTimeout(step, 52 + Math.random() * 40);
+      } else {
+        pos--;
+        el.textContent = txt.slice(0, pos);
+        if (pos <= 0) { del = false; i = (i + 1) % rows.length; typeTimer = setTimeout(step, 320); return; }
+        typeTimer = setTimeout(step, 26);
+      }
+    }
+    el.textContent = '';
+    typeTimer = setTimeout(step, 700);
+  }
+
+  /* ====================== OCHIQ SAYT ======================
+     Tuzilishi: tepa panel → hero → afzalliklar → bosqichlar (narx) →
+     ustozlar → dars vaqtlari → ariza (bepul sinov darsi) → savol-javob →
+     pastki qism.
+
+     Muhim qoida: markaz haqidagi DA'VOLAR (litsenziya, foiz, "standart"
+     kabi) kodda yozilmaydi. Ular Sozlamalardan keladi va bo'sh bo'lsa
+     bo'lim umuman ko'rinmaydi — saytda tekshirilmagan gap turmasin.   */
   function renderLanding() {
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
@@ -1209,9 +1281,18 @@
 
     var name = centerNameNow();
 
-    /* --- Tepa panel --- */
+    /* ---------- Tepa panel ---------- */
+    var navBtn = function (label, id) {
+      return h('button', {
+        class: 'btn sm ghost', type: 'button',
+        onclick: function () { scrollTo(id); }
+      }, label);
+    };
     var topIn = h('div', { class: 'site-top-in' }, [
-      h('div', { class: 'site-brand' }, [
+      h('button', {
+        class: 'site-brand', type: 'button',
+        onclick: function () { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+      }, [
         h('img', { class: 'logo', src: LOGO, alt: '' }),
         h('div', {}, [
           h('b', { id: 'site-name' }, name),
@@ -1219,9 +1300,12 @@
         ])
       ]),
       h('nav', { class: 'site-nav' }, [
-        h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('ustozlar'); } }, 'Ustozlar'),
-        h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('kurslar'); } }, 'Kurslar'),
-        h('button', { class: 'btn sm ghost', type: 'button', onclick: function () { scrollTo('ariza'); } }, 'Ariza'),
+        navBtn('Ustozlar', 'ustozlar'),
+        navBtn('Bosqichlar', 'bosqichlar'),
+        navBtn('Imkoniyatlar', 'imkoniyatlar'),
+        navBtn('Savollar', 'savollar'),
+        h('a', { class: 'site-phone', id: 'site-call', href: '#ariza' },
+          [UI.icon('phone'), h('span', { id: 'site-call-text' }, 'Bog’lanish')]),
         h('button', {
           class: 'btn sm ghost', type: 'button',
           onclick: function () { location.hash = 'test'; renderTest(); }
@@ -1238,12 +1322,17 @@
     ]);
     var top = h('header', { class: 'site-top' }, topIn);
 
-    /* --- Hero: to'q ko'k panel, tilla hoshiya va xatam naqshi --- */
+    /* ---------- Hero ---------- */
+    var statsBox = h('div', { class: 'hero-stats', id: 'hero-stats' });
+    var heroBadge = h('span', { class: 'hero-pill', id: 'hero-pill', hidden: true });
     var hero = h('section', { class: 'site-hero' }, [
+      heroBadge,
       h('div', { class: 'hero-text' }, [
         h('span', { class: 'hero-eyebrow' }, 'Toshkentda arab tili'),
-        h('h1', {}, [
-          h('span', { class: 'gold', id: 'site-name-hero' }, name)
+        h('h1', {}, [h('span', { class: 'gold', id: 'site-name-hero' }, name)]),
+        h('div', { class: 'hero-type' }, [
+          h('span', { class: 'hero-type-txt', id: 'hero-type-txt' }, ''),
+          h('span', { class: 'hero-type-cur', 'aria-hidden': 'true' })
         ]),
         h('div', { class: 'hero-rule', 'aria-hidden': 'true' }),
         h('p', { class: 'hero-lead', id: 'site-about' },
@@ -1254,14 +1343,12 @@
           h('button', {
             class: 'btn on-dark lg', type: 'button',
             onclick: function () { location.hash = 'test'; renderTest(); }
-          }, 'Darajangizni aniqlang'),
-          h('a', { class: 'btn on-dark lg', id: 'site-call', href: '#ariza' },
-            [UI.icon('phone'), h('span', { id: 'site-call-text' }, 'Bog\u2019lanish')])
+          }, ['Darajangizni aniqlang', UI.icon('right')])
         ]),
-        h('div', { class: 'hero-stats' }, [
-          stat('6', 'daraja: A1\u2013C2'),
-          stat('8\u201312', 'kishilik guruh'),
-          stat('6', 'kun ish rejimi')
+        h('div', { class: 'hero-meta' }, [
+          h('a', { class: 'hero-tel', id: 'hero-tel', href: '#ariza' },
+            [UI.icon('phone'), h('span', { id: 'hero-tel-text' }, '')]),
+          h('span', { class: 'hero-hours', id: 'hero-hours', hidden: true })
         ])
       ]),
       h('div', { class: 'hero-art' }, [
@@ -1269,48 +1356,70 @@
           h('div', { class: 'medal-in' }, [
             khatamSvg('khatam-in'),
             h('img', { src: LOGO, alt: '' }),
-            h('span', { class: 'hero-ar', 'aria-hidden': 'true' }, '\u0627\u0644\u0628\u064a\u0627\u0646')
+            h('span', { class: 'hero-ar', 'aria-hidden': 'true' }, 'البيان')
           ])
         ]),
         h('div', { class: 'hero-badge' }, [h('b', {}, 'AlBayan'), h('span', {}, 'Cairo')])
-      ])
+      ]),
+      statsBox
     ]);
 
-    function stat(v, l) {
-      return h('div', { class: 'hero-stat' }, [h('b', {}, v), h('span', {}, l)]);
-    }
-
-    /* --- Nima beramiz --- */
-    var feats = h('section', { class: 'site-sec reveal' }, [
-      h('div', { class: 'sec-eyebrow' }, 'Imkoniyatlar'),
-      h('h2', {}, 'Nega AlBayan Cairo?'),
-      h('div', { class: 'feat-grid' }, [
-        feat('users', 'Kichik guruhlar', 'Har bir o’quvchiga vaqt yetadi — 8–12 kishilik guruhlar.'),
-        feat('badge', 'Tajribali ustozlar', 'Arab tilini Misrda o’rgangan va yillar davomida dars bergan ustozlar.'),
-        feat('check', 'Davomat va natija', 'Har dars davomat olinadi, ota-ona va o’quvchi kabinetdan ko’rib turadi.'),
-        feat('wallet', 'Shaffof to’lov', 'Oylik hisob, qarz va to’lov tarixi — hammasi kabinetda ko’rinadi.'),
-        feat('calendar', 'Qulay jadval', 'Ertalabki va kechki guruhlar; ishlaydiganlar uchun ham vaqt bor.'),
-        feat('bot', 'Telegram bot', 'Davomat, to’lov va e’lonlar bot orqali darhol yetib boradi.')
-      ])
-    ]);
+    /* ---------- Afzalliklar ---------- */
     function feat(icon, t, d) {
       return h('div', { class: 'feat' }, [
         h('div', { class: 'feat-ico' }, UI.icon(icon)),
         h('b', {}, t), h('p', {}, d)
       ]);
     }
+    var feats = h('section', { class: 'site-sec reveal', id: 'imkoniyatlar' }, [
+      h('div', { class: 'sec-split' }, [
+        h('div', {}, [
+          h('div', { class: 'sec-eyebrow' }, 'Imkoniyatlar'),
+          h('h2', {}, 'Nega aynan AlBayan Cairo?')
+        ]),
+        h('p', { class: 'sec-note' },
+          'Har bir bosqich aniq maqsad bilan tuzilgan: alifbodan boshlab erkin suhbatgacha. ' +
+          'Darslar amaliy — o’quvchi birinchi kundan gapira boshlaydi.')
+      ]),
+      h('div', { class: 'feat-grid' }, [
+        feat('layers', 'Bosqichma-bosqich dastur',
+          'Alifbodan C2 gacha — har bosqich oldingisiga qurilgan, sakrab o’tish yo’q.'),
+        feat('users', 'Kichik guruhlar',
+          'Har bir o’quvchiga vaqt yetadi — 8–12 kishilik guruhlar.'),
+        feat('badge', 'Tajribali ustozlar',
+          'Arab tilini Misrda o’rgangan va yillar davomida dars bergan ustozlar.'),
+        feat('check', 'Davomat va natija',
+          'Har dars davomat olinadi, ota-ona va o’quvchi kabinetdan ko’rib turadi.')
+      ])
+    ]);
 
-    /* --- Ustozlar --- */
+    /* ---------- Bosqichlar va narx ---------- */
+    var tierBox = h('div', { class: 'tier-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
+    var tiers = h('section', { class: 'site-sec reveal', id: 'bosqichlar' }, [
+      h('div', { class: 'sec-mid' }, [
+        h('div', { class: 'sec-eyebrow center' }, 'O’quv dasturlari'),
+        h('h2', {}, 'Bosqichma-bosqich til o’rganish tizimi'),
+        h('p', { class: 'sec-note center' },
+          'Noldan boshlab erkin suhbatgacha — xalqaro CEFR darajalariga mos bosqichlar.')
+      ]),
+      tierBox
+    ]);
+
+    /* ---------- Ustozlar ---------- */
     var teachBox = h('div', { class: 'tch-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
     var teachers = h('section', { class: 'site-sec reveal', id: 'ustozlar' }, [
-      h('div', { class: 'sec-eyebrow' }, 'Jamoa'),
-      h('h2', {}, 'Ustozlar'),
-      h('p', { class: 'muted' },
-        'Darslarni Misrda tahsil olgan, ona tili arab tili bo’lgan ustozlar olib boradi. Erkaklar va ayollar guruhlari uchun alohida ustozlar bor.'),
+      h('div', { class: 'sec-split' }, [
+        h('div', {}, [
+          h('div', { class: 'sec-eyebrow' }, 'Ustozlar'),
+          h('h2', {}, 'Darsni kim olib boradi')
+        ]),
+        h('p', { class: 'sec-note' },
+          'Darslarni Misrda tahsil olgan, ona tili arab tili bo’lgan ustozlar olib boradi. Erkaklar va ayollar guruhlari uchun alohida ustozlar bor.')
+      ]),
       teachBox
     ]);
 
-    /* --- Dars vaqtlari --- */
+    /* ---------- Dars vaqtlari ---------- */
     var slotBox = h('div', { class: 'slot-grid' });
     var timetable = h('section', { class: 'site-sec reveal', id: 'vaqt' }, [
       h('div', { class: 'sec-eyebrow' }, 'Jadval'),
@@ -1319,75 +1428,148 @@
       slotBox
     ]);
 
-    /* --- Kurslar --- */
-    var courseBox = h('div', { class: 'course-grid' }, h('div', { class: 'muted small' }, 'Yuklanmoqda…'));
-    var courses = h('section', { class: 'site-sec reveal', id: 'kurslar' }, [
-      h('div', { class: 'sec-eyebrow' }, 'Yo’nalishlar'),
-      h('h2', {}, 'Kurslar'),
-      courseBox
-    ]);
-
-    /* --- Ariza formasi --- */
-    var fName = UI.field({ label: 'Ismingiz', id: 'lead-name', required: true, placeholder: 'Ism familiya' });
+    /* ---------- Ariza: bepul sinov darsi ---------- */
+    var fName = UI.field({ label: 'Ism va familiyangiz', id: 'lead-name', required: true, placeholder: 'Ism familiya' });
     var fPhone = UI.field({
-      label: 'Telefon', id: 'lead-phone', required: true,
+      label: 'Telefon raqamingiz', id: 'lead-phone', required: true,
       placeholder: '+998 90 123 45 67', inputmode: 'tel'
     });
-    var fCourse = UI.field({ label: 'Qaysi kurs', id: 'lead-course', type: 'select', options: [{ value: '', label: 'Tanlanmagan' }] });
-    var fNote = UI.field({ label: 'Izoh (ixtiyoriy)', id: 'lead-note', type: 'textarea', placeholder: 'Qaysi vaqt qulay?' });
+    var fCourse = UI.field({
+      label: 'Qaysi kurs', id: 'lead-course', type: 'select',
+      options: [{ value: '', label: 'Tanlanmagan' }]
+    });
+    var fTime = UI.field({
+      label: 'Dars uchun qulay vaqt', id: 'lead-time', type: 'select',
+      options: [{ value: '', label: 'Farqi yo’q' }]
+    });
+    /* Hozirgi daraja — uchta tanlov (chip) */
+    var LVL = [
+      { id: 'noldan', label: 'Noldan (alifbo)' },
+      { id: 'oqiy', label: 'O’qiy olaman' },
+      { id: 'gram', label: 'Grammatikani bilaman' }
+    ];
+    var lvlPick = '';
+    var lvlBox = h('div', { class: 'chip-row' }, LVL.map(function (o) {
+      var b = h('button', { class: 'chip', type: 'button' }, o.label);
+      b.addEventListener('click', function () {
+        lvlPick = (lvlPick === o.id) ? '' : o.id;
+        Array.prototype.forEach.call(lvlBox.children, function (x) { x.classList.remove('on'); });
+        if (lvlPick) b.classList.add('on');
+      });
+      return b;
+    }));
+    var lvlWrap = h('div', { class: 'field full' }, [
+      h('label', {}, 'Hozirgi arab tili darajangiz'), lvlBox
+    ]);
+
     var err = h('div', { class: 'err-msg', hidden: true });
     var okBox = h('div', { class: 'lead-ok', hidden: true });
-    var btn = h('button', { class: 'btn primary block lg', type: 'submit' }, 'Yuborish');
+    var btn = h('button', { class: 'btn gold block lg', type: 'submit' },
+      ['Bepul sinov darsiga yozilish', UI.icon('right')]);
 
     var form = h('form', {
       class: 'lead-form', onsubmit: function (e) { e.preventDefault(); sendLead(); }
-    }, [fName.wrap, fPhone.wrap, fCourse.wrap, fNote.wrap, err, btn,
-    h('p', { class: 'small muted', style: 'margin:0;text-align:center' },
-      'Arizangizni olib, bir ish kuni ichida qo’ng’iroq qilamiz.')]);
+    }, [
+      h('b', { class: 'form-title' }, 'Ro’yxatdan o’tish formasi'),
+      h('p', { class: 'form-note' }, 'Ma’lumotlaringiz maxfiy, administratorimiz siz bilan bog’lanadi.'),
+      fName.wrap, fPhone.wrap, lvlWrap, fCourse.wrap, fTime.wrap, err, btn,
+      h('p', { class: 'form-fine' },
+        'Tugmani bosish orqali siz shaxsiy ma’lumotlaringiz qayta ishlanishiga rozilik bildirasiz.')
+    ]);
 
-    var contact = h('div', { class: 'site-contact' }, [
-      h('h3', {}, 'Bog’lanish'),
-      h('div', { class: 'contact-row', id: 'site-phone-row', hidden: true }, [
-        UI.icon('phone'), h('a', { id: 'site-phone-link', href: '#' }, '')
-      ]),
-      h('div', { class: 'contact-row', id: 'site-addr-row', hidden: true }, [
-        UI.icon('home'), h('span', { id: 'site-addr' }, '')
-      ]),
-      h('div', { class: 'contact-row', id: 'site-time-row', hidden: true }, [
-        UI.icon('calendar'), h('span', { id: 'site-time' }, '')
-      ]),
-      h('div', { class: 'contact-row', id: 'site-tg-row', hidden: true }, [
-        UI.icon('bot'), h('a', { id: 'site-tg', href: '#', target: '_blank', rel: 'noopener' }, '')
+    function benefit(icon, t) {
+      return h('div', { class: 'ben-row' }, [h('span', { class: 'ben-ico' }, UI.icon(icon)), h('span', {}, t)]);
+    }
+    var apply = h('section', { class: 'site-sec reveal', id: 'ariza' }, [
+      h('div', { class: 'apply-wrap' }, [
+        h('div', { class: 'apply-left' }, [
+          h('span', { class: 'hero-eyebrow' }, 'Bepul sinov darsi'),
+          h('h2', {}, 'Darajangizni aniqlang va bepul sinov darsida qatnashing'),
+          h('p', {}, 'Qisqa suhbat va daraja testidan keyin sizga mos guruhni aytamiz.'),
+          h('div', { class: 'ben-list' }, [
+            benefit('clock', 'Qisqa suhbat — darajani aniqlash uchun'),
+            benefit('check', 'Bepul sinov darsi — guruhni ichidan ko’rasiz'),
+            benefit('layers', 'Mos guruh va jadval taklifi')
+          ]),
+          h('div', { class: 'site-contact', id: 'contact-box' }, [
+            h('div', { class: 'contact-row', id: 'site-phone-row', hidden: true }, [
+              UI.icon('phone'), h('a', { id: 'site-phone-link', href: '#' }, '')
+            ]),
+            h('div', { class: 'contact-row', id: 'site-addr-row', hidden: true }, [
+              UI.icon('home'), h('span', { id: 'site-addr' }, '')
+            ]),
+            h('div', { class: 'contact-row', id: 'site-time-row', hidden: true }, [
+              UI.icon('calendar'), h('span', { id: 'site-time' }, '')
+            ]),
+            h('div', { class: 'contact-row', id: 'site-tg-row', hidden: true }, [
+              UI.icon('bot'), h('a', { id: 'site-tg', href: '#', target: '_blank', rel: 'noopener' }, '')
+            ])
+          ])
+        ]),
+        h('div', { class: 'apply-card' }, [form, okBox])
       ])
     ]);
 
-    var apply = h('section', { class: 'site-sec reveal', id: 'ariza' }, [
-      h('div', { class: 'sec-eyebrow' }, 'Ariza'),
-      h('h2', {}, 'Darsga yozilish'),
-      h('p', { class: 'muted' }, 'Formani to’ldiring — administratorimiz bog’lanadi.'),
-      h('div', { class: 'apply-grid' }, [h('div', { class: 'apply-card' }, [form, okBox]), contact])
+    /* ---------- Savol-javob ---------- */
+    var faqBox = h('div', { class: 'faq-list' });
+    var faq = h('section', { class: 'site-sec reveal', id: 'savollar', hidden: true }, [
+      h('div', { class: 'sec-mid' }, [
+        h('div', { class: 'sec-eyebrow center' }, 'Savol-javob'),
+        h('h2', {}, 'Tez-tez beriladigan savollar')
+      ]),
+      faqBox
     ]);
 
+    /* ---------- Pastki qism ---------- */
     var foot = h('footer', { class: 'site-foot' }, [
-      h('div', { class: 'foot-brand' }, [
-        h('img', { class: 'logo-sm', src: LOGO, alt: '' }),
-        h('span', {}, '© ' + new Date().getFullYear() + ' ' + name)
+      h('div', { class: 'foot-cols' }, [
+        h('div', { class: 'foot-col' }, [
+          h('div', { class: 'foot-brand' }, [
+            h('img', { class: 'logo-sm', src: LOGO, alt: '', width: 34, height: 34 }),
+            h('b', { id: 'foot-name' }, name)
+          ]),
+          h('p', { class: 'foot-about', id: 'foot-about' }, '')
+        ]),
+        h('div', { class: 'foot-col' }, [
+          h('b', {}, 'Bo’limlar'),
+          h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('bosqichlar'); } }, 'Bosqichlar va narx'),
+          h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('ustozlar'); } }, 'Ustozlar'),
+          h('button', { class: 'foot-link', type: 'button', onclick: function () { scrollTo('vaqt'); } }, 'Dars vaqtlari'),
+          h('button', {
+            class: 'foot-link', type: 'button',
+            onclick: function () { location.hash = 'test'; renderTest(); }
+          }, 'Daraja testi')
+        ]),
+        h('div', { class: 'foot-col' }, [
+          h('b', {}, 'Bog’lanish'),
+          h('a', { class: 'foot-link', id: 'foot-phone', href: '#ariza' }, ''),
+          h('span', { class: 'foot-line', id: 'foot-addr' }, ''),
+          h('span', { class: 'foot-line', id: 'foot-hours' }, '')
+        ]),
+        h('div', { class: 'foot-col' }, [
+          h('b', {}, 'Ijtimoiy tarmoqlar'),
+          h('div', { class: 'foot-soc', id: 'foot-soc' })
+        ])
       ]),
-      h('div', { class: 'rowflex' }, [
-        h('button', {
-          class: 'btn sm ghost', type: 'button',
-          onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
-        }, 'O’quvchi kabineti'),
-        h('button', {
-          class: 'btn sm ghost', type: 'button',
-          onclick: function () { location.hash = 'kirish'; renderLogin(null); }
-        }, 'Xodimlar kirishi')
+      h('div', { class: 'foot-bar' }, [
+        h('span', {}, '© ' + new Date().getFullYear() + ' ' + name),
+        h('div', { class: 'rowflex' }, [
+          h('button', {
+            class: 'btn sm ghost', type: 'button',
+            onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
+          }, 'O’quvchi kabineti'),
+          h('button', {
+            class: 'btn sm ghost', type: 'button',
+            onclick: function () { location.hash = 'kirish'; renderLogin(null); }
+          }, 'Xodimlar kirishi')
+        ])
       ])
     ]);
 
     wrap.appendChild(siteBackdrop());
     wrap.appendChild(top);
-    wrap.appendChild(h('div', { class: 'site-wrap' }, [hero, feats, teachers, timetable, courses, apply, foot]));
+    wrap.appendChild(h('div', { class: 'site-wrap' },
+      [hero, feats, tiers, teachers, timetable, apply, faq, foot]));
     A.I18N.apply(wrap);
     fillPublic();
     siteMotion(top);
@@ -1396,73 +1578,202 @@
       var el = document.getElementById(id);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+    function show(id) { var el = document.getElementById(id); if (el) el.hidden = false; }
+    function setText(id, t) { var el = document.getElementById(id); if (el) el.textContent = t; }
 
     async function fillPublic() {
       var d = await publicInfo();
+
       if (d.centerName) {
-        ['site-name', 'site-name-hero'].forEach(function (k) {
-          var el = document.getElementById(k);
-          if (el) el.textContent = d.centerName;
-        });
+        ['site-name', 'site-name-hero', 'foot-name'].forEach(function (k) { setText(k, d.centerName); });
       }
-      if (d.about) {
-        var ab = document.getElementById('site-about');
-        if (ab) ab.textContent = d.about;
-      }
+      if (d.about) { setText('site-about', d.about); setText('foot-about', d.about); }
+
+      /* Telefon — uch joyda */
       if (d.phone) {
-        show('site-phone-row');
         var tel = 'tel:' + String(d.phone).replace(/[^+0-9]/g, '');
+        show('site-phone-row');
         var pl = document.getElementById('site-phone-link');
-        pl.textContent = d.phone; pl.href = tel;
-        var call = document.getElementById('site-call');
-        if (call) {
-          call.href = tel;
-          var ct = document.getElementById('site-call-text');
-          if (ct) ct.textContent = d.phone;
-        }
+        if (pl) { pl.textContent = d.phone; pl.href = tel; }
+        [['site-call', 'site-call-text'], ['hero-tel', 'hero-tel-text']].forEach(function (pair) {
+          var a = document.getElementById(pair[0]);
+          if (a) { a.href = tel; setText(pair[1], d.phone); }
+        });
+        var fp = document.getElementById('foot-phone');
+        if (fp) { fp.textContent = d.phone; fp.href = tel; }
       }
-      if (d.address) { show('site-addr-row'); document.getElementById('site-addr').textContent = d.address; }
+      if (d.address) { show('site-addr-row'); setText('site-addr', d.address); setText('foot-addr', d.address); }
       if (d.workStart && d.workEnd) {
         show('site-time-row');
-        document.getElementById('site-time').textContent =
-          'Dushanba–Shanba · ' + d.workStart + '–' + d.workEnd;
+        var hrs = 'Dushanba–Shanba · ' + d.workStart + '–' + d.workEnd;
+        setText('site-time', hrs);
+        setText('foot-hours', hrs);
+        var hh = document.getElementById('hero-hours');
+        if (hh) { hh.hidden = false; hh.textContent = 'Har kuni ' + d.workStart + '–' + d.workEnd; }
       }
       if (d.telegram) {
         show('site-tg-row');
         var tg = document.getElementById('site-tg');
         var u = String(d.telegram).replace(/^@/, '');
-        tg.textContent = '@' + u; tg.href = 'https://t.me/' + u;
+        if (tg) { tg.textContent = '@' + u; tg.href = 'https://t.me/' + u; }
       }
+      paintSocial(d);
+      paintBadge(d.heroBadge);
+      paintStats(d.stats);
+      startTyping(d.taglines);
+      paintTiers(d.courses || []);
       paintTeachers(d.teachers || []);
       paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
-      if (A._siteSeen) { A._siteSeen(teachBox); A._siteSeen(slotBox); }
-      UI.clear(courseBox);
-      var list = d.courses || [];
-      if (!list.length) {
-        courseBox.appendChild(h('p', { class: 'muted' },
-          'Kurslar ro’yxati tez orada. Ariza qoldiring — o’zimiz bog’lanamiz.'));
-      } else {
-        list.forEach(function (c) {
-          courseBox.appendChild(h('div', { class: 'course' }, [
-            h('b', {}, c.name),
-            c.note ? h('p', {}, c.note) : null,
-            c.fee ? h('div', { class: 'course-fee' }, [h('b', {}, A.som(c.fee)), h('span', {}, 'so’m / oy')]) : null,
-            h('button', {
-              class: 'btn sm', type: 'button',
-              onclick: function () { fCourse.input.value = c.id; scrollTo('ariza'); fName.input.focus(); }
-            }, 'Yozilish')
-          ]));
-        });
-        UI.clear(fCourse.input);
-        [{ value: '', label: 'Tanlanmagan' }].concat(list.map(function (c) {
-          return { value: c.id, label: c.name };
-        })).forEach(function (o) {
-          fCourse.input.appendChild(h('option', { value: o.value }, o.label));
-        });
-      }
-      if (A._siteSeen) A._siteSeen(courseBox);
+      paintFaq(d.faq || []);
+      paintCoursePick(d.courses || []);
+      paintTimePick(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
+      if (A._siteSeen) { A._siteSeen(teachBox); A._siteSeen(slotBox); A._siteSeen(tierBox); }
       A.I18N.apply(wrap);
     }
+
+    function paintBadge(txt) {
+      var el = document.getElementById('hero-pill');
+      if (!el) return;
+      if (!txt) { el.hidden = true; return; }
+      el.hidden = false;
+      UI.clear(el);
+      el.appendChild(UI.icon('badge'));
+      el.appendChild(h('span', {}, txt));
+    }
+
+    function paintStats(list) {
+      UI.clear(statsBox);
+      var rows = (list && list.length) ? list : [
+        { v: '6', t: 'daraja: A1–C2' },
+        { v: '8–12', t: 'kishilik guruh' },
+        { v: '6', t: 'kun ish rejimi' }
+      ];
+      rows.forEach(function (r) {
+        statsBox.appendChild(h('div', { class: 'hero-stat' }, [
+          h('b', {}, r.v), h('span', {}, r.t)
+        ]));
+      });
+    }
+
+    function paintSocial(d) {
+      var box = document.getElementById('foot-soc');
+      if (!box) return;
+      UI.clear(box);
+      var links = [];
+      if (d.telegram) links.push(['bot', 'Telegram', 'https://t.me/' + String(d.telegram).replace(/^@/, '')]);
+      if (d.instagram) links.push(['link', 'Instagram', instaUrl(d.instagram)]);
+      if (d.youtube) links.push(['link', 'YouTube', ytUrl(d.youtube)]);
+      if (!links.length) { box.appendChild(h('span', { class: 'foot-line' }, 'Tez orada')); return; }
+      links.forEach(function (l) {
+        box.appendChild(h('a', {
+          class: 'soc-btn', href: l[2], target: '_blank', rel: 'noopener'
+        }, [UI.icon(l[0]), h('span', {}, l[1])]));
+      });
+    }
+    function instaUrl(v) {
+      var t = String(v || '').trim();
+      if (/^https?:/i.test(t)) return t;
+      return 'https://instagram.com/' + t.replace(/^@/, '');
+    }
+    function ytUrl(v) {
+      var t = String(v || '').trim();
+      if (/^https?:/i.test(t)) return t;
+      return 'https://youtube.com/' + (t.charAt(0) === '@' ? t : '@' + t);
+    }
+
+    /* --- Bosqichlar: markazning kurslaridan yasaladi --- */
+    function paintTiers(list) {
+      UI.clear(tierBox);
+      if (!list.length) {
+        tierBox.appendChild(h('p', { class: 'muted' },
+          'Kurslar ro’yxati tez orada. Ariza qoldiring — o’zimiz bog’lanamiz.'));
+        return;
+      }
+      var main = list.slice(0, 3);
+      var mid = main.length === 3 ? 1 : -1;
+      main.forEach(function (c, i) {
+        var lines = String(c.note || '').split(/[;\n]/).map(function (x) { return x.trim(); })
+          .filter(Boolean).slice(0, 5);
+        tierBox.appendChild(h('div', { class: 'tier' + (i === mid ? ' tier-hot' : '') }, [
+          i === mid ? h('span', { class: 'tier-ribbon' }, 'Eng ko’p tanlangan') : null,
+          h('b', { class: 'tier-name' }, c.name),
+          lines.length
+            ? h('ul', { class: 'tier-list' }, lines.map(function (x) {
+              return h('li', {}, [UI.icon('check'), h('span', {}, x)]);
+            }))
+            : null,
+          c.fee ? h('div', { class: 'tier-fee' }, [
+            h('b', {}, A.som(c.fee)), h('span', {}, 'so’m / oy')
+          ]) : null,
+          h('button', {
+            class: 'btn block' + (i === mid ? ' gold' : ''), type: 'button',
+            onclick: function () {
+              if (fCourse.input) fCourse.input.value = c.id;
+              scrollTo('ariza');
+              if (fName.input) fName.input.focus();
+            }
+          }, 'Ushbu guruhga yozilish')
+        ].filter(Boolean)));
+      });
+      /* Qolgan kurslar — pastda ikki qatorli taklif sifatida */
+      list.slice(3, 7).forEach(function (c) {
+        tierBox.appendChild(h('div', { class: 'tier-extra' }, [
+          h('div', {}, [
+            h('b', {}, c.name),
+            c.note ? h('span', {}, String(c.note).slice(0, 90)) : null
+          ]),
+          c.fee ? h('div', { class: 'extra-fee' }, [
+            h('b', {}, A.som(c.fee)), h('span', {}, 'so’m / oy')
+          ]) : null,
+          h('button', {
+            class: 'btn sm', type: 'button',
+            onclick: function () {
+              if (fCourse.input) fCourse.input.value = c.id;
+              scrollTo('ariza');
+            }
+          }, 'Batafsil')
+        ].filter(Boolean)));
+      });
+    }
+
+    function paintCoursePick(list) {
+      if (!fCourse.input) return;
+      UI.clear(fCourse.input);
+      [{ value: '', label: 'Tanlanmagan' }].concat(list.map(function (c) {
+        return { value: c.id, label: c.name };
+      })).forEach(function (o) {
+        fCourse.input.appendChild(h('option', { value: o.value }, o.label));
+      });
+    }
+    function paintTimePick(start, end, minutes) {
+      if (!fTime.input) return;
+      UI.clear(fTime.input);
+      fTime.input.appendChild(h('option', { value: '' }, 'Farqi yo’q'));
+      A.lessonSlots(start, end, minutes).forEach(function (sl) {
+        var t = sl.part + ' (' + sl.from + '–' + sl.to + ')';
+        fTime.input.appendChild(h('option', { value: t }, t));
+      });
+    }
+
+    function paintFaq(list) {
+      if (!list.length) { faq.hidden = true; return; }
+      faq.hidden = false;
+      UI.clear(faqBox);
+      list.forEach(function (row, i) {
+        var body = h('div', { class: 'faq-a' }, h('p', {}, row.a));
+        var head = h('button', { class: 'faq-q', type: 'button', 'aria-expanded': 'false' }, [
+          h('span', {}, row.q), h('span', { class: 'faq-ico', 'aria-hidden': 'true' })
+        ]);
+        var item = h('div', { class: 'faq-item' }, [head, body]);
+        head.addEventListener('click', function () {
+          var open = item.classList.toggle('open');
+          head.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        if (i === 0) { item.classList.add('open'); head.setAttribute('aria-expanded', 'true'); }
+        faqBox.appendChild(item);
+      });
+    }
+
     function paintTeachers(list) {
       UI.clear(teachBox);
       if (!list.length) {
@@ -1470,16 +1781,25 @@
         return;
       }
       list.forEach(function (t) {
+        var facts = [];
+        if (t.years) facts.push(t.years + ' yil tajriba');
+        if (t.country) facts.push(t.country + 'da tahsil');
+        if (t.levels) facts.push(t.levels);
         teachBox.appendChild(h('button', {
           class: 'tch-card', type: 'button',
           onclick: function () { openTeacher(t, list); }
         }, [
-          A.teacherAvatar(t, 96),
+          h('span', { class: 'tch-photo' }, [
+            A.teacherAvatar(t, 120),
+            t.tag ? h('span', { class: 'tch-ribbon' }, t.tag) : null
+          ].filter(Boolean)),
           h('b', {}, t.name),
-          h('span', { class: 'tch-tag' }, t.tag || 'Ustoz'),
           h('span', { class: 'tch-aud' }, A.audienceLabel(t.audience)),
-          t.levels ? h('span', { class: 'small muted' }, t.levels) : null
-        ]));
+          facts.length ? h('ul', { class: 'tch-facts-mini' }, facts.map(function (x) {
+            return h('li', {}, x);
+          })) : null,
+          t.bio ? h('p', { class: 'tch-bio' }, String(t.bio).slice(0, 150)) : null
+        ].filter(Boolean)));
       });
     }
 
@@ -1503,8 +1823,6 @@
       });
     }
 
-    function show(id) { var el = document.getElementById(id); if (el) el.hidden = false; }
-
     function sendLead() {
       err.hidden = true;
       var name2 = fName.input.value.trim();
@@ -1515,7 +1833,10 @@
         try {
           var r = await D.api('POST', 'api/lead', {
             name: name2, phone: phone,
-            courseId: fCourse.input.value, note: fNote.input.value.trim()
+            courseId: fCourse.input.value,
+            startLevel: lvlPick,
+            wantTime: fTime.input ? fTime.input.value : '',
+            note: ''
           });
           form.hidden = true;
           okBox.hidden = false;
@@ -1527,7 +1848,9 @@
             h('button', {
               class: 'btn sm', type: 'button', onclick: function () {
                 form.hidden = false; okBox.hidden = true;
-                fName.input.value = ''; fPhone.input.value = ''; fNote.input.value = '';
+                fName.input.value = ''; fPhone.input.value = '';
+                lvlPick = '';
+                Array.prototype.forEach.call(lvlBox.children, function (x) { x.classList.remove('on'); });
               }
             }, 'Yana ariza qoldirish')
           ]));

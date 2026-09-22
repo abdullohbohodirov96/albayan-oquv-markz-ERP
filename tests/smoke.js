@@ -97,7 +97,7 @@ require('fs').mkdirSync(shots, { recursive: true });
     await page.click('#tabbar button:has-text("Menyu")');
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(shots, 'm02-menu.png') });
-    await page.click('.modal .list-item:has-text("O’quvchilar")');
+    await page.click('.modal .menu-item:has-text("O’quvchilar")');
     await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(shots, 'm03-students.png'), fullPage: true });
     const ov2 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -105,7 +105,7 @@ require('fs').mkdirSync(shots, { recursive: true });
 
     await page.click('#tabbar button:has-text("Menyu")');
     await page.waitForTimeout(300);
-    await page.click('.modal .list-item:has-text("Moliya")');
+    await page.click('.modal .menu-item:has-text("Moliya")');
     await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(shots, 'm04-finance.png'), fullPage: true });
 
@@ -121,7 +121,7 @@ require('fs').mkdirSync(shots, { recursive: true });
 
     await page.click('#tabbar button:has-text("Menyu")');
     await page.waitForTimeout(300);
-    await page.click('.modal .list-item:has-text("Davomat")');
+    await page.click('.modal .menu-item:has-text("Davomat")');
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(shots, 'm06-attendance.png'), fullPage: true });
     const attBtn = await page.locator('.att-opts button').first().boundingBox();
@@ -131,7 +131,7 @@ require('fs').mkdirSync(shots, { recursive: true });
 
     await page.click('#tabbar button:has-text("Menyu")');
     await page.waitForTimeout(300);
-    await page.click('.modal .list-item:has-text("Jadval")');
+    await page.click('.modal .menu-item:has-text("Jadval")');
     await page.waitForTimeout(800);
     await page.screenshot({ path: path.join(shots, 'm07-schedule.png'), fullPage: true });
     const ov4 = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

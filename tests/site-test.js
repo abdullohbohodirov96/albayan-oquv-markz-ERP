@@ -81,8 +81,13 @@ async function api(p, opts = {}) {
   ok('Markaz nomi ko’rinadi', /AlBayan/.test(txt), txt.slice(0, 120));
   ok('Markaz haqida matn ko’rinadi', /Misr uslubida/.test(txt), txt.slice(0, 300));
   ok('Logotip bor', await page.evaluate(() => !!document.querySelector('.site-brand img') && !!document.querySelector('.hero-art img')));
-  ok('Kurs kartasi bor', /boshlang/.test(txt) && (await page.evaluate(() => document.querySelectorAll('.course').length)) > 0);
-  ok('Narx ko’rsatilgan', /450 000/.test(txt), txt.slice(0, 600));
+  /* Kurslar serverdan keyin keladi — kartalar chiqishini kutamiz.
+     Yangi dizaynda ular "bosqich" kartalari (.tier).                   */
+  await page.waitForSelector('.tier', { timeout: 15000 });
+  const txt2 = await page.evaluate(() => document.body.innerText);
+  ok('Bosqich kartasi bor', (await page.evaluate(() => document.querySelectorAll('.tier').length)) > 0);
+  ok('Kurs nomi ko’rinadi', /boshlang/i.test(txt2), txt2.slice(0, 400));
+  ok('Narx ko’rsatilgan', /450 000/.test(txt2), txt2.slice(0, 900));
   ok('Telefon va manzil bor', /200 70 07/.test(txt) && /Chilonzor/.test(txt));
   ok('Parol maydoni yo’q', !(await page.evaluate(() => !!document.getElementById('login-pass'))));
   await page.screenshot({ path: path.join(SHOTS, 'sayt-1280.png'), fullPage: true });
@@ -105,8 +110,17 @@ async function api(p, opts = {}) {
   ok('Forma bor', await page.evaluate(() => !!document.querySelector('.lead-form')));
   await page.fill('#lead-name', 'Sayt Mijoz ' + R);
   await page.fill('#lead-phone', PHONE);
-  await page.fill('#lead-note', 'Kechki guruh qiziqtiradi');
+  /* Forma namunaga moslandi: erkin "izoh" o'rniga daraja (chip) va
+     qulay vaqt (ro'yxat) tanlanadi. */
   await page.selectOption('#lead-course', { index: 1 }).catch(() => { });
+  await page.selectOption('#lead-time', { index: 1 }).catch(() => { });
+  const chipOk = await page.evaluate(() => {
+    const c = document.querySelectorAll('.chip-row .chip');
+    if (c.length < 3) return false;
+    c[1].click();
+    return c[1].classList.contains('on');
+  });
+  ok('Daraja tanlovi ishlaydi', chipOk);
   await page.click('.lead-form button[type=submit]');
   await page.waitForTimeout(1500);
   const okTxt = await page.evaluate(() => {
@@ -123,7 +137,11 @@ async function api(p, opts = {}) {
   ok('Telefon saqlandi', (mine || {}).phone && (mine || {}).phone.replace(/\D/g, '').slice(-9) === PHONE.replace(/\D/g, '').slice(-9),
     (mine || {}).phone);
   ok('Kurs biriktirildi', !!(mine || {}).courseId, JSON.stringify(mine));
-  ok('Izoh saqlandi', /Kechki guruh/.test((mine || {}).note || ''), (mine || {}).note);
+  eq('Tanlangan daraja saqlandi', (mine || {}).startLevel, 'O’qiy olaman');
+  ok('Qulay vaqt saqlandi', !!(mine || {}).wantTime, JSON.stringify((mine || {}).wantTime));
+  ok('Izohda daraja va vaqt ko’rinadi',
+    /Daraja:/.test((mine || {}).note || '') && /Qulay vaqt:/.test((mine || {}).note || ''),
+    (mine || {}).note);
   ok('Birinchi bosqichda', !!(mine || {}).stage, JSON.stringify((mine || {}).stage));
 
   section('   Direktorga xabar bordi');
