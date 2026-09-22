@@ -1052,9 +1052,64 @@
     return false;
   }
 
+  /* ================= BOG'LANISH TUGMALARI =================
+     Raqamni qo'lda terish shart emas: bosilsa telefon o'zi teradi.
+     Kompyuterda ham ishlaydi (FaceTime/Telefon ilovasi ochiladi), shuning
+     uchun ish stolida ham "nusxa olish" tugmasi yonida turadi.          */
+
+  /** "tel:" manzili. Raqam bo'sh yoki noto'g'ri bo'lsa — bo'sh qaytadi. */
+  function telHref(p) {
+    var n = (global.A && global.A.normPhone) ? global.A.normPhone(p) : String(p || '');
+    var d = String(n || '').replace(/[^+0-9]/g, '');
+    return d.replace(/\D/g, '').length >= 7 ? 'tel:' + d : '';
+  }
+  function smsHref(p) {
+    var t = telHref(p);
+    return t ? 'sms:' + t.slice(4) : '';
+  }
+
+  /** Jadvaldagi raqam: bosilsa qo'ng'iroq qiladi.
+      Raqam yo'q bo'lsa — oddiy chiziqcha.                               */
+  function phoneLink(p) {
+    var href = telHref(p);
+    if (!href) return h('span', { class: 'muted' }, '—');
+    return h('a', {
+      class: 'tel-link mono', href: href,
+      title: 'Qo’ng’iroq qilish',
+      onclick: function (e) { e.stopPropagation(); }
+    }, [icon('phone'), h('span', {}, String(p))]);
+  }
+
+  /** Karta va oynalar uchun: Qo'ng'iroq · SMS · Nusxa.
+      `small` — jadval ichidagi kichik ko'rinish.                        */
+  function contactBtns(p, opts) {
+    opts = opts || {};
+    var href = telHref(p);
+    if (!href) return null;
+    var sz = opts.small ? ' sm' : '';
+    var stop = function (e) { e.stopPropagation(); };
+    var kids = [
+      h('a', {
+        class: 'btn' + sz + ' call-btn', href: href, onclick: stop,
+        title: 'Qo’ng’iroq qilish'
+      }, [icon('phone'), opts.small ? null : h('span', {}, 'Qo’ng’iroq')].filter(Boolean))
+    ];
+    if (!opts.small) {
+      kids.push(h('a', {
+        class: 'btn', href: smsHref(p), onclick: stop, title: 'SMS yozish'
+      }, [icon('chat'), h('span', {}, 'SMS')]));
+      kids.push(h('button', {
+        class: 'btn', type: 'button',
+        onclick: function (e) { stop(e); copy(String(p)); }
+      }, [icon('link'), h('span', {}, 'Nusxa olish')]));
+    }
+    return h('div', { class: 'contact-btns rowflex' }, kids);
+  }
+
   global.A.UI = {
     h: h, clear: clear, icon: icon, ICONS: ICONS, toast: toast, modal: modal, confirm: confirm,
-    copy: copy,
+    copy: copy, telHref: telHref, smsHref: smsHref,
+    phoneLink: phoneLink, contactBtns: contactBtns,
     askReason: askReason, field: field, form: form, busy: busy, table: table, empty: empty,
     pill: pill, tile: tile, pageHead: pageHead, card: card, tabs: tabs, avatar: avatar,
     suggest: suggest, exportCsv: exportCsv, exportRows: exportRows, safeCell: safeCell, saveText: saveText,

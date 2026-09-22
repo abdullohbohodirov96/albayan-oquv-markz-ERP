@@ -13,6 +13,12 @@
 
   /* uz -> [ru, en, ar] */
   var T = {
+    /* --- Bog'lanish tugmalari --- */
+    'Qo’ng’iroq': ['Позвонить', 'Call', 'اتصال'],
+    'SMS': ['СМС', 'SMS', 'رسالة'],
+    'Nusxa olish': ['Копировать', 'Copy', 'نسخ'],
+    'Ota-onaga': ['Родителю', 'To the parent', 'إلى وليّ الأمر'],
+    'SMS yozish': ['Написать СМС', 'Send an SMS', 'إرسال رسالة'],
     /* --- Sayt: darajalar, narx, nega biz (2026-09) --- */
     'Darajalar': ['Уровни', 'Levels', 'المستويات'],
     'Narx': ['Цена', 'Price', 'السعر'],

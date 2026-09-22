@@ -471,7 +471,8 @@
 
     view.appendChild(UI.card(null, UI.table([
       { label: 'Ism', render: function (l) { return h('b', {}, l.name); } },
-      { label: 'Telefon', render: function (l) { return h('span', { class: 'mono' }, l.phone); } },
+      /* Raqam bosilsa telefon o'zi teradi — qo'lda ko'chirish shart emas */
+      { label: 'Telefon', render: function (l) { return UI.phoneLink(l.phone); } },
       { label: 'Kurs', render: function (l) { return Q.courseName(l.courseId); } },
       { label: 'Manba', key: 'source' },
       { label: 'Mas’ul', render: function (l) { return Q.staffName(l.ownerStaffId); } },
@@ -485,13 +486,14 @@
       { label: 'Holat', render: function (l) { return stagePill(l.stage, funnel); } },
       {
         label: '', right: true, render: function (l) {
-          if (!App.can('lead.edit')) return '';
-          return h('div', { class: 'rowflex', style: 'justify-content:flex-end;gap:6px' }, [
+          if (!App.can('lead.edit')) return UI.contactBtns(l.phone, { small: true });
+          return h('div', { class: 'rowflex', style: 'justify-content:flex-end;gap:6px;flex-wrap:nowrap' }, [
+            UI.contactBtns(l.phone, { small: true }),
             A.stageOf(funnel, l.stage).type !== 'won' ? h('button', {
               class: 'btn sm primary', onclick: function (e) { e.stopPropagation(); convertLead(l, App); }
             }, 'O’quvchiga') : null,
             h('button', { class: 'btn sm', onclick: function (e) { e.stopPropagation(); leadForm(l, App); } }, 'Ochish')
-          ]);
+          ].filter(Boolean));
         }
       }
     ], leads, { onRow: function (l) { if (App.can('lead.edit')) leadForm(l, App); }, page: 100 }), null, null, true));
@@ -563,8 +565,20 @@
       { name: 'note', label: 'Izoh', type: 'textarea', value: lead.note, full: true }
     ]);
 
+    /* Oyna ochilishi bilan qo'ng'iroq qilish mumkin bo'lsin —
+       raqamni qidirib, ko'chirib o'tirish shart emas.                  */
+    var callBox = h('div', { class: 'quick-contact' });
+    function paintContact() {
+      UI.clear(callBox);
+      var v = f.get('phone').input.value;
+      var btns = UI.contactBtns(v);
+      if (btns) callBox.appendChild(btns);
+      callBox.hidden = !btns;
+    }
+
     var dupBox = h('div');
     function checkDup() {
+      paintContact();
       UI.clear(dupBox);
       var d = A.phoneDigits(f.get('phone').input.value);
       if (d.length < 7) return;
@@ -582,11 +596,12 @@
       }
     }
     f.get('phone').input.addEventListener('blur', checkDup);
+    f.get('phone').input.addEventListener('input', paintContact);
     checkDup();
 
     var m = UI.modal({
       title: isNew ? 'Yangi murojaat' : 'Murojaat: ' + lead.name,
-      body: [f.node, dupBox],
+      body: [callBox, f.node, dupBox],
       actions: [
         !isNew && App.can('lead.edit') ? {
           label: 'O’chirish', cls: 'danger', onClick: async function (c) {
@@ -741,7 +756,8 @@
             h('div', { class: 'small muted' }, [
               s.code ? h('span', {}, 'Kod') : null,
               s.code ? h('span', { class: 'mono' }, ' ' + s.code + ' · ') : null,
-              h('span', { class: 'mono' }, s.phone || '—')
+              /* Raqam bosilsa telefon o'zi teradi */
+              s.phone ? UI.phoneLink(s.phone) : h('span', { class: 'mono' }, '—')
             ])])
           ]);
         }
@@ -753,7 +769,15 @@
           return h('div', { class: 'rowflex', style: 'gap:4px' }, gs.map(function (m) { return UI.pill(Q.groupName(m.groupId), 'mute'); }));
         }
       },
-      { label: 'Ota-ona', render: function (s) { return h('div', {}, [h('div', {}, s.parentName || '—'), h('div', { class: 'small muted mono' }, s.parentPhone || '')]); } },
+      {
+        label: 'Ota-ona', render: function (s) {
+          return h('div', {}, [
+            h('div', {}, s.parentName || '—'),
+            s.parentPhone ? h('div', { class: 'small' }, UI.phoneLink(s.parentPhone))
+              : h('div', { class: 'small muted mono' }, '')
+          ]);
+        }
+      },
       { label: 'Holat', render: function (s) { return statusPill(s.status); } }
     ];
     if (showMoney) {
@@ -764,6 +788,13 @@
         }
       });
     }
+    /* Qo'ng'iroq tugmasi: avval ota-onaga, raqami bo'lmasa o'quvchiga */
+    cols.push({
+      label: '', right: true, render: function (s) {
+        return UI.contactBtns(s.parentPhone || s.phone, { small: true }) ||
+          h('span', { class: 'muted' }, '');
+      }
+    });
     view.appendChild(UI.card(null, UI.table(cols, list, {
       onRow: function (s) { App.go('student', { id: s.id }); },
       page: 100
@@ -1007,9 +1038,9 @@
       var dl = h('dl', { class: 'kv' });
       [['Familiya, ism', s.lastName + ' ' + s.firstName],
       ['Shaxsiy kod', s.code || '—'],
-      ['Telefon', s.phone || '—'],
+      ['Telefon', s.phone ? UI.phoneLink(s.phone) : '—'],
       ['Ota-ona / vasiy', s.parentName || '—'],
-      ['Ota-ona telefoni', s.parentPhone || '—'],
+      ['Ota-ona telefoni', s.parentPhone ? UI.phoneLink(s.parentPhone) : '—'],
       ['Tug’ilgan sana', s.birthDate ? A.dateLabel(s.birthDate) : '—'],
       ['Qo’shilgan', s.createdAt || '—'],
       ['Izoh', s.note || '—']].forEach(function (r) {
@@ -1047,7 +1078,15 @@
           }
         }, s.status === 'arxiv' ? 'Arxivdan qaytarish' : 'Arxivlash') : null
       ]);
-      view.appendChild(UI.card('Umumiy ma’lumot', [dl, actions]));
+      /* Bog'lanish tugmalari — kartaning eng tepasida, qidirmasdan bosiladi */
+      var quick = UI.contactBtns(s.parentPhone || s.phone);
+      var quickRow = quick
+        ? h('div', { class: 'quick-contact with-label' }, [
+          h('span', { class: 'qc-label' }, s.parentPhone ? 'Ota-onaga' : 'O’quvchiga'),
+          quick
+        ])
+        : null;
+      view.appendChild(UI.card('Umumiy ma’lumot', [quickRow, dl, actions].filter(Boolean)));
     }
 
     if (tab === 'guruhlar') {

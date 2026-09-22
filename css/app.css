@@ -1408,6 +1408,42 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   .site .btn,.chip,.faq-q,.faq-item,.soc-btn,.foot-link,.slot::before{transition:none}
 }
 
+/* ================= BOG'LANISH (qo'ng'iroq) =================
+   Raqam bosilsa telefon o'zi teradi. Jadvalda ham, kartada ham bir xil
+   ko'rinadi. Telefonda tugmalar barmoq uchun kattaroq.                 */
+.tel-link{display:inline-flex;align-items:center;gap:6px;
+  color:var(--ink);text-decoration:none;font-weight:600;
+  padding:3px 8px;margin:-3px -8px;border-radius:8px;
+  transition:background .14s,color .14s}
+.tel-link .ico{width:14px;height:14px;flex:none;color:var(--brand);opacity:.9}
+.tel-link:hover{background:var(--surface-2);color:var(--brand)}
+.tel-link:active{background:var(--brand);color:#fff}
+.tel-link:active .ico{color:#fff}
+.tel-link:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+
+.contact-btns{gap:8px;flex-wrap:wrap}
+.contact-btns .btn{text-decoration:none}
+.btn.call-btn{border-color:color-mix(in srgb,var(--ok) 45%,var(--line-strong));
+  color:var(--ok)}
+.btn.call-btn:hover{background:var(--ok-soft);border-color:var(--ok)}
+.btn.call-btn:active{background:var(--ok);border-color:var(--ok);color:#fff}
+.btn.call-btn .ico{color:currentColor}
+/* Jadval ichidagi kichik tugma — faqat ikonka */
+.btn.sm.call-btn{padding:6px 9px}
+
+.quick-contact{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:12px 14px;margin-bottom:14px;border-radius:12px;
+  background:var(--surface-2);border:1px solid var(--line)}
+.quick-contact[hidden]{display:none}
+.quick-contact .qc-label{font-size:12.5px;font-weight:700;color:var(--muted);
+  letter-spacing:.02em}
+
+@media (max-width:560px){
+  .btn.sm.call-btn{min-height:38px;min-width:42px}
+  .contact-btns .btn{flex:1 1 auto;justify-content:center}
+  .tel-link{padding:7px 8px;margin:-7px -8px}
+}
+
 /* ---------- O'qituvchi uchun davomat kartasi ---------- */
 .att-list{display:flex;flex-direction:column;gap:8px}
 .att-row{display:flex;align-items:center;gap:10px;width:100%;text-align:start;cursor:pointer;

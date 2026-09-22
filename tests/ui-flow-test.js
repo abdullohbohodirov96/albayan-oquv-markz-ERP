@@ -386,6 +386,61 @@ async function typeIn(page, sel, val) {
      avval server uni majburan 4 xonali raqamga almashtirardi. */
   ok('Guruh kodi ko’rsatilgan', /^[A-Z0-9]{3,12}$/.test(tgInfo.code || ''), tgInfo.code);
   ok('Nima qilish kerakligi yozilgan', /guruh nomiga/i.test(tgInfo.text || ''), (tgInfo.text || '').slice(0, 80));
+
+  /* ---- 5. Qo'ng'iroq tugmasi ----
+     Administrator raqamni qo'lda terib o'tirmasin: raqam ham, yonidagi
+     tugma ham bosilganda telefon o'zi teradi (tel: manzili).           */
+  section('5. Murojaatda qo’ng’iroq tugmasi');
+  const LEADP = '+9989' + String(Date.now()).slice(-8);
+  await dpage.evaluate(async (phone) => {
+    const A = window.A, D = A.Data;
+    await D.save('leads', {
+      id: 'led_aloqa_' + Date.now(), name: 'Aloqa Sinov', phone: phone,
+      stage: 'yangi', funnelId: (D.all('funnels')[0] || {}).id || 'fnl_asosiy',
+      createdAt: A.nowStamp()
+    });
+    A.App.go('leads');
+    await new Promise(r => setTimeout(r, 900));
+  }, LEADP);
+  await dpage.waitForSelector('.tel-link', { timeout: 15000 }).catch(() => { });
+  const call = await dpage.evaluate((phone) => {
+    const d = phone.replace(/\D/g, '');
+    const links = Array.from(document.querySelectorAll('a.tel-link'));
+    const mine = links.filter(a => (a.getAttribute('href') || '').replace(/\D/g, '') === d)[0];
+    const btns = Array.from(document.querySelectorAll('a.btn.call-btn'));
+    const myBtn = btns.filter(a => (a.getAttribute('href') || '').replace(/\D/g, '') === d)[0];
+    return {
+      links: links.length,
+      href: mine ? mine.getAttribute('href') : '',
+      btns: btns.length,
+      btnHref: myBtn ? myBtn.getAttribute('href') : '',
+      badHref: links.filter(a => (a.getAttribute('href') || '').indexOf('tel:') !== 0).length
+    };
+  }, LEADP);
+  ok('Raqam bosiladigan havola', call.href.indexOf('tel:') === 0, JSON.stringify(call));
+  ok('Havolada aynan o’sha raqam', call.href.replace(/\D/g, '') === LEADP.replace(/\D/g, ''),
+    call.href + ' vs ' + LEADP);
+  ok('Yonida qo’ng’iroq tugmasi bor', call.btnHref.indexOf('tel:') === 0, JSON.stringify(call));
+  ok('Hamma havola "tel:" bilan boshlanadi', call.badHref === 0, String(call.badHref));
+
+  /* Oynada ham: Qo'ng'iroq / SMS / Nusxa */
+  const inModal = await dpage.evaluate(async () => {
+    const btn = Array.from(document.querySelectorAll('.card button'))
+      .filter(b => /Ochish/.test(b.textContent))[0];
+    if (!btn) return { none: true };
+    btn.click();
+    await new Promise(r => setTimeout(r, 800));
+    const q = document.querySelector('.modal .quick-contact');
+    return {
+      bor: !!q && !q.hidden,
+      matn: q ? q.innerText.replace(/\s+/g, ' ').trim() : '',
+      tel: q ? (q.querySelector('a.call-btn') || {}).href || '' : ''
+    };
+  });
+  ok('Oynada bog’lanish tugmalari bor', !!inModal.bor, JSON.stringify(inModal));
+  ok('Oynada ham "tel:" manzili', String(inModal.tel).indexOf('tel:') === 0, String(inModal.tel));
+  await dpage.keyboard.press('Escape').catch(() => { });
+
   await dctx.close();
 
   await browser.close();
