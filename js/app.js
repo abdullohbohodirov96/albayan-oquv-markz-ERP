@@ -246,7 +246,7 @@
     document.getElementById('app').hidden = true;
     var wrap = document.getElementById('auth');
     wrap.hidden = false;
-    wrap.className = 'screen';
+    wrap.className = 'screen login-screen';
     UI.clear(wrap);
 
     var fLogin = UI.field({ label: 'Login', id: 'login-user', required: true, autocomplete: 'username' });
@@ -258,7 +258,7 @@
       ]))
       : null;
 
-    var btn = h('button', { class: 'btn primary block', type: 'submit' }, 'Kirish');
+    var btn = h('button', { class: 'btn primary block lg', type: 'submit' }, 'Kirish');
     var formEl = h('form', { class: 'login', onsubmit: onSubmit }, [
       h('div', { class: 'brandline' }, [
         h('img', { class: 'logo', src: LOGO, alt: '' }),
@@ -280,8 +280,17 @@
           class: 'btn sm', type: 'button',
           onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
         }, 'Shaxsiy kod bilan kirish')
-      ]) : null
+      ]) : null,
+      h('button', {
+        class: 'btn sm ghost login-back', type: 'button',
+        onclick: function () { location.hash = ''; renderLanding(); }
+      }, [UI.icon('back'), h('span', {}, 'Saytga qaytish')])
     ]);
+    /* Kirish sahifasi ham saytning ko'rinishida: to'q fon va naqsh */
+    wrap.appendChild(h('div', { class: 'login-art', 'aria-hidden': 'true' }, [
+      khatamSvg('khatam'),
+      h('span', { class: 'login-ar' }, 'البيان')
+    ]));
     wrap.appendChild(formEl);
     refreshCenterName();
 
@@ -1261,9 +1270,9 @@
      iboralar shunchaki navbat bilan almashadi.                            */
   var TAGLINES = [
     'Arab tilini arablardan o’rganing',
-    'Imtihonga tayyorlov',
-    'C2 sertifikatigacha',
-    'Kichik guruhlar, aniq natija'
+    'Arab davlatlarida erkin gaplashing',
+    'Alifbodan C2 darajasigacha',
+    'Kichik guruh — har bir o’quvchiga vaqt'
   ];
   var typeTimer = null;
 
@@ -1277,8 +1286,40 @@
     if (!rows.length) return;
 
     var box = el.parentNode;
-    /* Sakrab turmasligi uchun eng uzun ibora bo'yicha joy ajratamiz */
-    box.style.minHeight = '';
+    /* Sahifa SAKRAMASLIGI uchun eng baland ibora bo'yicha joy ajratamiz.
+       Matn kattalashgandan keyin uzun ibora ikki qatorga tushadi — shuning
+       uchun balandlikni har bir iborani o'lchab topamiz, uzunligiga qarab
+       taxmin qilmaymiz. Oyna kengligi o'zgarsa qayta o'lchanadi.        */
+    function reserve() {
+      var keep = el.textContent;
+      box.style.minHeight = '';
+      var max = 0;
+      rows.forEach(function (t) {
+        el.textContent = t;
+        var hgt = box.offsetHeight;
+        if (hgt > max) max = hgt;
+      });
+      el.textContent = keep;
+      if (max) box.style.minHeight = max + 'px';
+    }
+    reserve();
+    if (typeof ResizeObserver === 'function') {
+      try {
+        if (A._typeRO) A._typeRO.disconnect();
+        var last = box.clientWidth;
+        A._typeRO = new ResizeObserver(function () {
+          if (!document.body.contains(box)) { A._typeRO.disconnect(); return; }
+          if (Math.abs(box.clientWidth - last) < 8) return;
+          last = box.clientWidth;
+          reserve();
+        });
+        A._typeRO.observe(box.parentNode || box);
+      } catch (e) { }
+    }
+    /* Shrift kech yuklansa — qayta o'lchaymiz */
+    if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+      document.fonts.ready.then(function () { reserve(); }).catch(function () { });
+    }
     var slow = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (rows.length === 1) { el.textContent = rows[0]; box.classList.add('done'); return; }
@@ -1297,19 +1338,25 @@
       return;
     }
 
+    /* Harakat: yozilayotganda kursor tez, ibora tugaganda bir lahza
+       porlaydi, keyin o'chiriladi. "full" klassi shu porlashni beradi. */
     var i = 0, pos = 0, del = false;
     function step() {
       var txt = rows[i];
       if (!del) {
         pos++;
         el.textContent = txt.slice(0, pos);
-        if (pos >= txt.length) { del = true; typeTimer = setTimeout(step, 1900); return; }
-        typeTimer = setTimeout(step, 52 + Math.random() * 40);
+        if (pos >= txt.length) {
+          box.classList.add('full');
+          del = true; typeTimer = setTimeout(step, 2100); return;
+        }
+        typeTimer = setTimeout(step, 48 + Math.random() * 38);
       } else {
+        box.classList.remove('full');
         pos--;
         el.textContent = txt.slice(0, pos);
-        if (pos <= 0) { del = false; i = (i + 1) % rows.length; typeTimer = setTimeout(step, 320); return; }
-        typeTimer = setTimeout(step, 26);
+        if (pos <= 0) { del = false; i = (i + 1) % rows.length; typeTimer = setTimeout(step, 340); return; }
+        typeTimer = setTimeout(step, 24);
       }
     }
     el.textContent = '';
@@ -1356,7 +1403,6 @@
         navBtn('Darajalar', 'bosqichlar'),
         navBtn('Narx', 'narx'),
         navBtn('Ustozlar', 'ustozlar'),
-        navBtn('Savollar', 'savollar'),
         h('a', { class: 'site-phone', id: 'site-call', href: '#ariza' },
           [UI.icon('phone'), h('span', { id: 'site-call-text' }, 'Bog’lanish')]),
         h('button', {
@@ -1389,14 +1435,16 @@
         ]),
         h('div', { class: 'hero-rule', 'aria-hidden': 'true' }),
         h('p', { class: 'hero-lead', id: 'site-about' },
-          'Qur’on tili — boshlang’ichdan suhbatgacha. Kichik guruhlar, tajribali ustozlar va har bir o’quvchi uchun aniq natija rejasi.'),
+          'Alifbodan erkin suhbatgacha. Darsni arab ustozlar olib boradi — siz birinchi kundan arabcha gapira boshlaysiz.'),
         h('div', { class: 'hero-cta' }, [
-          h('button', { class: 'btn gold lg', type: 'button', onclick: function () { scrollTo('ariza'); } },
-            'Darsga yozilish'),
+          h('button', {
+            class: 'btn gold xl', type: 'button',
+            onclick: function () { scrollTo('ariza'); if (fName.input) fName.input.focus(); }
+          }, [h('span', {}, 'Darsga yozilish'), goIcon()]),
           h('button', {
             class: 'btn on-dark lg', type: 'button',
             onclick: function () { location.hash = 'test'; renderTest(); }
-          }, ['Darajangizni aniqlang', goIcon()])
+          }, ['Darajangizni bepul aniqlang', goIcon()])
         ]),
         /* Ishonch qatori. Doiralar — NAQSH, odam surati emas: biz
            o'quvchilarning suratini saytga qo'ymaymiz. Yozuvni markaz
@@ -1449,14 +1497,15 @@
         ]),
         h('div', { class: 'why-text' }, [
           h('div', { class: 'sec-eyebrow' }, 'Nega biz'),
-          h('h2', {}, 'Biz til o’rgatamiz — imtihon uchun emas, gapirish uchun'),
+          h('h2', {}, 'Til daftarda emas, suhbatda o’rganiladi'),
           h('p', { class: 'sec-note' },
-            'Har bir daraja aniq maqsad bilan tuzilgan: alifbodan boshlab erkin suhbatgacha. ' +
-            'Darslar amaliy — o’quvchi birinchi kundan gapira boshlaydi.'),
+            'Har bir daraja bitta aniq maqsad bilan tuzilgan: alifbodan boshlab arab ' +
+            'davlatlarida erkin gaplashgunga qadar. Darsda ko’proq siz gapirasiz — ' +
+            'ustoz esa xatoni o’sha zahoti tuzatadi.'),
           h('ul', { class: 'why-list' }, [
+            whyRow('Darsni ona tili arab tili bo’lgan ustozlar olib boradi'),
             whyRow('Bir dastur, olti daraja — sakrab o’tish yo’q'),
             whyRow('Kichik guruh: har bir o’quvchiga vaqt yetadi'),
-            whyRow('Misrda tahsil olgan ustozlar'),
             whyRow('Har dars davomat — ota-ona kabinetdan ko’rib turadi'),
             whyRow('Uy vazifasi va natija kabinetda saqlanadi')
           ]),
@@ -1478,8 +1527,8 @@
         h('div', { class: 'sec-eyebrow center' }, 'O’quv dasturi'),
         h('h2', {}, 'Bitta dastur — olti daraja'),
         h('p', { class: 'sec-note center' },
-          'Guruhlar darajasi bilan farq qiladi, narx esa hamma daraja uchun bir xil. ' +
-          'Qaysi darajadan boshlashni bepul daraja testi aniqlaydi.')
+          'Guruhlar faqat daraja bilan farq qiladi, narx esa hammasida bir xil. ' +
+          'Qaysi darajadan boshlashni bepul test bir necha daqiqada aniqlaydi.')
       ]),
       lvlGrid
     ]);
@@ -1497,7 +1546,9 @@
           h('h2', {}, 'Darsni kim olib boradi')
         ]),
         h('p', { class: 'sec-note' },
-          'Darslarni Misrda tahsil olgan, ona tili arab tili bo’lgan ustozlar olib boradi. Erkaklar va ayollar guruhlari uchun alohida ustozlar bor.')
+          'Darslarni arab ustozlar olib boradi — arab tili ularning ona tili, ' +
+          'o’zlari arab davlatlarida tug’ilib o’sgan. Siz tilni kitobdan emas, ' +
+          'tilning egasidan o’rganasiz.')
       ]),
       teachBox
     ]);
@@ -1585,13 +1636,15 @@
       h('div', { class: 'apply-wrap' }, [
         h('div', { class: 'apply-left' }, [
           h('span', { class: 'hero-eyebrow' }, 'Bepul sinov darsi'),
-          h('h2', {}, 'Darajangizni aniqlang va bepul sinov darsida qatnashing'),
-          h('p', {}, 'Qisqa suhbat va daraja testidan keyin sizga mos guruhni aytamiz.'),
+          h('h2', {}, 'Bir dars kelib ko’ring — keyin qaror qilasiz'),
+          h('p', {}, 'Raqamingizni qoldiring: qo’ng’iroq qilib, darajangizni aniqlaymiz ' +
+            'va sizga mos guruhni aytamiz.'),
           h('div', { class: 'ben-list' }, [
             benefit('clock', 'Qisqa suhbat — darajani aniqlash uchun'),
             benefit('check', 'Bepul sinov darsi — guruhni ichidan ko’rasiz'),
-            benefit('layers', 'Mos guruh va jadval taklifi')
+            benefit('layers', 'Mos guruh va qulay jadval taklifi')
           ]),
+          h('div', { class: 'apply-soc', id: 'apply-soc', hidden: true }),
           h('div', { class: 'site-contact', id: 'contact-box' }, [
             h('div', { class: 'contact-row', id: 'site-phone-row', hidden: true }, [
               UI.icon('phone'), h('a', { id: 'site-phone-link', href: '#' }, '')
@@ -1626,7 +1679,7 @@
       h('div', { class: 'cta-ico' }, UI.icon('calendar')),
       h('div', { class: 'cta-text' }, [
         h('b', {}, 'Bepul sinov darsiga yozilish'),
-        h('span', {}, 'Bir dars kelib ko’ring — guruhni, ustozni va dastur uslubini o’zingiz ko’rasiz.')
+        h('span', {}, 'Guruhni, ustozni va dars uslubini o’zingiz ko’rasiz — keyin qaror qilasiz.')
       ]),
       h('button', {
         class: 'btn gold lg', type: 'button',
@@ -1742,10 +1795,10 @@
       paintLevels(d.levels || []);
       paintPrice(d.courses || []);
       paintTeachers(d.teachers || []);
-      paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
+      paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes);
       paintFaq(d.faq || []);
       setLeadCourse(d.courses || []);
-      paintTimePick(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90);
+      paintTimePick(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes);
       if (A._siteSeen) {
         A._siteSeen(teachBox); A._siteSeen(slotBox);
         A._siteSeen(lvlGrid); A._siteSeen(statsBox);
@@ -1784,20 +1837,64 @@
       if (band) band.hidden = !statsBox.children.length;
     }
 
+    /* Ijtimoiy tarmoqlar. Manzillarni markaz Sozlamada yozadi —
+       yozilmagani ko'rinmaydi.                                          */
+    function socialList(d) {
+      var out = [];
+      if (d.tgQabul) {
+        out.push({ ico: 'chat', cls: 'soc-tg', name: 'Telegram — qabul',
+          sub: d.tgQabulLabel || '', url: tgUrl(d.tgQabul) });
+      }
+      if (d.tgChannel) {
+        out.push({ ico: 'bot', cls: 'soc-tg', name: 'Telegram kanal',
+          sub: '', url: tgUrl(d.tgChannel) });
+      }
+      if (d.instagram) {
+        out.push({ ico: 'camera', cls: 'soc-ig', name: 'Instagram',
+          sub: '', url: instaUrl(d.instagram) });
+      }
+      if (d.youtube) {
+        out.push({ ico: 'play', cls: 'soc-yt', name: 'YouTube', sub: '', url: ytUrl(d.youtube) });
+      }
+      /* Bot — oxirida: u odam emas, dastur */
+      if (d.telegram) {
+        out.push({ ico: 'bot', cls: 'soc-tg', name: 'Telegram bot',
+          sub: '', url: tgUrl(d.telegram) });
+      }
+      return out;
+    }
+    function socBtn(l, big) {
+      return h('a', {
+        class: 'soc-btn ' + l.cls + (big ? ' big' : ''),
+        href: l.url, target: '_blank', rel: 'noopener'
+      }, [
+        h('span', { class: 'soc-ico' }, UI.icon(l.ico)),
+        h('span', { class: 'soc-txt' }, [
+          h('b', {}, l.name),
+          l.sub ? h('span', {}, l.sub) : null
+        ].filter(Boolean))
+      ]);
+    }
     function paintSocial(d) {
+      var links = socialList(d);
       var box = document.getElementById('foot-soc');
-      if (!box) return;
-      UI.clear(box);
-      var links = [];
-      if (d.telegram) links.push(['bot', 'Telegram', 'https://t.me/' + String(d.telegram).replace(/^@/, '')]);
-      if (d.instagram) links.push(['camera', 'Instagram', instaUrl(d.instagram)]);
-      if (d.youtube) links.push(['play', 'YouTube', ytUrl(d.youtube)]);
-      if (!links.length) { box.appendChild(h('span', { class: 'foot-line' }, 'Tez orada')); return; }
-      links.forEach(function (l) {
-        box.appendChild(h('a', {
-          class: 'soc-btn', href: l[2], target: '_blank', rel: 'noopener'
-        }, [UI.icon(l[0]), h('span', {}, l[1])]));
-      });
+      if (box) {
+        UI.clear(box);
+        if (!links.length) box.appendChild(h('span', { class: 'foot-line' }, 'Tez orada'));
+        else links.forEach(function (l) { box.appendChild(socBtn(l)); });
+      }
+      /* Ariza blokidagi katta tugmalar */
+      var big = document.getElementById('apply-soc');
+      if (big) {
+        UI.clear(big);
+        links.slice(0, 3).forEach(function (l) { big.appendChild(socBtn(l, true)); });
+        big.hidden = !links.length;
+      }
+    }
+    function tgUrl(v) {
+      var t = String(v || '').trim();
+      if (/^https?:/i.test(t)) return t;
+      return 'https://t.me/' + t.replace(/^@/, '');
     }
     function instaUrl(v) {
       var t = String(v || '').trim();
@@ -1903,11 +2000,11 @@
       leadCourse = list.length ? list[0].id : '';
     }
 
-    function paintTimePick(start, end, minutes) {
+    function paintTimePick(start, end, minutes, brk) {
       if (!fTime.input) return;
       UI.clear(fTime.input);
       fTime.input.appendChild(h('option', { value: '' }, 'Farqi yo’q'));
-      A.lessonSlots(start, end, minutes).forEach(function (sl) {
+      A.lessonSlots(start, end, minutes, brk).forEach(function (sl) {
         var t = sl.part + ' (' + sl.from + '–' + sl.to + ')';
         fTime.input.appendChild(h('option', { value: t }, t));
       });
@@ -1934,14 +2031,17 @@
 
     function paintTeachers(list) {
       UI.clear(teachBox);
+      /* Hamma ustoz bitta qatorda tursin: ustunlar soni ro'yxatga qarab
+         beriladi (ko'pi bilan 5 ta). Tor ekranda CSS o'zi buzib tashlaydi. */
+      teachBox.style.setProperty('--cols', String(Math.min(5, Math.max(1, list.length))));
       if (!list.length) {
         teachBox.appendChild(h('p', { class: 'muted' }, 'Ustozlar ro’yxati tez orada.'));
         return;
       }
       list.forEach(function (t) {
         var facts = [];
+        if (t.country) facts.push(t.country + 'dan');
         if (t.years) facts.push(t.years + ' yil tajriba');
-        if (t.country) facts.push(t.country + 'da tahsil');
         if (t.levels) facts.push(t.levels);
         teachBox.appendChild(h('button', {
           class: 'tch-card', type: 'button',
@@ -1952,7 +2052,6 @@
             t.tag ? h('span', { class: 'tch-ribbon' }, t.tag) : null
           ].filter(Boolean)),
           h('b', {}, t.name),
-          h('span', { class: 'tch-aud' }, A.audienceLabel(t.audience)),
           facts.length ? h('ul', { class: 'tch-facts-mini' }, facts.map(function (x) {
             return h('li', {}, x);
           })) : null,
@@ -1967,14 +2066,17 @@
       renderTeacher(t, list);
     }
 
-    function paintSlots(start, end, minutes) {
+    function paintSlots(start, end, minutes, brk) {
       UI.clear(slotBox);
       var lead = document.getElementById('slot-lead');
+      var gap = brk == null ? 30 : Number(brk) || 0;
       if (lead) {
-        lead.textContent = 'Darslar ' + start + '–' + end + ' oralig’ida. Har bir dars ' +
-          Math.floor(minutes / 60) + ' soat ' + (minutes % 60) + ' daqiqa.';
+        var uz = Math.floor(minutes / 60) + ' soat' +
+          (minutes % 60 ? ' ' + (minutes % 60) + ' daqiqa' : '');
+        lead.textContent = 'Har bir dars ' + uz +
+          (gap ? ', darslar orasida ' + gap + ' daqiqa tanaffus.' : '.');
       }
-      A.lessonSlots(start, end, minutes).forEach(function (sl) {
+      A.lessonSlots(start, end, minutes, brk).forEach(function (sl) {
         slotBox.appendChild(h('div', { class: 'slot' }, [
           h('b', {}, sl.from + '–' + sl.to),
           h('span', { class: 'small muted' }, sl.part)
@@ -2046,7 +2148,9 @@
   };
 
   /** Ish vaqtini dars oralig'lariga bo'lish: 08:00–22:00, 90 daqiqadan */
-  A.lessonSlots = function (start, end, minutes) {
+  /** Dars vaqtlari. `breakMin` — har darsdan keyingi tanaffus (daqiqa).
+      Markaz Sozlamada yozadi; yozmagan bo'lsa 30 daqiqa.               */
+  A.lessonSlots = function (start, end, minutes, breakMin) {
     function toMin(v) {
       var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || ''));
       return m ? Number(m[1]) * 60 + Number(m[2]) : null;
@@ -2056,9 +2160,10 @@
       return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
     }
     var a = toMin(start), b = toMin(end), len = Number(minutes) || 90;
+    var gap = breakMin == null ? 30 : Math.max(0, Number(breakMin) || 0);
     if (a == null || b == null || b <= a || len < 15) return [];
     var out = [];
-    for (var t = a; t + len <= b && out.length < 12; t += len) {
+    for (var t = a; t + len <= b && out.length < 12; t += len + gap) {
       out.push({
         from: toStr(t), to: toStr(t + len),
         part: t < 12 * 60 ? 'ertalabki' : (t < 17 * 60 ? 'kunduzgi' : 'kechki')
@@ -2102,7 +2207,8 @@
     }
 
     var slots = A.lessonSlots(A._pub && A._pub.workStart || '08:00',
-      A._pub && A._pub.workEnd || '22:00', (A._pub && A._pub.lessonMinutes) || 90);
+      A._pub && A._pub.workEnd || '22:00', (A._pub && A._pub.lessonMinutes) || 90,
+      A._pub && A._pub.breakMinutes);
 
     box.appendChild(h('section', { class: 'tch-page' }, [
       h('div', { class: 'tch-hero' }, [

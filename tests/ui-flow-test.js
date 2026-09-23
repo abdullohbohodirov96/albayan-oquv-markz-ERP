@@ -394,13 +394,16 @@ async function typeIn(page, sel, val) {
   const LEADP = '+9989' + String(Date.now()).slice(-8);
   await dpage.evaluate(async (phone) => {
     const A = window.A, D = A.Data;
+    /* Voronkani ANIQ tanlaymiz va o'sha voronkani ochamiz — bazada
+       bir nechta voronka bo'lsa ham ariza ko'rinadigan joyda tursin. */
+    const fns = D.all('funnels');
+    const fn = fns.filter(f => f.isDefault)[0] || fns[0] || { id: 'fnl_asosiy' };
     await D.save('leads', {
       id: 'led_aloqa_' + Date.now(), name: 'Aloqa Sinov', phone: phone,
-      stage: 'yangi', funnelId: (D.all('funnels')[0] || {}).id || 'fnl_asosiy',
-      createdAt: A.nowStamp()
+      stage: 'yangi', funnelId: fn.id, createdAt: A.nowStamp()
     });
-    A.App.go('leads');
-    await new Promise(r => setTimeout(r, 900));
+    A.App.go('leads', { funnelId: fn.id });
+    await new Promise(r => setTimeout(r, 1000));
   }, LEADP);
   await dpage.waitForSelector('.tel-link', { timeout: 15000 }).catch(() => { });
   const call = await dpage.evaluate((phone) => {

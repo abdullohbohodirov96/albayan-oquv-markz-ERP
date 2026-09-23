@@ -394,12 +394,17 @@ async function login(l, p) {
        heroProof — "500+ o'quvchi" qatori (markaz o'zi yozadi);
        levels    — CEFR darajalari (A1…C2) nomi va qisqa izohi. Bu
                    MARKAZ ma'lumoti emas — dasturning o'zidagi ro'yxat
-                   (server/levels.js), daraja testi ham shundan oladi.
+                   (server/levels.js), daraja testi ham shundan oladi.;
+       breakMinutes — darslar orasidagi tanaffus (jadval shunga qarab
+                   tuziladi);
+       tgChannel, tgQabul, tgQabulLabel — ochiq Telegram manzillari
+                   (kanal va qabul). Markaz o'zi yozadi.
      Bularning hammasi SOZLAMADA markaz qo'li bilan yoziladi va aynan
      saytda ko'rsatish uchun. Ichki ma'lumot emas. */
   const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
     'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes', 'taglines',
-    'youtube', 'heroBadge', 'stats', 'faq', 'heroProof', 'levels'];
+    'youtube', 'heroBadge', 'stats', 'faq', 'heroProof', 'levels',
+    'breakMinutes', 'tgChannel', 'tgQabul', 'tgQabulLabel'];
   ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
   const tKeys = ['id', 'name', 'tag', 'bio', 'levels', 'audience', 'country', 'years'];

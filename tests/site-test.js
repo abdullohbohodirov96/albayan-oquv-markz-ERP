@@ -52,7 +52,7 @@ async function api(p, opts = {}) {
         about: 'AlBayan Cairo — arab tilini Misr uslubida o’rgatadigan markaz.',
         /* Ish vaqtini SINOVNING O'ZI yozadi — bazada nima turgani
            muhim emas. Kechki dars tekshiruvi shunga tayanadi.          */
-        workStart: '08:00', workEnd: '22:00', lessonMinutes: 90,
+        workStart: '08:00', workEnd: '22:00', lessonMinutes: 90, breakMinutes: 30,
         bot: Object.assign({}, st.bot || {}, { username: 'AlBayan_cairobot', staffChats: '' })
       })
     }
@@ -271,10 +271,22 @@ async function api(p, opts = {}) {
   }));
   ok('Ustoz kartalari ko’rinadi', tv.cards >= 5, String(tv.cards));
   ok('Ustoz ismlari bor', /Asmaa/.test(tv.text) && /Ahmad/.test(tv.text));
-  ok('Misrlik ustoz yozuvi bor', /Misr/.test(tv.text));
-  ok('Ayollar guruhi yozilgan', /Ayollar guruhlari/.test(tv.text));
-  ok('Dars vaqtlari chiqdi', tv.slots >= 8, String(tv.slots));
+  /* Markaz rahbari so'radi: "Misrlik" emas, ARAB ustoz; kartada
+     erkak/ayol guruhi yozilmaydi.                                      */
+  ok('Kartada "Arab ustoz" yozuvi bor', /Arab ustoz/i.test(tv.text), tv.text.slice(0, 400));
+  ok('Kartada erkak/ayol guruhi yozilmaydi',
+    !/guruhlari/i.test(tv.text.split('Dars vaqtlari')[0] || ''), tv.text.slice(0, 500));
+  ok('Dars vaqtlari chiqdi', tv.slots >= 6, String(tv.slots));
   ok('Kechki dars bor', /20:00–21:30/.test(tv.text), (tv.text.match(/\d\d:\d\d–\d\d:\d\d/g) || []).join(' '));
+  /* Har darsdan keyin 30 daqiqa tanaffus: 08:00–09:30 dan keyin
+     keyingisi 10:00 da boshlanadi, 09:30 da emas. Vaqtlarni JADVAL
+     kartalaridan o'qiymiz — sahifadagi boshqa soatlar aralashmasin.   */
+  const soat = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#vaqt .slot b')).map(b => b.textContent.trim()));
+  ok('Birinchi dars 08:00–09:30', soat[0] === '08:00–09:30', soat.join(' '));
+  ok('Keyingisi tanaffusdan keyin — 10:00', soat[1] === '10:00–11:30', soat.join(' '));
+  ok('Tanaffus yozib qo’yilgan', /30 daqiqa tanaffus/.test(tv.text),
+    (tv.text.match(/Har bir dars[^\n]*/) || [''])[0]);
 
   await page.evaluate(() => document.querySelector('.tch-card').click());
   await page.waitForSelector('.tch-page', { timeout: 10000 });
@@ -283,7 +295,7 @@ async function api(p, opts = {}) {
     times: document.querySelectorAll('.tch-page .slot').length
   }));
   ok('Ustoz profili ochildi', /ustoz\?id=/.test(prof.hash), prof.hash);
-  ok('Profilda dars vaqtlari bor', prof.times >= 8, String(prof.times));
+  ok('Profilda dars vaqtlari bor', prof.times >= 6, String(prof.times));
   ok('Profilda yozilish tugmasi bor', /yozilish/i.test(prof.text));
   await page.screenshot({ path: path.join(SHOTS, 'ustoz-profil.png'), fullPage: true });
   await page.goto(BASE);

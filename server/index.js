@@ -347,7 +347,7 @@ async function ensureSeed() {
     ];
     for (const t of seedT) {
       await store.set('teachers/' + t.id, Object.assign({
-        tag: 'Misrlik ustoz', country: 'Misr', levels: '', bio: '', years: 0,
+        tag: 'Arab ustoz', country: '', levels: '', bio: '', years: 0,
         active: true, createdAt: stamp()
       }, t));
     }
@@ -1583,6 +1583,15 @@ async function handleApi(req, res, url) {
           years: Number(t.years) || 0
         }));
       out.lessonMinutes = Number(s.lessonMinutes) || 90;
+      /* Darslar orasidagi tanaffus. Markaz Sozlamada yozadi; yozmagan
+         bo'lsa 30 daqiqa — jadval shunga qarab tuziladi.               */
+      out.breakMinutes = s.breakMinutes == null ? 30
+        : Math.min(120, Math.max(0, Number(s.breakMinutes) || 0));
+      /* Ochiq Telegram manzillari: kanal va qabul. Bot nomidan alohida —
+         o'quvchi botga emas, odamga yoki kanalga yozadi.               */
+      out.tgChannel = String(s.tgChannel || '').slice(0, 60);
+      out.tgQabul = String(s.tgQabul || '').slice(0, 60);
+      out.tgQabulLabel = String(s.tgQabulLabel || '').slice(0, 60);
       /* Saytning hero qismida yozilib turadigan qatorlar.
          Markaz o'zi yozadi (Sozlamalar → Ochiq sayt). Har qatorda bitta
          ibora. Bo'sh bo'lsa mijoz standart iboralarni ko'rsatadi.        */

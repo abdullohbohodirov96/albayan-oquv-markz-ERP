@@ -13,6 +13,28 @@
 
   /* uz -> [ru, en, ar] */
   var T = {
+    /* --- Sayt matnlari 2026-09-23 --- */
+    'Alifbodan erkin suhbatgacha. Darsni arab ustozlar olib boradi — siz birinchi kundan arabcha gapira boshlaysiz.': ['От алфавита до свободной беседы. Занятия ведут арабские преподаватели — вы начинаете говорить по-арабски с первого дня.', 'From the alphabet to free conversation. Lessons are led by Arab teachers, and you start speaking Arabic from day one.', 'من الحروف إلى الحوار الحرّ. يقوم بالتدريس أساتذة عرب — وتبدأ التحدّث بالعربية من اليوم الأول.'],
+    'Darajangizni bepul aniqlang': ['Определите уровень бесплатно', 'Find your level free', 'حدّد مستواك مجاناً'],
+    'Til daftarda emas, suhbatda o’rganiladi': ['Язык учат не в тетради, а в разговоре', 'A language is learned in conversation, not in a notebook', 'اللغة تُتعلَّم بالحوار لا بالدفتر'],
+    'Har bir daraja bitta aniq maqsad bilan tuzilgan: alifbodan boshlab arab davlatlarida erkin gaplashgunga qadar. Darsda ko’proq siz gapirasiz — ustoz esa xatoni o’sha zahoti tuzatadi.': ['Каждый уровень построен вокруг одной чёткой цели: от алфавита до свободной речи в арабских странах. На занятии больше говорите вы, а преподаватель тут же исправляет ошибки.', 'Every level is built around one clear goal: from the alphabet to speaking freely in Arab countries. In class you do most of the talking, and the teacher corrects mistakes on the spot.', 'كلّ مستوى مبنيّ على هدف واضح: من الحروف إلى التحدّث بطلاقة في البلاد العربية. في الدرس تتكلّم أنت أكثر، والأستاذ يصحّح الخطأ فوراً.'],
+    'Darsni ona tili arab tili bo’lgan ustozlar olib boradi': ['Занятия ведут преподаватели — носители арабского языка', 'Lessons are led by native Arabic speakers', 'يقوم بالتدريس أساتذة لغتهم الأمّ العربية'],
+    'Darslarni arab ustozlar olib boradi — arab tili ularning ona tili, o’zlari arab davlatlarida tug’ilib o’sgan. Siz tilni kitobdan emas, tilning egasidan o’rganasiz.': ['Занятия ведут арабские преподаватели: арабский — их родной язык, они родились и выросли в арабских странах. Вы учите язык не по книге, а у его носителя.', 'Lessons are led by Arab teachers: Arabic is their mother tongue and they were born and raised in Arab countries. You learn the language from its native speakers, not from a book.', 'يقوم بالتدريس أساتذة عرب: العربية لغتهم الأمّ وقد وُلدوا ونشأوا في البلاد العربية. فتتعلّم اللغة من أهلها لا من الكتاب.'],
+    'Guruhlar faqat daraja bilan farq qiladi, narx esa hammasida bir xil. Qaysi darajadan boshlashni bepul test bir necha daqiqada aniqlaydi.': ['Группы отличаются только уровнем, цена везде одинаковая. С какого уровня начать — бесплатный тест покажет за несколько минут.', 'Groups differ only by level; the price is the same for all of them. A free test shows where to start in a few minutes.', 'تختلف المجموعات بالمستوى فقط، والسعر واحد في جميعها. واختبار مجاني يبيّن من أين تبدأ في دقائق.'],
+    'Bir dars kelib ko’ring — keyin qaror qilasiz': ['Придите на один урок — потом решите', 'Come to one lesson, then decide', 'احضر درساً واحداً ثمّ قرّر'],
+    'Raqamingizni qoldiring: qo’ng’iroq qilib, darajangizni aniqlaymiz va sizga mos guruhni aytamiz.': ['Оставьте номер: мы позвоним, определим уровень и подберём подходящую группу.', 'Leave your number: we will call, find your level and suggest a suitable group.', 'اترك رقمك: نتّصل بك ونحدّد مستواك ونقترح المجموعة المناسبة.'],
+    'Mos guruh va qulay jadval taklifi': ['Подбор группы и удобного расписания', 'A suitable group and a convenient timetable', 'اقتراح المجموعة والجدول المناسب'],
+    'Guruhni, ustozni va dars uslubini o’zingiz ko’rasiz — keyin qaror qilasiz.': ['Вы сами увидите группу, преподавателя и стиль занятий — потом решите.', 'You will see the group, the teacher and how we teach — then decide.', 'ترى المجموعة والأستاذ وأسلوب الدرس بنفسك، ثمّ تقرّر.'],
+    'Arab ustoz': ['Арабский преподаватель', 'Arab teacher', 'أستاذ عربي'],
+    'Saytga qaytish': ['Вернуться на сайт', 'Back to the website', 'العودة إلى الموقع'],
+    'Telegram — qabul': ['Telegram — приём', 'Telegram — admissions', 'تيليجرام — القبول'],
+    'Telegram kanal': ['Telegram-канал', 'Telegram channel', 'قناة تيليجرام'],
+    'Darslar orasida tanaffus (daqiqa)': ['Перерыв между уроками (минут)', 'Break between lessons (minutes)', 'الاستراحة بين الدروس (دقائق)'],
+    'Saytdagi dars vaqtlari shu tanaffusni hisobga olib chiziladi.': ['Расписание на сайте строится с учётом этого перерыва.', 'The timetable on the website is built with this break in mind.', 'يُبنى جدول الموقع مع مراعاة هذه الاستراحة.'],
+    'Qabul qaysi filial': ['Приём — какой филиал', 'Admissions branch', 'فرع القبول'],
+    'Ariza va savollar uchun odam yoziladigan manzil.': ['Адрес, куда пишут человеку по заявкам и вопросам.', 'Where people write to a real person about applications and questions.', 'العنوان الذي يُكتب فيه إلى شخص للطلبات والأسئلة.'],
+    'Saytda "Telegram kanal" tugmasi bo’lib chiqadi.': ['На сайте появится кнопка «Telegram-канал».', 'It appears on the website as a “Telegram channel” button.', 'يظهر في الموقع زرّ «قناة تيليجرام».'],
+    'Telegram — qabul tugmasi tagida kichik yozuv bo’lib chiqadi.': ['Появится маленькой подписью под кнопкой «Telegram — приём».', 'Appears as a small line under the “Telegram — admissions” button.', 'يظهر سطراً صغيراً تحت زرّ «تيليجرام — القبول».'],
     /* --- Bog'lanish tugmalari --- */
     'Qo’ng’iroq': ['Позвонить', 'Call', 'اتصال'],
     'SMS': ['СМС', 'SMS', 'رسالة'],

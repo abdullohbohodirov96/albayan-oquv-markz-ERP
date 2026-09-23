@@ -1105,12 +1105,12 @@
   function teacherForm(t, App) {
     App.guard('staff.edit');
     var isNew = !t;
-    var s = t || { active: true, tag: 'Misrlik ustoz', country: 'Misr', audience: 'erkaklar', order: (D.all('teachers').length + 1) };
+    var s = t || { active: true, tag: 'Arab ustoz', country: '', audience: 'erkaklar', order: (D.all('teachers').length + 1) };
     var newPhoto = null;
 
     var f = UI.form([
       { name: 'name', label: 'Ism (saytda ko’rinadi)', required: true, value: s.name, placeholder: 'Ustoz Ahmad' },
-      { name: 'tag', label: 'Qisqa yozuv', value: s.tag, placeholder: 'Misrlik ustoz' },
+      { name: 'tag', label: 'Qisqa yozuv', value: s.tag, placeholder: 'Arab ustoz' },
       { name: 'country', label: 'Davlat', value: s.country, placeholder: 'Misr' },
       {
         name: 'audience', label: 'Kimga dars beradi', type: 'select', value: s.audience,
@@ -1617,8 +1617,25 @@
           return yarim.length ? 'Javobi yozilmagan savol bor: ' + yarim[0].slice(0, 34) : null;
         }
       },
-      { name: 'instagram', label: 'Instagram', value: s.instagram, placeholder: '@albayan yoki havola' },
+      { name: 'instagram', label: 'Instagram', value: s.instagram, placeholder: '@albayan.cairo yoki havola' },
       { name: 'youtube', label: 'YouTube', value: s.youtube, placeholder: '@albayan yoki havola' },
+      {
+        /* Ochiq Telegram manzillari. Bot nomidan alohida: o'quvchi
+           botga emas, kanalga yoki qabul xodimiga yozadi. */
+        name: 'tgChannel', label: 'Telegram kanal', value: s.tgChannel,
+        placeholder: '@albayanuz',
+        help: 'Saytda "Telegram kanal" tugmasi bo’lib chiqadi.'
+      },
+      {
+        name: 'tgQabul', label: 'Telegram — qabul', value: s.tgQabul,
+        placeholder: '@Albayan_qabul1',
+        help: 'Ariza va savollar uchun odam yoziladigan manzil.'
+      },
+      {
+        name: 'tgQabulLabel', label: 'Qabul qaysi filial', value: s.tgQabulLabel,
+        placeholder: 'masalan: Taxtapul filiali',
+        help: 'Telegram — qabul tugmasi tagida kichik yozuv bo’lib chiqadi.'
+      },
       {
         /* Hero'da harf-harf yozilib turadigan iboralar. Har qatorda bittasi. */
         name: 'taglines', label: 'Saytda yozilib turadigan iboralar', type: 'textarea',
@@ -1638,6 +1655,16 @@
         { name: 'address', label: 'Manzil', value: s.address, full: true },
         { name: 'workStart', label: 'Ish boshlanishi', type: 'time', value: s.workStart },
         { name: 'workEnd', label: 'Ish tugashi', type: 'time', value: s.workEnd },
+        {
+          /* Saytdagi dars vaqtlari shu tanaffusni hisobga olib tuziladi */
+          name: 'breakMinutes', label: 'Darslar orasida tanaffus (daqiqa)', type: 'number',
+          value: s.breakMinutes == null ? 30 : s.breakMinutes,
+          help: 'Saytdagi dars vaqtlari shu tanaffusni hisobga olib chiziladi.',
+          validate: function (v) {
+            var n = Number(v);
+            return (n < 0 || n > 120) ? '0 dan 120 gacha bo’lsin.' : null;
+          }
+        },
         {
           name: 'dueDay', label: 'To’lov muddati (oyning kuni)', type: 'number', value: s.dueDay,
           help: 'Shu kundan keyin to’lanmagan hisob "muddati o’tgan" hisoblanadi.'
