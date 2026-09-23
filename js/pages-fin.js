@@ -1656,6 +1656,21 @@
         { name: 'workStart', label: 'Ish boshlanishi', type: 'time', value: s.workStart },
         { name: 'workEnd', label: 'Ish tugashi', type: 'time', value: s.workEnd },
         {
+          /* Aniq jadval. Yozilsa — sayt aynan shuni ko'rsatadi. */
+          name: 'lessonTimes', label: 'Dars vaqtlari (aniq jadval)', type: 'textarea',
+          value: s.lessonTimes, full: true,
+          placeholder: '08:30–10:00\n10:30–12:00\n18:30–20:00\n20:30–22:00',
+          help: 'Har qatorda bitta dars vaqti. Yozsangiz, saytda AYNAN shu ' +
+            'vaqtlar chiqadi. Bo’sh qoldirsangiz, ish vaqti va tanaffusga ' +
+            'qarab o’zi hisoblanadi.',
+          validate: function (v) {
+            var bad = String(v || '').split('\n').map(function (x) { return x.trim(); })
+              .filter(Boolean)
+              .filter(function (x) { return !/^\d{1,2}:\d{2}(\s*[-–—]\s*\d{1,2}:\d{2})?$/.test(x); });
+            return bad.length ? 'Noto’g’ri yozilgan: ' + bad[0] + ' (masalan 08:30–10:00)' : null;
+          }
+        },
+        {
           /* Saytdagi dars vaqtlari shu tanaffusni hisobga olib tuziladi */
           name: 'breakMinutes', label: 'Darslar orasida tanaffus (daqiqa)', type: 'number',
           value: s.breakMinutes == null ? 30 : s.breakMinutes,

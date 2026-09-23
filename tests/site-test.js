@@ -53,6 +53,9 @@ async function api(p, opts = {}) {
         /* Ish vaqtini SINOVNING O'ZI yozadi — bazada nima turgani
            muhim emas. Kechki dars tekshiruvi shunga tayanadi.          */
         workStart: '08:00', workEnd: '22:00', lessonMinutes: 90, breakMinutes: 30,
+        /* Aniq jadval BO'SH: bu bo'limda formula bo'yicha hisoblanishi
+           tekshiriladi. Qo'lda yozilgani pastda alohida sinaladi.      */
+        lessonTimes: '',
         bot: Object.assign({}, st.bot || {}, { username: 'AlBayan_cairobot', staffChats: '' })
       })
     }
@@ -184,6 +187,39 @@ async function api(p, opts = {}) {
      Karta bosilganda forma "B1 — O'rta" degan yorliq bilan to'ladi va
      ariza aynan shu KOD bilan ketadi. Kod ro'yxati serverda yopiq:
      mijoz o'z matnini yozib yubora olmaydi.                            */
+  /* --- Markaz qo'lda yozgan jadval ---
+     Haqiqiy jadval har doim ham formulaga tushavermaydi (masalan 08:30
+     dan boshlanadi va 20:30 da tugaydi). Yozilgan bo'lsa, sayt AYNAN
+     shuni ko'rsatishi kerak.                                           */
+  section('   Qo’lda yozilgan dars vaqtlari');
+  const st2 = (await api('/api/doc?path=' + encodeURIComponent('meta/settings'), { cookie: dir })).json.data;
+  await api('/api/doc?path=' + encodeURIComponent('meta/settings'), {
+    method: 'PUT', cookie: dir,
+    body: { data: Object.assign({}, st2, {
+      lessonTimes: '08:30–10:00\n18:30–20:00\n20:30–22:00' }) }
+  });
+  const pubT = await api('/api/public');
+  eq('/api/public jadvalni berdi', (pubT.json.lessonTimes || []).length, 3);
+  await page.goto(BASE);
+  await page.waitForSelector('#vaqt .slot', { timeout: 20000 });
+  await page.waitForTimeout(600);
+  const qoI = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#vaqt .slot b')).map(b => b.textContent.trim()));
+  eq('Saytda aynan uchta vaqt', qoI.length, 3);
+  ok('08:30–10:00 bor', qoI[0] === '08:30–10:00', qoI.join(' '));
+  ok('18:30–20:00 bor', qoI[1] === '18:30–20:00', qoI.join(' '));
+  ok('20:30–22:00 bor', qoI[2] === '20:30–22:00', qoI.join(' '));
+  ok('Formula bo’yicha vaqt qo’shilmadi', qoI.indexOf('08:00–09:30') < 0, qoI.join(' '));
+  /* Arizadagi "qulay vaqt" ro'yxati ham shu jadvaldan olinadi */
+  const vaqtOpt = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#lead-time option')).map(o => o.textContent.trim()));
+  ok('Formadagi vaqt ro’yxati ham shu jadvaldan',
+    vaqtOpt.some(t => /20:30–22:00/.test(t)), vaqtOpt.join(' | '));
+  /* Sinovning qolgan qismi uchun jadvalni qaytarib bo'shatamiz */
+  await api('/api/doc?path=' + encodeURIComponent('meta/settings'), {
+    method: 'PUT', cookie: dir, body: { data: Object.assign({}, st2, { lessonTimes: '' }) }
+  });
+
   section('   Daraja kartasidan ariza');
   const R2 = R + 'L';
   const PHONE2 = '+99890' + String(Date.now()).slice(-7);

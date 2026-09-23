@@ -13,6 +13,8 @@
 
   /* uz -> [ru, en, ar] */
   var T = {
+    'Dars vaqtlari (aniq jadval)': ['Время занятий (точное расписание)', 'Lesson times (exact timetable)', 'أوقات الدروس (الجدول الدقيق)'],
+    'Har qatorda bitta dars vaqti. Yozsangiz, saytda AYNAN shu vaqtlar chiqadi. Bo’sh qoldirsangiz, ish vaqti va tanaffusga qarab o’zi hisoblanadi.': ['В каждой строке одно время занятия. Если заполните, на сайте появятся ИМЕННО эти часы. Оставите пустым — расписание посчитается по рабочему времени и перерыву.', 'One lesson time per line. If you fill it in, the website shows exactly these times. Leave it empty and the timetable is calculated from working hours and the break.', 'في كلّ سطر وقت درس واحد. إن كتبتَه ظهرت في الموقع هذه الأوقات بعينها. وإن تركته فارغاً حُسب الجدول من ساعات العمل والاستراحة.'],
     /* --- Sayt matnlari 2026-09-23 --- */
     'Alifbodan erkin suhbatgacha. Darsni arab ustozlar olib boradi — siz birinchi kundan arabcha gapira boshlaysiz.': ['От алфавита до свободной беседы. Занятия ведут арабские преподаватели — вы начинаете говорить по-арабски с первого дня.', 'From the alphabet to free conversation. Lessons are led by Arab teachers, and you start speaking Arabic from day one.', 'من الحروف إلى الحوار الحرّ. يقوم بالتدريس أساتذة عرب — وتبدأ التحدّث بالعربية من اليوم الأول.'],
     'Darajangizni bepul aniqlang': ['Определите уровень бесплатно', 'Find your level free', 'حدّد مستواك مجاناً'],

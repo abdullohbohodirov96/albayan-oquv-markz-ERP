@@ -1412,11 +1412,11 @@
         h('button', {
           class: 'btn sm', type: 'button',
           onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
-        }, [UI.icon('users'), 'O’quvchi kabineti']),
+        }, [UI.icon('key'), 'O’quvchi kabineti']),
         h('button', {
           class: 'btn sm primary', type: 'button',
           onclick: function () { location.hash = 'kirish'; renderLogin(null); }
-        }, [UI.icon('key'), 'Kirish'])
+        }, [UI.icon('person'), 'Kirish'])
       ])
     ]);
     var top = h('header', { class: 'site-top' }, topIn);
@@ -1795,10 +1795,10 @@
       paintLevels(d.levels || []);
       paintPrice(d.courses || []);
       paintTeachers(d.teachers || []);
-      paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes);
+      paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes, d.lessonTimes);
       paintFaq(d.faq || []);
       setLeadCourse(d.courses || []);
-      paintTimePick(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes);
+      paintTimePick(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes, d.lessonTimes);
       if (A._siteSeen) {
         A._siteSeen(teachBox); A._siteSeen(slotBox);
         A._siteSeen(lvlGrid); A._siteSeen(statsBox);
@@ -2000,11 +2000,12 @@
       leadCourse = list.length ? list[0].id : '';
     }
 
-    function paintTimePick(start, end, minutes, brk) {
+    function paintTimePick(start, end, minutes, brk, times) {
       if (!fTime.input) return;
       UI.clear(fTime.input);
       fTime.input.appendChild(h('option', { value: '' }, 'Farqi yo’q'));
-      A.lessonSlots(start, end, minutes, brk).forEach(function (sl) {
+      var own = times && times.length ? A.lessonTimesFrom(times, minutes) : null;
+      (own || A.lessonSlots(start, end, minutes, brk)).forEach(function (sl) {
         var t = sl.part + ' (' + sl.from + '–' + sl.to + ')';
         fTime.input.appendChild(h('option', { value: t }, t));
       });
@@ -2066,17 +2067,18 @@
       renderTeacher(t, list);
     }
 
-    function paintSlots(start, end, minutes, brk) {
+    function paintSlots(start, end, minutes, brk, times) {
       UI.clear(slotBox);
       var lead = document.getElementById('slot-lead');
       var gap = brk == null ? 30 : Number(brk) || 0;
+      var own = times && times.length ? A.lessonTimesFrom(times, minutes) : null;
       if (lead) {
         var uz = Math.floor(minutes / 60) + ' soat' +
           (minutes % 60 ? ' ' + (minutes % 60) + ' daqiqa' : '');
         lead.textContent = 'Har bir dars ' + uz +
-          (gap ? ', darslar orasida ' + gap + ' daqiqa tanaffus.' : '.');
+          (gap && !own ? ', darslar orasida ' + gap + ' daqiqa tanaffus.' : '.');
       }
-      A.lessonSlots(start, end, minutes, brk).forEach(function (sl) {
+      (own || A.lessonSlots(start, end, minutes, brk)).forEach(function (sl) {
         slotBox.appendChild(h('div', { class: 'slot' }, [
           h('b', {}, sl.from + '–' + sl.to),
           h('span', { class: 'small muted' }, sl.part)
@@ -2150,6 +2152,31 @@
   /** Ish vaqtini dars oralig'lariga bo'lish: 08:00–22:00, 90 daqiqadan */
   /** Dars vaqtlari. `breakMin` — har darsdan keyingi tanaffus (daqiqa).
       Markaz Sozlamada yozadi; yozmagan bo'lsa 30 daqiqa.               */
+  /** Markaz qo'lda yozgan vaqtlarni o'qiydi: "08:30–10:00" yoki "08:30".
+      Tugash vaqti yozilmagan bo'lsa dars uzunligiga qarab hisoblanadi. */
+  A.lessonTimesFrom = function (list, minutes) {
+    function toMin(v) {
+      var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim());
+      return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+    }
+    function toStr(x) {
+      var hh = Math.floor(x / 60) % 24, mm = x % 60;
+      return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+    }
+    var len = Number(minutes) || 90;
+    return (list || []).map(function (row) {
+      var p = String(row).split('–');
+      var a = toMin(p[0]);
+      if (a == null) return null;
+      var b = p.length > 1 ? toMin(p[1]) : null;
+      if (b == null) b = a + len;
+      return {
+        from: toStr(a), to: toStr(b),
+        part: a < 12 * 60 ? 'ertalabki' : (a < 17 * 60 ? 'kunduzgi' : 'kechki')
+      };
+    }).filter(Boolean).slice(0, 12);
+  };
+
   A.lessonSlots = function (start, end, minutes, breakMin) {
     function toMin(v) {
       var m = /^(\d{1,2}):(\d{2})$/.exec(String(v || ''));
@@ -2206,9 +2233,12 @@
       return;
     }
 
-    var slots = A.lessonSlots(A._pub && A._pub.workStart || '08:00',
-      A._pub && A._pub.workEnd || '22:00', (A._pub && A._pub.lessonMinutes) || 90,
-      A._pub && A._pub.breakMinutes);
+    var pubT = (A._pub && A._pub.lessonTimes) || [];
+    var slots = pubT.length
+      ? A.lessonTimesFrom(pubT, (A._pub && A._pub.lessonMinutes) || 90)
+      : A.lessonSlots(A._pub && A._pub.workStart || '08:00',
+        A._pub && A._pub.workEnd || '22:00', (A._pub && A._pub.lessonMinutes) || 90,
+        A._pub && A._pub.breakMinutes);
 
     box.appendChild(h('section', { class: 'tch-page' }, [
       h('div', { class: 'tch-hero' }, [

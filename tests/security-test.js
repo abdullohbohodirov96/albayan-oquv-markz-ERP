@@ -397,6 +397,8 @@ async function login(l, p) {
                    (server/levels.js), daraja testi ham shundan oladi.;
        breakMinutes — darslar orasidagi tanaffus (jadval shunga qarab
                    tuziladi);
+       lessonTimes — markaz qo'lda yozgan aniq dars vaqtlari; yozilgan
+                   bo'lsa sayt aynan shuni ko'rsatadi;
        tgChannel, tgQabul, tgQabulLabel — ochiq Telegram manzillari
                    (kanal va qabul). Markaz o'zi yozadi.
      Bularning hammasi SOZLAMADA markaz qo'li bilan yoziladi va aynan
@@ -404,7 +406,7 @@ async function login(l, p) {
   const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
     'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes', 'taglines',
     'youtube', 'heroBadge', 'stats', 'faq', 'heroProof', 'levels',
-    'breakMinutes', 'tgChannel', 'tgQabul', 'tgQabulLabel'];
+    'breakMinutes', 'lessonTimes', 'tgChannel', 'tgQabul', 'tgQabulLabel'];
   ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
   const tKeys = ['id', 'name', 'tag', 'bio', 'levels', 'audience', 'country', 'years'];

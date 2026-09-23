@@ -1587,6 +1587,14 @@ async function handleApi(req, res, url) {
          bo'lsa 30 daqiqa — jadval shunga qarab tuziladi.               */
       out.breakMinutes = s.breakMinutes == null ? 30
         : Math.min(120, Math.max(0, Number(s.breakMinutes) || 0));
+      /* Dars vaqtlarini markaz QO'LDA ham yozishi mumkin — haqiqiy jadval
+         har doim ham "ish boshlanishi + dars + tanaffus" formulasiga
+         tushavermaydi. Yozilgan bo'lsa, sayt aynan shuni ko'rsatadi;
+         yozilmagan bo'lsa formula bo'yicha o'zi chizadi.                */
+      out.lessonTimes = String(s.lessonTimes || '')
+        .split('\n').map(x => x.trim()).filter(Boolean).slice(0, 12)
+        .map(x => x.replace(/\s*[-—]\s*/g, '–').slice(0, 20))
+        .filter(x => /^\d{1,2}:\d{2}(–\d{1,2}:\d{2})?$/.test(x));
       /* Ochiq Telegram manzillari: kanal va qabul. Bot nomidan alohida —
          o'quvchi botga emas, odamga yoki kanalga yozadi.               */
       out.tgChannel = String(s.tgChannel || '').slice(0, 60);
