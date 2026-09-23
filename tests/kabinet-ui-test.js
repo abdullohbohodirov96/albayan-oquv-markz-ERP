@@ -47,7 +47,11 @@ const ID = n => R + '_' + n;
   await put('staff/' + ID('t'), { id: ID('t'), name: 'Ustoz Sayt', status: 'faol' });
   await put('courses/' + ID('c'), { id: ID('c'), name: 'Arab tili', monthlyFee: 250000, active: true });
   await put('groups/' + ID('g'), {
-    id: ID('g'), code: 'S001', name: 'Sayt guruhi', courseId: ID('c'), teacherId: ID('t'),
+    /* Guruh kodi bazada TAKRORLANMASLIGI kerak. Qattiq 'S001' yozilsa,
+       sinov ikkinchi marta ishga tushganda kod band bo'lib, guruh
+       yaratilmay qolardi — keyin kabinetda guruh ko'rinmasdi.        */
+    id: ID('g'), code: 'S' + String(Date.now() % 1000).padStart(3, '0'),
+    name: 'Sayt guruhi', courseId: ID('c'), teacherId: ID('t'),
     days: [1, 5], startTime: '16:00', endTime: '17:30', startDate: '2026-09-01',
     fee: 250000, feeHistory: [{ fee: 250000, from: '2026-09' }], limit: 10, status: 'faol'
   });
@@ -122,6 +126,10 @@ const ID = n => R + '_' + n;
 
   await page.goto(BASE + '#kabinet?t=' + mk.token);
   await page.waitForSelector('.kab-card', { timeout: 15000 });
+  /* Karta avval sarlavha bilan chiziladi, guruh va to'lov keyin keladi —
+     shuning uchun guruh bloki paydo bo'lguncha kutamiz.                */
+  await page.waitForSelector('.kab-card .kab-groups', { timeout: 15000 }).catch(() => { });
+  await page.waitForTimeout(500);
   const txt = await page.evaluate(() => document.querySelector('.kab-card').innerText);
   ok('Ism ko’rindi', /Bahodirov Abdulloh/.test(txt), txt.slice(0, 120));
   ok('Guruh ko’rindi', /Sayt guruhi/.test(txt), txt.slice(0, 250));

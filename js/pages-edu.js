@@ -242,9 +242,9 @@
       var lessons = A.monthLessons(g, ym, doc);
       var nav = h('div', { class: 'filters' }, [
         h('div', { class: 'rowflex', style: 'gap:8px;flex-wrap:nowrap;width:100%;justify-content:space-between' }, [
-          h('button', { class: 'btn sm', 'aria-label': 'Oldingi oy', onclick: function () { App.go('group', { id: g.id, tab: tab, ym: A.addMonths(ym, -1) }); } }, '‹'),
+          h('button', { class: 'btn sm ico-only', 'aria-label': 'Oldingi oy', onclick: function () { App.go('group', { id: g.id, tab: tab, ym: A.addMonths(ym, -1) }); } }, '‹'),
           h('b', { style: 'align-self:center;text-align:center;flex:1' }, A.monthLabel(ym)),
-          h('button', { class: 'btn sm', 'aria-label': 'Keyingi oy', onclick: function () { App.go('group', { id: g.id, tab: tab, ym: A.addMonths(ym, 1) }); } }, '›')
+          h('button', { class: 'btn sm ico-only', 'aria-label': 'Keyingi oy', onclick: function () { App.go('group', { id: g.id, tab: tab, ym: A.addMonths(ym, 1) }); } }, '›')
         ])
       ]);
       view.appendChild(nav);

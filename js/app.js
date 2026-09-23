@@ -211,8 +211,32 @@
         h('b', {}, n.label)
       ]);
     }));
+    /* Til va mavzu telefonda yuqoridagi tasmadan olib tashlandi — u har
+       sahifada bir qator joyni yeb turardi. Endi shu yerda, bir bosishda. */
+    var langRow = h('div', { class: 'menu-lang' }, A.I18N.langs.map(function (l) {
+      return h('button', {
+        type: 'button', class: 'btn sm' + (A.I18N.lang === l.id ? ' primary' : ''),
+        'aria-pressed': A.I18N.lang === l.id ? 'true' : 'false',
+        lang: l.id, dir: l.id === 'ar' ? 'rtl' : 'ltr',
+        onclick: function () {
+          A.I18N.set(l.id);
+          if (A.renderLangPick) A.renderLangPick();
+          m.close();
+          App.render();
+        }
+      }, l.short);
+    }).concat([
+      h('button', {
+        type: 'button', class: 'btn sm', 'aria-label': 'Yorug’ / qorong’i',
+        onclick: function () { toggleTheme(); }
+      }, [UI.icon('sun')])
+    ]));
+    var tools = h('div', { class: 'menu-tools' }, [
+      h('div', { class: 'small muted' }, 'Til va mavzu'),
+      langRow
+    ]);
     var m = UI.modal({
-      title: 'Menyu', body: list,
+      title: 'Menyu', body: h('div', {}, [tools, list]),
       actions: [{ label: 'Chiqish', cls: 'danger', onClick: function (c) { c(); logout(); } }]
     });
   }
@@ -1439,6 +1463,8 @@
     wrap.hidden = false;
     wrap.className = 'site';
     UI.clear(wrap);
+    /* Oldingi chizishdan qolgan kuzatuvchini uzamiz */
+    if (A._ctaOff) { A._ctaOff(); A._ctaOff = null; }
 
     var name = centerNameNow();
 
@@ -1825,11 +1851,52 @@
       ])
     ]);
 
+    /* Telefonda pastda doim turadigan tasma: yozilish va qo'ng'iroq.
+       Kompyuterda ko'rinmaydi (CSS), chunki u yerda tepadagi tugmalar
+       baribir ko'z oldida turadi.                                     */
+    var ctaBar = h('div', { class: 'site-cta-bar', id: 'cta-bar' }, [
+      h('a', {
+        class: 'cta-bar-tel', id: 'cta-bar-tel', href: '#ariza',
+        'aria-label': 'Qo’ng’iroq qilish'
+      }, UI.icon('phone')),
+      h('button', {
+        class: 'btn gold cta-bar-go', type: 'button',
+        onclick: function () { scrollTo('ariza'); }
+      }, [h('span', {}, 'Darsga yozilish'), goIcon()])
+    ]);
+
     wrap.appendChild(siteBackdrop());
     wrap.appendChild(top);
     wrap.appendChild(h('div', { class: 'site-wrap' },
       [hero, revBand, statsBand, levelsSec, priceSec, feats, teachers,
         timetable, apply, revSec, faq, ctaBand, foot]));
+    wrap.appendChild(ctaBar);
+    /* Hero'dagi "Darsga yozilish" ko'rinib turganda pastki tasma kerak
+       emas — u ko'zdan yo'qolgandan keyin chiqadi.                     */
+    (function () {
+      var heroBtn = wrap.querySelector('.site-hero .btn.gold.xl');
+      if (!heroBtn) { ctaBar.classList.add('on'); return; }
+      var waiting = false;
+      function check() {
+        waiting = false;
+        var r = heroBtn.getBoundingClientRect();
+        /* Hero tugmasi ekrandan chiqib ketgan bo'lsa — tasma chiqadi */
+        ctaBar.classList.toggle('on', r.bottom <= 0 || r.top >= window.innerHeight);
+      }
+      function onScroll() {
+        if (waiting) return;
+        waiting = true;
+        if (window.requestAnimationFrame) window.requestAnimationFrame(check);
+        else setTimeout(check, 16);
+      }
+      window.addEventListener('scroll', onScroll, { passive: true });
+      window.addEventListener('resize', onScroll, { passive: true });
+      A._ctaOff = function () {
+        window.removeEventListener('scroll', onScroll);
+        window.removeEventListener('resize', onScroll);
+      };
+      check();
+    })();
     A.I18N.apply(wrap);
     fillPublic();
     siteMotion(top);
@@ -1862,6 +1929,9 @@
         });
         var fp = document.getElementById('foot-phone');
         if (fp) { fp.textContent = d.phone; fp.href = tel; }
+        /* Telefondagi pastki tasmadagi qo'ng'iroq tugmasi */
+        var cb = document.getElementById('cta-bar-tel');
+        if (cb) cb.href = tel;
       }
       if (d.address) { show('site-addr-row'); setText('site-addr', d.address); setText('foot-addr', d.address); }
       if (d.workStart && d.workEnd) {
@@ -2515,6 +2585,7 @@
   }
   A.renderTeacherFromHash = renderTeacherFromHash;
 
+
   /* ---------- Til tanlash ---------- */
   function renderLangPick() {
     var box = document.getElementById('lang-pick');
@@ -2532,6 +2603,7 @@
       }, l.short));
     });
   }
+  A.renderLangPick = renderLangPick;
 
   var restPromise = null;
 
@@ -2685,18 +2757,22 @@
   }
 
   /* ---------- Mavzu ---------- */
+  /* Yorug'dan qorong'iga va aksincha. Telefondagi menyu ham shuni chaqiradi. */
+  function toggleTheme() {
+    var cur = document.documentElement.getAttribute('data-theme');
+    var isDark = cur === 'dark' || (!cur && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = isDark ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('albyana_theme', next); } catch (e) { }
+  }
+  A.toggleTheme = toggleTheme;
+
   function wireTheme() {
     var btn = document.getElementById('theme-toggle');
     var saved = null;
     try { saved = localStorage.getItem('albyana_theme'); } catch (e) { }
     if (saved) document.documentElement.setAttribute('data-theme', saved);
-    btn.addEventListener('click', function () {
-      var cur = document.documentElement.getAttribute('data-theme');
-      var isDark = cur === 'dark' || (!cur && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      var next = isDark ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-theme', next);
-      try { localStorage.setItem('albyana_theme', next); } catch (e) { }
-    });
+    if (btn) btn.addEventListener('click', toggleTheme);
   }
 
   var LOGO = '';

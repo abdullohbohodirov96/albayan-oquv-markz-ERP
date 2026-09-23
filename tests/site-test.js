@@ -344,6 +344,17 @@ async function api(p, opts = {}) {
      o'chiradi — demo baza ifloslanmasin.                             */
   section('4b. Izohlar (sharhlar)');
   await page.setViewportSize({ width: 1280, height: 900 });
+  /* Avvalgi sinovdan qolgan izohlarni tozalaymiz. Aks holda bir IP dan
+     kuniga 3 ta chegara (to'g'ri qoida) sinovning o'zini to'xtatib
+     qo'yardi va tasma tekshiruvi ham noto'g'ri yo'ldan ketardi.      */
+  {
+    const old = await api('/api/collection?name=reviews', { cookie: dir });
+    for (const r of Object.values((old.json || {}).items || {})) {
+      if (r && /^Sinov /.test(String(r.name || ''))) {
+        await api('/api/doc?path=' + encodeURIComponent('reviews/' + r.id), { method: 'DELETE', cookie: dir });
+      }
+    }
+  }
   const revIds = [];
   const NAME1 = 'Sinov Izoh ' + R;
   const revBefore = await api('/api/public');
@@ -502,6 +513,58 @@ async function api(p, opts = {}) {
     ok(w + ' px: Kirish tugmasi ko’rinadi', m.loginBtn);
     ok(w + ' px: forma bor', m.form);
     if (w === 390) await page.screenshot({ path: path.join(SHOTS, 'sayt-390.png'), fullPage: true });
+
+    /* Pastdagi doimiy tasma: hero'dagi tugma ko'rinib turganda yopiq,
+       pastga tushgach chiqadi. Odam qayerda bo'lsa ham bir bosishda
+       ariza qoldiradi yoki qo'ng'iroq qiladi.                        */
+    const barTop = await page.evaluate(() => {
+      const b = document.getElementById('cta-bar');
+      return b ? b.classList.contains('on') : null;
+    });
+    ok(w + ' px: tepada pastki tasma chiqmaydi', barTop === false, String(barTop));
+    await page.evaluate(() => window.scrollTo(0, 2200));
+    /* Tasma surish paytida chiqadi — sahifa to'liq yuklanib bo'lguncha
+       biroz kutamiz (rasm va izohlar kelgach balandlik o'zgaradi). */
+    await page.waitForFunction(
+      () => document.getElementById('cta-bar').classList.contains('on'),
+      null, { timeout: 5000 }
+    ).catch(() => { });
+    const bar = await page.evaluate(() => {
+      const b = document.getElementById('cta-bar');
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      const tel = document.getElementById('cta-bar-tel');
+      const go = b.querySelector('.cta-bar-go');
+      return {
+        on: b.classList.contains('on'),
+        h: Math.round(r.height),
+        bottom: Math.round(window.innerHeight - r.bottom),
+        tel: tel ? tel.getAttribute('href') : '',
+        telH: tel ? Math.round(tel.getBoundingClientRect().height) : 0,
+        goH: go ? Math.round(go.getBoundingClientRect().height) : 0,
+        goText: go ? go.textContent.trim() : ''
+      };
+    });
+    ok(w + ' px: pastga tushganda tasma chiqdi', bar && bar.on, JSON.stringify(bar));
+    ok(w + ' px: qo’ng’iroq tugmasi haqiqiy raqamga ulangan',
+      bar && /^tel:\+?\d{7,}$/.test(bar.tel), bar && bar.tel);
+    ok(w + ' px: tasmadagi tugmalar ≥ 48px',
+      bar && bar.telH >= 48 && bar.goH >= 48, JSON.stringify(bar));
+    ok(w + ' px: tasma ekran pastiga yopishgan', bar && bar.bottom <= 1, String(bar && bar.bottom));
+    ok(w + ' px: yozuv "Darsga yozilish"', bar && /Darsga yozilish/.test(bar.goText), bar && bar.goText);
+
+    /* Tasma sahifaning oxirini yopib qo'ymaydi */
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.waitForTimeout(700);
+    const covered = await page.evaluate(() => {
+      const b = document.getElementById('cta-bar');
+      const f = document.querySelector('.site-foot');
+      if (!b || !f) return null;
+      const br = b.getBoundingClientRect(), fr = f.getBoundingClientRect();
+      return Math.round(fr.bottom - br.top);   // musbat bo'lsa ustiga tushgan
+    });
+    ok(w + ' px: pastki yozuvlar tasma ostida qolmadi', covered !== null && covered <= 0,
+      String(covered));
   }
 
   await browser.close();

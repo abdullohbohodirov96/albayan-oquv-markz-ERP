@@ -565,9 +565,9 @@
 
     var monthNav = h('div', { class: 'filters' }, [
       h('div', { class: 'rowflex', style: 'gap:8px;flex-wrap:nowrap;width:100%;justify-content:space-between' }, [
-        h('button', { class: 'btn sm', 'aria-label': 'Oldingi oy', onclick: function () { goMonth(A.addMonths(ym, -1)); } }, '‹'),
+        h('button', { class: 'btn sm ico-only', 'aria-label': 'Oldingi oy', onclick: function () { goMonth(A.addMonths(ym, -1)); } }, '‹'),
         h('b', { style: 'align-self:center;text-align:center;flex:1' }, A.monthLabel(ym)),
-        h('button', { class: 'btn sm', 'aria-label': 'Keyingi oy', onclick: function () { goMonth(A.addMonths(ym, 1)); } }, '›'),
+        h('button', { class: 'btn sm ico-only', 'aria-label': 'Keyingi oy', onclick: function () { goMonth(A.addMonths(ym, 1)); } }, '›'),
         ym !== A.thisMonth() ? h('button', { class: 'btn sm', onclick: function () { goMonth(A.thisMonth()); } }, 'Joriy oy') : null
       ])
     ]);

@@ -138,6 +138,80 @@ function section(t) { out.push('\n' + t); }
     await ctx.close();
   }
 
+  /* ---------- Telefonda joyni tejash va barmoqqa mos o'lchamlar ---------- */
+  section('Telefonda tepa panel va menyu');
+  {
+    const { ctx, page } = await openAs(390, 800, 'admin', '1234');
+    const topRow = await page.evaluate(() => ({
+      lang: getComputedStyle(document.getElementById('lang-pick')).display,
+      theme: getComputedStyle(document.getElementById('theme-toggle')).display,
+      barH: Math.round(document.querySelector('.topbar').getBoundingClientRect().height)
+    }));
+    ok('Til tanlash tepadan olib tashlandi', topRow.lang === 'none', topRow.lang);
+    ok('Mavzu tugmasi ham tepada emas', topRow.theme === 'none', topRow.theme);
+    ok('Tepa panel bir qator (≤ 80px)', topRow.barH <= 80, topRow.barH + 'px');
+
+    /* Menyu varag'ida til va mavzu turibdi */
+    await page.evaluate(() => { const b = document.querySelectorAll('.tabbar button'); b[b.length - 1].click(); });
+    await page.waitForSelector('.menu-sheet', { timeout: 6000 });
+    await page.waitForTimeout(350);
+    const menu = await page.evaluate(() => ({
+      langs: Array.from(document.querySelectorAll('.menu-lang .btn')).map(b => b.textContent.trim()),
+      items: document.querySelectorAll('.menu-sheet .menu-item').length,
+      minH: Math.min.apply(null, Array.from(document.querySelectorAll('.menu-lang .btn'))
+        .map(b => Math.round(b.getBoundingClientRect().height)))
+    }));
+    ok('Menyuda to’rt til bor', menu.langs.slice(0, 4).join(',') === 'UZ,RU,EN,AR', menu.langs.join(','));
+    ok('Mavzu tugmasi ham shu yerda', menu.langs.length === 5, String(menu.langs.length));
+    ok('Til tugmalari ≥ 40px', menu.minH >= 40, menu.minH + 'px');
+    ok('Bo’limlar ro’yxati ham joyida', menu.items >= 8, String(menu.items));
+    /* Mavzuni almashtirish */
+    const before = await page.evaluate(() => document.documentElement.getAttribute('data-theme') || '');
+    await page.evaluate(() => document.querySelectorAll('.menu-lang .btn')[4].click());
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => document.documentElement.getAttribute('data-theme') || '');
+    ok('Mavzu almashdi', after && after !== before, before + ' → ' + after);
+    await page.evaluate(() => { const b = document.querySelector('.m-head button'); b && b.click(); });
+    await page.waitForTimeout(300);
+
+    section('   Barmoqqa mos o’lchamlar va yon siljish');
+    const ROUTES = ['dashboard', 'leads', 'students', 'groups', 'schedule', 'attendance',
+      'finance', 'staff', 'reports', 'settings', 'chat', 'tasks'];
+    const bad = [];
+    const tiny = [];
+    for (const r of ROUTES) {
+      await page.evaluate(n => window.A.App.go(n), r);
+      await page.waitForTimeout(700);
+      const m = await page.evaluate(() => {
+        const vw = document.documentElement.clientWidth;
+        const small = [];
+        /* Suriladigan tasmadagi tugmalar hisobga olinmaydi — ular
+           ataylab ekrandan tashqariga chiqadi. */
+        document.querySelectorAll('.seg button,.page-actions .btn,.tabs button').forEach(el => {
+          const b = el.getBoundingClientRect();
+          if (b.width > 0 && b.height < 38) small.push(el.textContent.trim().slice(0, 18) + ' ' + Math.round(b.height));
+        });
+        return { ovf: document.documentElement.scrollWidth - vw, small: small.slice(0, 3) };
+      });
+      if (m.ovf > 1) bad.push(r + ': ' + m.ovf + 'px');
+      if (m.small.length) tiny.push(r + ': ' + m.small.join(', '));
+    }
+    ok('Hech bir bo’limda yon siljish yo’q', bad.length === 0, bad.join(' | '));
+    ok('Filtr va amal tugmalari ≥ 38px', tiny.length === 0, tiny.join(' | '));
+
+    section('   Sahifa boshidagi tugmalar joy yemaydi');
+    await page.evaluate(() => window.A.App.go('leads'));
+    await page.waitForTimeout(700);
+    const acts = await page.evaluate(() => {
+      const bs = Array.from(document.querySelectorAll('.page-actions .btn'));
+      return bs.map(b => { const r = b.getBoundingClientRect(); return { t: b.textContent.trim().slice(0, 14), y: Math.round(r.top), w: Math.round(r.width) }; });
+    });
+    const rows = new Set(acts.map(a => a.y)).size;
+    ok('Uchta tugma ikki qatorga joylashdi (' + acts.length + ' ta, ' + rows + ' qator)',
+      acts.length < 3 || rows <= 2, JSON.stringify(acts));
+    await ctx.close();
+  }
+
   /* ---------- O'qituvchi pastki menyusi ---------- */
   section('O’qituvchi pastki menyusi');
   {

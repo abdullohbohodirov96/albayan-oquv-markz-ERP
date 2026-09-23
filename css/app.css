@@ -707,7 +707,32 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   .tch-grid{grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
   .tch-hero{padding:20px;gap:18px;border-radius:20px}
   .apply-card,.site-contact{padding:18px;border-radius:18px}
+  /* Logotip birinchi ekranning yarmini egallab qolmasin — sarlavha va
+     "Darsga yozilish" tugmasi darrov ko'rinsin.                       */
+  .site-medal{width:min(126px,33vw)}
+  .site-hero{padding-top:20px}
 }
+
+/* --- Telefonda pastda doim turadigan tasma: yozilish va qo'ng'iroq ---
+   Odam sahifaning qaysi joyida bo'lishidan qat'i nazar bir bosishda
+   ariza qoldirishi yoki qo'ng'iroq qilishi mumkin.                    */
+.site-cta-bar{display:none}
+@media (max-width:760px){
+  .site .site-cta-bar,.site-cta-bar{display:flex;gap:10px;position:fixed;left:0;right:0;bottom:0;z-index:35;
+    transform:translateY(105%);transition:transform .22s ease;
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
+    background:color-mix(in srgb,var(--st-paper) 94%,transparent);
+    backdrop-filter:blur(10px);border-top:1px solid var(--st-line)}
+  .site-cta-bar .cta-bar-go{flex:1;min-height:50px;font-size:15px}
+  .cta-bar-tel{flex:none;width:50px;min-height:50px;border-radius:12px;
+    display:grid;place-items:center;border:1px solid var(--st-line);
+    background:var(--st-card);color:var(--st-ink)}
+  .cta-bar-tel svg{width:22px;height:22px}
+  .site-cta-bar.on{transform:none}
+  /* Tasma sahifaning oxirini yopib qo'ymasin */
+  .site .site-wrap{padding-bottom:96px}
+}
+@media (prefers-reduced-motion:reduce){.site-cta-bar{backdrop-filter:none;transition:none}}
 
 
 /* ================= SAYT: YANGI BO'LIMLAR =================
@@ -1814,13 +1839,24 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   .field input,.field select,.field textarea,.topbar .search input{font-size:16px;min-height:44px}
   .field textarea{min-height:88px}
 
+  /* Til va mavzu telefonda yuqoridagi tasmadan olib tashlandi — ular
+     "Menyu" varag'ida va Sozlamalarda turibdi. Shu bilan har sahifada
+     bir qator joy bo'shaydi.                                          */
+  .topbar #lang-pick,.topbar #theme-toggle{display:none}
+  .topbar{padding:8px 16px}
+
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .tile{padding:12px}
   .tile .val{font-size:21px}
   .grid.cols-2,.grid.cols-3,.grid.cols-4{grid-template-columns:1fr}
   .page-head h1{font-size:19px}
   .page-actions{width:100%}
-  .page-actions .btn{flex:1 1 calc(50% - 8px)}
+  /* Asosiy amal butun enlikda, qolganlari ikkitadan yonma-yon —
+     shunda sahifaning boshi uchta tugmadan iborat bo'lib qolmaydi.
+     Uzun yozuv ikki qatorga tushadi, kesilmaydi.                    */
+  .page-actions .btn{flex:1 1 calc(50% - 8px);min-width:0;white-space:normal;
+    padding-inline:10px;line-height:1.2}
+  .page-actions .btn.primary{flex:1 1 100%}
   .filters{flex-direction:column;align-items:stretch;padding:12px}
   .filters .field{flex:1 1 auto;width:100%}
   .filters .seg{width:100%;overflow-x:auto}
@@ -1844,7 +1880,11 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   .scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
 
   /* Ro'yxat qatorlari telefonda o'ralsin */
-  .list-item{flex-wrap:wrap;row-gap:6px}
+  .list-item{flex-wrap:wrap;row-gap:6px;padding-inline:12px}
+  /* Ichkaridagi hech bir ustun qatorni kengaytirib yubormasin —
+     aks holda butun sahifa yon tomonga siljib ketadi.                */
+  .list-item>*{min-width:0;max-width:100%}
+  .list,.chat-list{min-width:0}
   .list-item .main-col{flex:1 1 60%;min-width:0}
   .pill{white-space:normal}
 
@@ -1864,9 +1904,54 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   .receipt{font-size:11.5px;padding:12px}
   .kv{grid-template-columns:1fr auto}
   .week{min-width:640px}
+
+  /* ---- Yon tomonga suriladigan tasmalar ---- */
+  /* Bo'limlar va filtrlar ekranga sig'masa yon tomonga suriladi. Odam
+     buni bilishi uchun o'ng chetda soyali "davomi bor" belgisi turadi.  */
+  .tabs,.filters .seg,.day-strip,.ts-row{
+    scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none}
+  .tabs::-webkit-scrollbar,.filters .seg::-webkit-scrollbar{display:none}
+  .tabs button,.filters .seg button{scroll-snap-align:start}
+  /* Soya faqat surish mumkin bo'lgan tomonda ko'rinadi — oxiriga
+     yetganda o'zi yo'qoladi. Qo'shimcha kod kerak emas.               */
+  .tabs,.day-strip,.ts-row{
+    background:
+      linear-gradient(to right,var(--bg) 40%,transparent) left center/22px 100% no-repeat local,
+      linear-gradient(to left,var(--bg) 40%,transparent) right center/22px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%,rgba(15,23,42,.16),transparent) left center/11px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%,rgba(15,23,42,.16),transparent) right center/11px 100% no-repeat scroll}
+
+  /* Filtr tugmalari ham barmoqqa mos balandlikda */
+  .seg button{min-height:40px;padding:9px 14px}
+
+  /* ---- Barmoq bilan bosiladigan joylar ---- */
+  /* Telefon havolasi, sayt pastidagi havolalar va belgilash katakchalari
+     sichqoncha uchun yetarli edi, barmoq uchun kichik. */
+  .tel-link{min-height:40px}
+  .site .foot-link{min-height:40px;display:inline-flex;align-items:center}
+  /* Telefon raqami va bot havolasi — bosish uchun yetarli baland */
+  .contact-row a{min-height:40px;display:inline-flex;align-items:center}
+  input[type="checkbox"],input[type="radio"]{width:20px;height:20px}
+  .field label input[type="checkbox"],.check-row input[type="checkbox"]{margin-inline-end:8px}
+  .check-row,label.check,.popts label,.perm-row label{min-height:40px;display:flex;align-items:center;gap:8px}
+  select{min-height:40px}
+  /* Oy oldinga-orqaga tugmalari */
+  .month-nav .btn,.mon-nav .btn,.btn.sm.ico-only{min-width:44px}
+
+  /* Davomatdagi "Bugungi darslar" sarlavhasi ikki qatorga tushsin */
+  .today-strip .ts-head{flex-wrap:wrap;row-gap:2px}
+  .today-strip .ts-head b{flex:1 1 100%}
+  .ts-card{min-width:min(78vw,240px)}
+
+  /* Telefondagi menyuda til va mavzu */
+  .menu-tools{padding:0 0 12px;border-bottom:1px solid var(--line);margin-bottom:10px}
+  .menu-lang{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .menu-lang .btn{flex:1 1 auto;min-width:64px;justify-content:center}
 }
 @media (max-width:400px){
-  .page-actions .btn{flex:1 1 100%}
+  .page-actions .btn{flex:1 1 calc(50% - 8px)}
+  .page-actions .btn.primary{flex:1 1 100%}
   .tile .val{font-size:19px}
   .view{padding:14px 14px 84px}
 }
@@ -1939,7 +2024,10 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .chat-form input{flex:1;padding:10px 12px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface)}
 .chat-unread{background:var(--bad);color:#fff;border-radius:999px;font-size:10.5px;font-weight:700;padding:1px 6px;min-width:18px;text-align:center}
 @media (max-width:760px){
-  .chat{grid-template-columns:1fr}
+  /* minmax(0,1fr) — aks holda uzun ism ustunni kengaytirib, butun
+     sahifani yon tomonga siljitib yuboradi.                          */
+  .chat{grid-template-columns:minmax(0,1fr)}
+  .chat-main,.chat-msgs,.chat-form{min-width:0}
   .chat-list{border-right:0;border-bottom:1px solid var(--line);max-height:180px}
   [dir="rtl"] .chat-list{border-left:0;border-bottom:1px solid var(--line)}
   .chat-form input{font-size:16px;min-height:44px}
