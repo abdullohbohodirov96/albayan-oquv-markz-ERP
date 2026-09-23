@@ -212,6 +212,76 @@ function section(t) { out.push('\n' + t); }
     await ctx.close();
   }
 
+  /* ---------- Telefonni yotiq tutganda ---------- */
+  /* Yotiq holatda ekran eni 760 px dan oshadi, lekin bosish baribir
+     barmoq bilan bo'ladi. Shuning uchun o'lchamlar ekran kengligiga
+     emas, kursor turiga (pointer:coarse) qarab kattalashtiriladi.    */
+  section('Telefon yotiq holatda (844×390)');
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi (yotiq): ' + e.message); });
+    await page.goto(FILE);
+    await page.waitForSelector('#login-user', { timeout: 20000 });
+    await page.fill('#login-user', 'admin');
+    await page.fill('#login-pass', '1234');
+    await page.click('button[type=submit]');
+    await page.waitForSelector('#app:not([hidden])', { timeout: 20000 });
+    await page.waitForTimeout(900);
+
+    const small = [];
+    for (const r of ['dashboard', 'students', 'attendance', 'finance', 'settings']) {
+      await page.evaluate(n => window.A.App.go(n), r);
+      await page.waitForTimeout(700);
+      const m = await page.evaluate(() => {
+        const bad = [];
+        document.querySelectorAll('button,select,.tel-link').forEach(el => {
+          const cs = getComputedStyle(el);
+          if (cs.display === 'none' || cs.visibility === 'hidden') return;
+          const b = el.getBoundingClientRect();
+          if (b.width > 0 && b.height > 0 && b.height < 38) {
+            bad.push((el.textContent || el.tagName).trim().slice(0, 14) + ' ' + Math.round(b.height));
+          }
+        });
+        return { ovf: document.documentElement.scrollWidth - document.documentElement.clientWidth, bad: bad.slice(0, 4) };
+      });
+      if (m.ovf > 1) small.push(r + ': yon siljish ' + m.ovf);
+      if (m.bad.length) small.push(r + ': ' + m.bad.join(', '));
+    }
+    ok('Yotiq holatda ham tugmalar ≥ 38px va yon siljish yo’q', small.length === 0, small.join(' | '));
+
+    section('   Belgilash katakchasi yorlig’i bilan bosiladi');
+    /* Guruh oynasidagi dars kunlari — eng ko'p ishlatiladigan katakchalar */
+    await page.evaluate(() => window.A.App.go('groups'));
+    await page.waitForTimeout(900);
+    await page.evaluate(() => {
+      const b = Array.from(document.querySelectorAll('.page-actions button'))
+        .find(x => /Guruh ochish|Guruh qo/.test(x.textContent));
+      if (b) b.click();
+    });
+    await page.waitForSelector('.modal .daypick', { timeout: 10000 }).catch(() => { });
+    await page.waitForTimeout(500);
+    const check = await page.evaluate(() => {
+      const cb = document.querySelector('.daypick input[type=checkbox]');
+      if (!cb) return null;
+      const lab = cb.closest('label');
+      if (!lab) return { noLabel: true };
+      const r = lab.getBoundingClientRect();
+      const before = cb.checked;
+      lab.click();
+      return { h: Math.round(r.height), toggled: cb.checked !== before };
+    });
+    if (check && !check.noLabel) {
+      ok('Yorliq balandligi ≥ 38px', check.h >= 38, String(check.h));
+      ok('Yorliqni bosish katakchani almashtiradi', check.toggled);
+    } else {
+      ok('Belgilash katakchasi yorliq ichida', false, JSON.stringify(check));
+    }
+    await ctx.close();
+  }
+
   /* ---------- O'qituvchi pastki menyusi ---------- */
   section('O’qituvchi pastki menyusi');
   {

@@ -1365,8 +1365,10 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 
 /* Baho tanlash (oynada) */
 .rev-pick{display:flex;gap:4px}
+/* Yulduz barmoq bilan bosiladi — maydoni kamida 44×44 px */
 .rev-pick-b{border:0;background:none;cursor:pointer;padding:2px 4px;
-  font-size:26px;line-height:1;color:var(--line-strong);
+  min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;
+  font-size:28px;line-height:1;color:var(--line-strong);
   transition:transform .14s cubic-bezier(.34,1.56,.64,1),color .14s}
 .rev-pick-b.on{color:#d8ae43}
 .rev-pick-b:hover{transform:scale(1.15)}
@@ -1901,6 +1903,8 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 
   .att-row{gap:8px;padding:10px 12px}
   .att-row .nm{flex:1 1 100%}
+  .daypick label{min-height:44px;min-width:48px;display:inline-flex;
+    align-items:center;justify-content:center;padding:8px 12px}
   .receipt{font-size:11.5px;padding:12px}
   .kv{grid-template-columns:1fr auto}
   .week{min-width:640px}
@@ -1942,7 +1946,6 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   /* Davomatdagi "Bugungi darslar" sarlavhasi ikki qatorga tushsin */
   .today-strip .ts-head{flex-wrap:wrap;row-gap:2px}
   .today-strip .ts-head b{flex:1 1 100%}
-  .ts-card{min-width:min(78vw,240px)}
 
   /* Telefondagi menyuda til va mavzu */
   .menu-tools{padding:0 0 12px;border-bottom:1px solid var(--line);margin-bottom:10px}
@@ -1954,6 +1957,32 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   .page-actions .btn.primary{flex:1 1 100%}
   .tile .val{font-size:19px}
   .view{padding:14px 14px 84px}
+}
+
+/* ---- Barmoq bilan ishlatiladigan qurilma (ekran kengligidan qat'i nazar) ----
+   Telefonni yotiq tutganda eni 760 px dan oshib ketadi, lekin bosish
+   baribir barmoq bilan bo'ladi. Planshetda ham shunday. Shuning uchun
+   bosish maydonlari ekran kengligiga emas, KURSOR turiga qarab
+   kattalashtiriladi.                                                  */
+@media (hover:none) and (pointer:coarse){
+  .btn{min-height:44px}
+  .btn.sm{min-height:40px}
+  .seg button,.tabs button{min-height:40px}
+  /* Davomat belgilash tugmalari — telefonni yotiq tutganda ham katta */
+  .att-opts button{min-height:44px;min-width:76px}
+  .day-strip button{min-width:56px;min-height:56px}
+  .x-btn{min-width:44px;min-height:44px;display:grid;place-items:center}
+  .tel-link,.contact-row a,.site .foot-link{min-height:40px;
+    display:inline-flex;align-items:center}
+  input[type="checkbox"],input[type="radio"]{width:20px;height:20px}
+  .popts label,.perm-row label,.check-row,label.check{min-height:40px;
+    display:flex;align-items:center;gap:8px}
+  /* Dars kunlari — barmoq bilan bosiladigan eng ko'p ishlatiladigan joy */
+  .daypick label{min-height:44px;min-width:48px;display:inline-flex;
+    align-items:center;justify-content:center;padding:8px 12px}
+  select{min-height:40px}
+  .field input,.field select,.field textarea{font-size:16px;min-height:44px}
+  .rev-pick-b{min-width:44px;min-height:44px}
 }
 
 /* Kunlik sana tasmasi (telefon uchun) */
@@ -2145,7 +2174,9 @@ details.more[open]>summary::before{content:'−'}
 .ts-card .ts-time{font-family:var(--mono);font-size:15px;font-weight:600}
 .ts-card .ts-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
 @media (max-width:760px){
-  .ts-card{min-width:170px;min-height:64px}
+  /* Telefonda karta kengroq: guruh nomi va vaqti kesilmasin, barmoq
+     bilan bosish ham oson bo'lsin.                                   */
+  .ts-card{min-width:min(78vw,240px);min-height:64px}
 }
 
 /* ================= SANA TANLASH (o'z taqvimimiz) ================= */

@@ -12,7 +12,7 @@
       keyin (SKIP_WAITING) ishga tushadi.                                    */
 'use strict';
 
-const VERSION = 'albayan-7d6c68ba2940';
+const VERSION = 'albayan-6ffb3f38da73';
 const SHELL = [
   './index.html',
   './css/app.css',
