@@ -16,6 +16,50 @@
     var d = tzNow();
     return toISODate(d) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
   }
+  /** Hozirgi soat "HH:MM" (Toshkent vaqti) */
+  function nowTime() {
+    var d = tzNow();
+    return pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  /** "HH:MM" -> yarim tundan boshlab daqiqa. Noto'g'ri yozuvda null. */
+  function hm(t) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(t == null ? '' : t).trim());
+    if (!m) return null;
+    var v = Number(m[1]) * 60 + Number(m[2]);
+    return (v >= 0 && v < 1440) ? v : null;
+  }
+  /* Dars bosqichi: 'tugadi' — vaqti o'tgan, 'hozir' — ayni paytda ketyapti,
+     'keyin' — hali boshlanmagan. Tugash vaqti yozilmagan bo'lsa 90 daqiqa
+     deb olinadi (standart dars uzunligi).                                */
+  function lessonPhase(lesson, nowMin) {
+    var s = hm(lesson && lesson.start);
+    if (s == null) return 'keyin';
+    var e = hm(lesson && lesson.end);
+    if (e == null || e <= s) e = s + 90;
+    var n = (nowMin == null) ? hm(nowTime()) : nowMin;
+    if (n == null) return 'keyin';
+    if (n >= e) return 'tugadi';
+    if (n >= s) return 'hozir';
+    return 'keyin';
+  }
+  /* Ro'yxatda tartib: avval ayni paytdagi dars, keyin kelayotganlari,
+     eng oxirida tugab bo'lganlari. Har guruh ichida soat bo'yicha.     */
+  function lessonOrder(lesson, nowMin) {
+    var ph = lessonPhase(lesson, nowMin);
+    var s = hm(lesson && lesson.start);
+    if (s == null) s = 0;
+    /* Tugaganlari orasida ENG OXIRGISI birinchi turadi — ustoz odatda
+       endigina tugagan darsning davomatini belgilaydi.                */
+    return (ph === 'hozir' ? 0 : ph === 'keyin' ? 1 : 2) * 10000 +
+      (ph === 'tugadi' ? (1440 - s) : s);
+  }
+  /** Darslarni "hozir → keyin → tugadi" tartibida qaytaradi */
+  function sortLessons(list, nowMin) {
+    var n = (nowMin == null) ? hm(nowTime()) : nowMin;
+    return (list || []).slice().sort(function (a, b) {
+      return lessonOrder(a, n) - lessonOrder(b, n);
+    });
+  }
   function ymOf(isoDate) { return isoDate.slice(0, 7); }
   function thisMonth() { return today().slice(0, 7); }
   function parseDate(iso) {
@@ -131,7 +175,9 @@
     /* O'quv qismi */
     'modules', 'topics', 'materials', 'homework', 'lessonlog',
     'holidays', 'pauses', 'makeups', 'questions', 'feedback',
-    'quizzes', 'quizres', 'asks', 'parents', 'files'];
+    'quizzes', 'quizres', 'asks', 'parents', 'files',
+    /* Saytdagi izohlar (markaz tasdiqlaydi) */
+    'reviews'];
   var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 
@@ -497,6 +543,8 @@
   Object.assign(global.A, {
     TZ_OFFSET_MIN: TZ_OFFSET_MIN,
     tzNow: tzNow, today: today, nowStamp: nowStamp, toISODate: toISODate,
+    nowTime: nowTime, hm: hm, lessonPhase: lessonPhase, lessonOrder: lessonOrder,
+    sortLessons: sortLessons,
     ymOf: ymOf, thisMonth: thisMonth, addDays: addDays, addMonths: addMonths,
     daysInMonth: daysInMonth, weekdayOf: weekdayOf, parseDate: parseDate,
     monthStart: monthStart, monthEnd: monthEnd, monthLabel: monthLabel, dateLabel: dateLabel,

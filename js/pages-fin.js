@@ -240,6 +240,80 @@
     function msg(t) { return h('div', { class: 'banner warn', style: 'margin:0' }, h('div', {}, t)); }
   };
 
+  /* ================= SAYTDAGI IZOHLAR =================
+     O'quvchi saytdan izoh yozadi — u DARHOL chiqmaydi. Shu yerda markaz
+     o'qib chiqib "Saytga chiqarish" tugmasini bosadi. Ya'ni saytda faqat
+     markaz tasdiqlagan izoh turadi.                                      */
+  function reviewCard(App) {
+    var D = A.Data, UI = A.UI, h = UI.h;
+    var all = A.sortBy(D.all('reviews'), 'createdAt', 'desc');
+    var yangi = all.filter(function (r) { return r.status !== 'ochiq'; });
+    var ochiq = all.filter(function (r) { return r.status === 'ochiq'; });
+
+    function stars(n) {
+      var t = '';
+      for (var i = 1; i <= 5; i++) t += (i <= (Number(n) || 0) ? '★' : '☆');
+      return t;
+    }
+    async function setStatus(r, st) {
+      r.status = st;
+      await D.save('reviews', r);
+      await A.Ops.audit(App.user,
+        st === 'ochiq' ? 'Izoh saytga chiqarildi' : 'Izoh saytdan olindi', r.name, '');
+      UI.toast('Saqlandi.', 'ok'); App.render();
+    }
+    function rows(list, ochiqmi) {
+      if (!list.length) {
+        return h('p', { class: 'muted small' },
+          ochiqmi ? 'Saytda hozircha izoh yo’q.' : 'Yangi izoh yo’q.');
+      }
+      return UI.table([
+        { label: 'Kim', render: function (r) { return h('b', {}, r.name); } },
+        { label: 'Baho', render: function (r) { return h('span', { class: 'rev-stars' }, stars(r.rating)); } },
+        { label: 'Izoh', render: function (r) { return h('span', {}, r.text); } },
+        { label: 'Guruh', render: function (r) { return r.about || '—'; } },
+        { label: 'Sana', render: function (r) { return String(r.createdAt || '').slice(0, 10); } },
+        {
+          label: '', right: true, render: function (r) {
+            return h('div', { class: 'rowflex', style: 'justify-content:flex-end;gap:6px' }, [
+              h('button', {
+                class: 'btn sm' + (ochiqmi ? '' : ' primary'), onclick: function (e) {
+                  e.stopPropagation();
+                  setStatus(r, ochiqmi ? 'yangi' : 'ochiq');
+                }
+              }, ochiqmi ? 'Saytdan olish' : 'Saytga chiqarish'),
+              h('button', {
+                class: 'btn sm danger', onclick: async function (e) {
+                  e.stopPropagation();
+                  if (await UI.confirm('Izohni o’chirish',
+                    'Bu izoh butunlay o’chiriladi.', 'O’chirish', true)) {
+                    await D.remove('reviews', r.id);
+                    await A.Ops.audit(App.user, 'Izoh o’chirildi', r.name, '');
+                    UI.toast('O’chirildi.', 'ok'); App.render();
+                  }
+                }
+              }, 'O’chirish')
+            ]);
+          }
+        }
+      ], list, { page: 50 });
+    }
+
+    return UI.card('Saytdagi izohlar', [
+      h('p', { class: 'muted small', style: 'margin:0 0 12px' },
+        'Izohni o’quvchilarning o’zi saytdan yozadi. Siz tasdiqlamaguningizcha ' +
+        'saytda ko’rinmaydi. Tepadagi yuradigan tasma kamida 3 ta izoh ' +
+        'bo’lganda paydo bo’ladi.'),
+      /* Sarlavha va soni alohida tugunda — tarjima aynan sarlavhaga
+         tushsin, son esa o'zgarmasin.                                  */
+      h('b', { class: 'small' }, [h('span', {}, 'Yangi'), h('span', {}, ' · ' + yangi.length)]),
+      rows(yangi, false),
+      h('div', { style: 'height:14px' }),
+      h('b', { class: 'small' }, [h('span', {}, 'Saytda turibdi'), h('span', {}, ' · ' + ochiq.length)]),
+      rows(ochiq, true)
+    ]);
+  }
+
   /* ================= AVTOMATIK OYLIK HISOBLAR ================= */
   function autoInvoiceCard(App) {
     var box = h('div', {});
@@ -1727,6 +1801,7 @@
       if (App.can('invoice.create')) {
         view.appendChild(h('div', { id: 'auto-inv', style: 'margin-top:14px' }, autoInvoiceCard(App)));
       }
+      view.appendChild(h('div', { style: 'margin-top:14px' }, reviewCard(App)));
     }
 
     if (tab === 'users') {

@@ -33,12 +33,31 @@ function levelList(lg) {
   }));
 }
 
-const PER_LEVEL = 5;            // har darajadan nechta savol
-const PASS = 3;                 // daraja o'tgan hisoblanishi uchun kerakli to'g'ri javob
+/* Har darajadan nechta savol olinadi — JAMI 20 ta.
+   Avval har darajadan 5 tadan, jami 30 ta edi. Markaz "test qisqaroq
+   bo'lsin" deb so'radi. Yuqori darajalarda savol bittadan ko'p: C1/C2
+   ni noto'g'ri berib qo'ymaslik uchun aynan o'sha yerda aniqlik kerak. */
+const COUNT = { A1: 3, A2: 3, B1: 3, B2: 3, C1: 4, C2: 4 };
+const TOTAL_Q = ORDER.reduce((n, l) => n + COUNT[l], 0);            // 20
+/** Daraja o'tilgan hisoblanishi uchun kerakli to'g'ri javob soni.
+    4 ta savolli darajada 3 ta, 3 ta savollida 2 ta. Ya'ni taxmin bilan
+    o'tib ketish ehtimoli har darajada 16% dan past, ketma-ket bir necha
+    darajada esa deyarli nolga tushadi.                                */
+function passFor(n) { return Number(n) >= 4 ? 3 : 2; }
+/* Eng yuqori daraja (C2) alohida shart bilan beriladi: jami 20 ta
+   savoldan kamida 19 tasi to'g'ri bo'lishi kerak. Avvalgi 30 talik
+   testda bu 28 ta edi — nisbat o'sha-o'shaligicha qoldi. Ya'ni C2 ni
+   faqat deyarli xatosiz ishlagan odam oladi.                          */
+const C2_MIN_TOTAL = 19;
 const COL = 'testq/';           // savollar
 const SESS = 'testsess/';       // boshlangan testlar
 const RESULT = 'placements/';   // natijalar
-const TTL_MS = Number(process.env.TEST_TTL_MS || 60 * 60 * 1000);   // 1 soat
+/* Testga berilgan vaqt — 10 daqiqa. Vaqt tugagach sahifa javoblarni
+   o'zi yuboradi; kechikkan so'rov uchun bir daqiqa muhlat qoldiriladi
+   (sekin internetda javob yo'qolib qolmasin).                          */
+const LIMIT_MS = Number(process.env.TEST_LIMIT_MS || 10 * 60 * 1000);
+const GRACE_MS = Number(process.env.TEST_GRACE_MS || 60 * 1000);
+const TTL_MS = Number(process.env.TEST_TTL_MS || LIMIT_MS + GRACE_MS);
 
 const KINDS = {};
 Object.keys(DATA.KIND_LABELS).forEach(k => { KINDS[k] = DATA.KIND_LABELS[k].uz; });
@@ -65,6 +84,8 @@ function seeded(seed) {
   return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; };
 }
 function clean(t, max) { return String(t == null ? '' : t).slice(0, max || 400); }
+/** Savollar to'plamining belgisi — matn o'zgarsa o'zgaradi */
+const BANK_V = sha(JSON.stringify(DATA.QUESTIONS)).slice(0, 12);
 
 /** Savol yozuvidan tanlangan tildagi matn va variantlar */
 function textOf(q, lg) {
@@ -83,7 +104,10 @@ async function ensureBank(store, opts) {
   const rows = await store.list(COL);
   const first = rows.map(r => r.data).filter(Boolean)[0];
   const multilingual = !!(first && first.t && first.t.ru && first.t.ar);
-  if (rows.length && multilingual && rows.length === DATA.QUESTIONS.length) return 0;
+  /* Savol matni o'zgargan bo'lsa bazadagi eski to'plam qolib ketmasin:
+     har bir savolga to'plam belgisi yoziladi va u solishtiriladi. */
+  const sameBank = !!(first && first.bankVersion === BANK_V);
+  if (rows.length && multilingual && sameBank && rows.length === DATA.QUESTIONS.length) return 0;
 
   /* Eski to'plamni tozalaymiz — aks holda bir xil savol ikki marta chiqardi */
   if (rows.length && store.del) {
@@ -103,6 +127,7 @@ async function ensureBank(store, opts) {
       t: { uz: s.uz, ru: s.ru, ar: s.ar },
       /* variantlar soni tillarda bir xil bo'lishi kerak */
       count: s.uz.o.length,
+      bankVersion: BANK_V,
       active: true,
       order: i,
       createdAt: nowStamp(opts)
@@ -129,15 +154,16 @@ async function start(store, opts) {
   const rnd = seeded(crypto.randomBytes(8).toString('hex'));
   const picked = [];
   for (const lvl of ORDER) {
+    const need = COUNT[lvl] || 3;
     /* Har darajada savol TURLARI xilma-xil bo'lsin */
     const pool = shuffle(all.filter(q => q.level === lvl), rnd);
     const byKind = {};
     pool.forEach(q => { (byKind[q.kind || 'lugat'] = byKind[q.kind || 'lugat'] || []).push(q); });
     const kinds = shuffle(Object.keys(byKind), rnd);
     const take = [];
-    for (const k of kinds) { if (take.length < PER_LEVEL) take.push(byKind[k].shift()); }
+    for (const k of kinds) { if (take.length < need) take.push(byKind[k].shift()); }
     for (const q of pool) {
-      if (take.length >= PER_LEVEL) break;
+      if (take.length >= need) break;
       if (take.indexOf(q) < 0) take.push(q);
     }
     take.filter(Boolean).forEach(q => picked.push(q));
@@ -152,12 +178,15 @@ async function start(store, opts) {
     const n = textOf(q, L).o.length;
     mix[q.id] = shuffle(Array.from({ length: n }, (_, i) => i), rnd);
   });
+  const deadline = Date.now() + LIMIT_MS;
   await store.set(SESS + id, {
     id,
     qids: picked.map(q => q.id),
     mix,
     lang: L,
     startedAt: nowStamp(opts),
+    deadline,
+    /* Muhlat = vaqt chegarasi + kechikish uchun bir daqiqa */
     expiresAt: Date.now() + TTL_MS,
     ip: sha(String((opts && opts.ip) || '')).slice(0, 16),
     usedAt: null
@@ -167,6 +196,9 @@ async function start(store, opts) {
     lang: L,
     rtl: !!DATA.RTL[L],
     total: picked.length,
+    /* Sahifa shu soniyalarga qarab sanoqni chizadi va vaqt tugaganda
+       javoblarni o'zi yuboradi. Baholash baribir serverda bo'ladi. */
+    limitSec: Math.round(LIMIT_MS / 1000),
     questions: picked.map(q => {
       const t = textOf(q, L);
       return {
@@ -181,12 +213,18 @@ async function start(store, opts) {
   };
 }
 
-/** Daraja hisoblash: pastdan yuqoriga, birinchi yiqilgan darajada to'xtaydi. */
-function decide(perLevel) {
+/** Daraja hisoblash: pastdan yuqoriga, birinchi yiqilgan darajada to'xtaydi.
+    C2 uchun qo'shimcha shart — jami to'g'ri javob C2_MIN_TOTAL dan kam
+    bo'lmasligi kerak; aks holda bir pog'ona pastga tushiriladi.         */
+function decide(perLevel, score, total) {
   let reached = '';
   for (const lvl of ORDER) {
     const r = perLevel[lvl] || { ok: 0, total: 0 };
-    if (r.total && r.ok >= PASS) reached = lvl; else break;
+    if (r.total && r.ok >= passFor(r.total)) reached = lvl; else break;
+  }
+  if (reached === 'C2' && Number(total) >= TOTAL_Q &&
+    Number(score) < C2_MIN_TOTAL) {
+    reached = ORDER[ORDER.indexOf('C2') - 1];   // C1
   }
   return reached || 'A0';
 }
@@ -222,7 +260,7 @@ async function submit(store, opts) {
       ? Number(map[shown]) : shown;
     if (real === Number(q.answer)) { lvl.ok++; score++; }
   }
-  const level = decide(perLevel);
+  const level = decide(perLevel, score, ses.qids.length);
 
   ses.usedAt = nowStamp(opts);
   await store.set(SESS + id, ses);
@@ -271,6 +309,7 @@ function levelInfo(code, lg) {
 }
 
 module.exports = {
-  LEVELS, KINDS, ORDER, PER_LEVEL, PASS, COL, SESS, RESULT, LANGS, DEF_LANG,
+  LEVELS, KINDS, ORDER, COUNT, TOTAL_Q, passFor, C2_MIN_TOTAL, LIMIT_MS, GRACE_MS,
+  COL, SESS, RESULT, LANGS, DEF_LANG,
   ensureBank, bank, start, submit, decide, cleanup, levelInfo, levelList, lang
 };

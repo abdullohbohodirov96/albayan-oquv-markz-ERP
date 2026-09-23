@@ -337,6 +337,156 @@ async function api(p, opts = {}) {
   await page.goto(BASE);
   await page.waitForSelector('.site-hero', { timeout: 15000 });
 
+  /* ================= 4b. Izohlar ================= */
+  /* Qoida: saytda FAQAT markaz tasdiqlagan izoh turadi. Shuning uchun
+     sinov avval izoh yozadi, uning saytga CHIQMAGANINI tekshiradi,
+     keyin tasdiqlab, chiqqanini tekshiradi. Oxirida o'zi yozganini
+     o'chiradi — demo baza ifloslanmasin.                             */
+  section('4b. Izohlar (sharhlar)');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const revIds = [];
+  const NAME1 = 'Sinov Izoh ' + R;
+  const revBefore = await api('/api/public');
+  const n0 = (revBefore.json.reviews || []).length;
+  const post1 = await api('/api/review', {
+    method: 'POST', ip: '203.0.113.' + (10 + (Date.now() % 40)),
+    body: { name: NAME1, text: 'Darslar juda yaxshi o’tyapti, ustoz tushuntirib beradi.', rating: 5, about: 'B1 guruhi' }
+  });
+  eq('Izoh qabul qilindi', post1.status, 200);
+  const all1 = await api('/api/collection?name=reviews', { cookie: dir });
+  const revOne = Object.values((all1.json || {}).items || {}).filter(r => r && r.name === NAME1)[0];
+  ok('Izoh bazaga tushdi', !!revOne, JSON.stringify(Object.keys((all1.json || {}).items || {})).slice(0, 120));
+  if (revOne) revIds.push(revOne.id);
+  eq('Holati "yangi" — tasdiqlanmagan', revOne && revOne.status, 'yangi');
+
+  const pubA = await api('/api/public');
+  eq('Tasdiqlanmagan izoh /api/public da yo’q', (pubA.json.reviews || []).length, n0);
+  ok('Ismi ham chiqmaydi', !JSON.stringify(pubA.json.reviews || []).includes(NAME1));
+
+  await page.goto(BASE);
+  await page.waitForSelector('#izohlar', { timeout: 15000 });
+  const v0 = await page.evaluate(() => ({
+    text: document.body.innerText,
+    band: !!document.querySelector('#rev-band:not([hidden])'),
+    btns: Array.from(document.querySelectorAll('button')).filter(b => /Izoh qoldirish/.test(b.textContent)).length,
+    grid: document.querySelectorAll('#izohlar .rev-card').length
+  }));
+  ok('Tasdiqlanmagan izoh saytda ko’rinmaydi', !v0.text.includes(NAME1));
+  ok('Pastda "Izoh qoldirish" tugmasi bor', v0.btns >= 1, String(v0.btns));
+
+  /* Markaz tasdiqlaydi */
+  if (revOne) {
+    const appr = await api('/api/doc?path=' + encodeURIComponent('reviews/' + revOne.id), {
+      method: 'PUT', cookie: dir, body: { data: Object.assign({}, revOne, { status: 'ochiq' }) }
+    });
+    eq('Markaz izohni tasdiqladi', appr.status, 200);
+  }
+  const pubB = await api('/api/public');
+  const shown = (pubB.json.reviews || []).filter(r => r.name === NAME1)[0];
+  ok('Tasdiqlangandan keyin /api/public da chiqdi', !!shown, JSON.stringify(pubB.json.reviews || []).slice(0, 160));
+  if (shown) {
+    ok('Faqat kerakli maydonlar beriladi',
+      Object.keys(shown).sort().join(',') === 'about,date,name,rating,text',
+      Object.keys(shown).join(','));
+    ok('IP manzil chiqmaydi', !('ip' in shown));
+    eq('Baho saqlandi', shown.rating, 5);
+  }
+
+  await page.goto(BASE);
+  await page.waitForSelector('#izohlar .rev-card, #izohlar .rev-empty', { timeout: 15000 });
+  const v1 = await page.evaluate(() => ({
+    text: document.body.innerText,
+    band: !!document.querySelector('#rev-band:not([hidden])'),
+    halves: document.querySelectorAll('#rev-track .rev-half').length,
+    grid: document.querySelectorAll('#izohlar .rev-card').length,
+    stars: document.querySelectorAll('#izohlar .rev-card .rev-star.on').length,
+    top: !!Array.from(document.querySelectorAll('#rev-band button')).some(b => /Izoh qoldirish/.test(b.textContent))
+  }));
+  ok('Izoh saytda chiqdi', v1.text.includes(NAME1), v1.text.slice(0, 200));
+  ok('Izoh kartalari chizildi', v1.grid >= 1, String(v1.grid));
+  ok('Yulduzchalar ko’rinadi', v1.stars >= 1, String(v1.stars));
+  const nOchiq = (pubB.json.reviews || []).length;
+  if (nOchiq >= 3) {
+    ok('3 tadan ko’p izohda tepadagi tasma ochiladi', v1.band, 'band=' + v1.band);
+    ok('Tasma uzluksiz yurishi uchun ro’yxat ikki marta qo’yilgan', v1.halves === 2, String(v1.halves));
+    ok('Tasmada ham "Izoh qoldirish" tugmasi bor', v1.top);
+  } else {
+    ok('3 tadan kam izohda tepadagi tasma yopiq', !v1.band, 'band=' + v1.band);
+    /* Tasma kamida 3 ta izohda ochiladi — yetmaganini sinov o'zi
+       qo'shadi, oxirida esa o'zi o'chiradi.                          */
+    for (let i = 0; i < 3 - nOchiq; i++) {
+      const rid = 'rev_sinov_' + R + '_' + i;
+      await api('/api/doc?path=' + encodeURIComponent('reviews/' + rid), {
+        method: 'PUT', cookie: dir,
+        body: {
+          data: {
+            id: rid, name: 'Sinov Tasma ' + i, text: 'Guruhda gapirish ko’p, natija tez sezildi.',
+            rating: 5, about: 'A2 guruhi', status: 'ochiq', createdAt: '2026-09-01 10:00'
+          }
+        }
+      });
+      revIds.push(rid);
+    }
+    await page.goto(BASE);
+    await page.waitForSelector('#rev-band:not([hidden])', { timeout: 15000 });
+    const v2 = await page.evaluate(() => ({
+      band: !!document.querySelector('#rev-band:not([hidden])'),
+      halves: document.querySelectorAll('#rev-track .rev-half').length,
+      cards: document.querySelectorAll('#rev-track .rev-card').length,
+      top: Array.from(document.querySelectorAll('#rev-band button')).some(b => /Izoh qoldirish/.test(b.textContent)),
+      anim: getComputedStyle(document.querySelector('#rev-track')).animationName
+    }));
+    ok('3 ta izohda tepadagi tasma ochildi', v2.band);
+    ok('Tasma uzluksiz yurishi uchun ro’yxat ikki marta qo’yilgan', v2.halves === 2, String(v2.halves));
+    ok('Tasmada izoh kartalari bor', v2.cards >= 6, String(v2.cards));
+    ok('Tasma yuradi (animatsiya ulangan)', /rev/i.test(v2.anim || ''), v2.anim);
+    ok('Tasmada ham "Izoh qoldirish" tugmasi bor', v2.top);
+  }
+
+  section('   Saytdan izoh yozish oynasi');
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('button')).filter(x => /Izoh qoldirish/.test(x.textContent)).pop();
+    b.click();
+  });
+  await page.waitForSelector('.modal .rev-pick', { timeout: 10000 });
+  const NAME2 = 'Sinov Oyna ' + R;
+  await page.fill('#rev-name', NAME2);
+  await page.fill('#rev-text', 'Guruhda hamma gapiradi, ustoz xatoni darrov tuzatadi.');
+  await page.evaluate(() => document.querySelectorAll('.rev-pick .rev-pick-b')[3].click());
+  const picked = await page.evaluate(() => document.querySelectorAll('.rev-pick .rev-pick-b.on').length);
+  eq('4 yulduz tanlandi', picked, 4);
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('.modal button')).filter(x => /Yuborish/.test(x.textContent))[0];
+    b.click();
+  });
+  await page.waitForTimeout(1200);
+  const all2 = await api('/api/collection?name=reviews', { cookie: dir });
+  const revUi = Object.values((all2.json || {}).items || {}).filter(r => r && r.name === NAME2)[0];
+  ok('Oynadan yozilgan izoh bazaga tushdi', !!revUi, NAME2);
+  if (revUi) revIds.push(revUi.id);
+  eq('U ham avval tasdiqlanadi', revUi && revUi.status, 'yangi');
+  eq('Tanlangan baho saqlandi', revUi && revUi.rating, 4);
+  const pubC = await api('/api/public');
+  ok('Yangi izoh darrov saytga chiqmaydi',
+    !JSON.stringify(pubC.json.reviews || []).includes(NAME2));
+
+  section('   Noto’g’ri izoh qabul qilinmaydi');
+  const ipBad = '203.0.113.' + (60 + (Date.now() % 30));
+  eq('Ismsiz izoh rad etiladi',
+    (await api('/api/review', { method: 'POST', ip: ipBad, body: { name: '', text: 'Juda yaxshi markaz ekan.', rating: 5 } })).status, 400);
+  eq('Juda qisqa izoh rad etiladi',
+    (await api('/api/review', { method: 'POST', ip: ipBad, body: { name: 'Sinov', text: 'zo’r', rating: 5 } })).status, 400);
+  eq('Bahosiz izoh rad etiladi',
+    (await api('/api/review', { method: 'POST', ip: ipBad, body: { name: 'Sinov', text: 'Darslar yaxshi o’tyapti.', rating: 0 } })).status, 400);
+
+  /* Sinov yozganlarini o'chiramiz */
+  for (const id of revIds) {
+    await api('/api/doc?path=' + encodeURIComponent('reviews/' + id), { method: 'DELETE', cookie: dir });
+  }
+  const pubZ = await api('/api/public');
+  ok('Sinov izohlari tozalandi',
+    !JSON.stringify(pubZ.json.reviews || []).includes(NAME1), 'tozalanmadi');
+
   /* ================= 5. Telefon ko'rinishi ================= */
   section('5. Telefon ko’rinishi');
   for (const w of [360, 390, 430]) {

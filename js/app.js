@@ -791,7 +791,11 @@
       note: 'Bu natija taxminiy. Aniq daraja ustoz bilan qisqa suhbatdan keyin belgilanadi.',
       apply: 'Ariza qoldirish', again: 'Qayta topshirish',
       errStart: 'Testni boshlab bo’lmadi.', errSend: 'Natijani olishda xato.',
-      changeLang: 'Tilni almashtirish'
+      changeLang: 'Tilni almashtirish',
+      rules: '20 ta savol · 10 daqiqa',
+      rulesNote: 'Vaqt tugaganda javoblaringiz o’zi yuboriladi.',
+      time: 'Qolgan vaqt',
+      timeUp: 'Vaqt tugadi — belgilangan javoblaringiz yuborildi.'
     },
     ru: {
       title: 'Тест на определение уровня', sub: 'A1 · A2 · B1 · B2 · C1 · C2',
@@ -805,7 +809,11 @@
       note: 'Результат приблизительный. Точный уровень определяется после короткой беседы с преподавателем.',
       apply: 'Оставить заявку', again: 'Пройти заново',
       errStart: 'Не удалось начать тест.', errSend: 'Ошибка при получении результата.',
-      changeLang: 'Сменить язык'
+      changeLang: 'Сменить язык',
+      rules: '20 вопросов · 10 минут',
+      rulesNote: 'Когда время выйдет, ответы отправятся сами.',
+      time: 'Осталось времени',
+      timeUp: 'Время вышло — отмеченные ответы отправлены.'
     },
     ar: {
       title: 'اختبار تحديد المستوى', sub: 'A1 · A2 · B1 · B2 · C1 · C2',
@@ -819,7 +827,11 @@
       note: 'هذه النتيجة تقريبية. يُحدَّد المستوى بدقّة بعد حديث قصير مع الأستاذ.',
       apply: 'أرسل طلباً', again: 'أعد الاختبار',
       errStart: 'تعذّر بدء الاختبار.', errSend: 'خطأ في جلب النتيجة.',
-      changeLang: 'تغيير اللغة'
+      changeLang: 'تغيير اللغة',
+      rules: '٢٠ سؤالاً · ١٠ دقائق',
+      rulesNote: 'عند انتهاء الوقت تُرسَل إجاباتك تلقائياً.',
+      time: 'الوقت المتبقّي',
+      timeUp: 'انتهى الوقت — أُرسلت إجاباتك المحدَّدة.'
     }
   };
   var TEST_LANGS = [
@@ -850,17 +862,51 @@
     var err = h('div', { class: 'err-msg', hidden: true });
     var body = h('div', { class: 'test-body' });
     var head = h('div', {}, []);
+    /* Sanoq — test davomida yuqorida turadi */
+    var clockV = h('b', { class: 'test-clock-v', dir: 'ltr' }, '');
+    var clock = h('div', { class: 'test-clock', hidden: true, role: 'timer' }, [
+      UI.icon('clock'), h('span', { class: 'test-clock-l' }, ''), clockV
+    ]);
 
     var homeBtn = h('button', {
       class: 'btn sm', type: 'button',
-      onclick: function () { location.hash = ''; renderLanding(); }
+      onclick: function () { stopClock(); location.hash = ''; renderLanding(); }
     }, T().home);
-    var box = h('div', { class: 'login test-box' }, [head, err, body,
+    var box = h('div', { class: 'login test-box' }, [head, clock, err, body,
       h('div', { class: 'login-alt' }, [homeBtn])
     ]);
     wrap.appendChild(box);
 
     var SES = null, QS = [], LVLS = [], pos = 0, picked = {};
+    /* Vaqt chegarasi: serverdan `limitSec` keladi. Sanoq faqat ko'rsatish
+       uchun — haqiqiy chegarani server tekshiradi (sessiya muddati). */
+    var endAt = 0, tick = null, timeUp = false;
+
+    function stopClock() {
+      if (tick) { clearInterval(tick); tick = null; }
+      clock.hidden = true;
+    }
+    function drawClock() {
+      var left = Math.max(0, Math.round((endAt - Date.now()) / 1000));
+      var m = Math.floor(left / 60), s = left % 60;
+      clockV.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      clock.classList.toggle('low', left <= 60);
+      if (left <= 0) {
+        if (tick) { clearInterval(tick); tick = null; }
+        timeUp = true;
+        finish(true);
+      }
+    }
+    function startClock(sec) {
+      stopClock();
+      if (!(sec > 0)) return;
+      endAt = Date.now() + sec * 1000;
+      timeUp = false;
+      clock.hidden = false;
+      clock.querySelector('.test-clock-l').textContent = T().time;
+      drawClock();
+      tick = setInterval(drawClock, 1000);
+    }
 
     paintHead();
     pickLang();
@@ -882,7 +928,12 @@
     function pickLang() {
       UI.clear(body);
       err.hidden = true;
+      stopClock();
       body.appendChild(h('div', { class: 'test-lang' }, [
+        h('div', { class: 'test-rules' }, [
+          UI.icon('clock'), h('b', {}, T().rules)
+        ]),
+        h('p', { class: 'small muted' }, T().rulesNote),
         h('p', { class: 'small muted' }, T().pick),
         h('div', { class: 'test-lang-row' }, TEST_LANGS.map(function (l) {
           return h('button', {
@@ -908,9 +959,11 @@
         paintHead();
         pos = 0; picked = {};
         if (!QS.length) throw new Error(T().errStart);
+        startClock(Number(d.limitSec) || 0);
         step();
       } catch (ex) {
         UI.clear(body);
+        stopClock();
         err.hidden = false;
         err.textContent = ex.message || T().errStart;
         body.appendChild(h('button', {
@@ -957,8 +1010,10 @@
       ]));
     }
 
-    /* Oxirida: ism/telefon (ixtiyoriy) va yuborish */
-    function finish() {
+    /* Oxirida: ism/telefon (ixtiyoriy) va yuborish.
+       `auto` — vaqt tugadi, savol qoldi-qolmadi javoblar darrov ketadi. */
+    function finish(auto) {
+      if (!auto) stopClock();
       UI.clear(body);
       var nameI = h('input', { id: 'test-name', type: 'text', placeholder: T().name, maxlength: '80' });
       var phoneI = h('input', { id: 'test-phone', type: 'tel', placeholder: T().phone, maxlength: '30' });
@@ -968,10 +1023,13 @@
         class: 'test-end',
         onsubmit: function (e) { e.preventDefault(); send(); }
       }, [
-        h('p', {}, T().done),
+        auto ? h('p', { class: 'test-timeup' }, T().timeUp) : h('p', {}, T().done),
         h('p', { class: 'small muted' }, T().hint),
         nameI, phoneI, btn
       ]));
+      /* Vaqt tugagan bo'lsa kutib turmaymiz — server muhlati ham
+         tugab qolmasin. Ism/telefonsiz ham natija chiqadi. */
+      if (auto) send();
 
       async function send() {
         btn.disabled = true; btn.textContent = T().calc; err.hidden = true;
@@ -991,12 +1049,15 @@
     }
 
     function show(r) {
+      stopClock();
       UI.clear(body);
       var info = r.info || {};
       var list = (r.levels && r.levels.length) ? r.levels : LVLS;
       var rows = list.map(function (l) {
         var p = (r.perLevel || {})[l.code] || { ok: 0, total: 0 };
-        var okAll = p.total && p.ok >= 3;
+        /* Daraja o'tilgan: 4 savolli darajada 3 ta, 3 savollida 2 ta.
+           Shu qoida serverdagi passFor() bilan bir xil. */
+        var okAll = p.total && p.ok >= (p.total >= 4 ? 3 : 2);
         return h('div', { class: 'test-row' + (okAll ? ' ok' : '') }, [
           h('b', {}, l.code),
           h('span', { class: 'small' }, l.name),
@@ -1412,7 +1473,7 @@
         h('button', {
           class: 'btn sm', type: 'button',
           onclick: function () { location.hash = 'kabinet'; renderKabinet(); }
-        }, [UI.icon('key'), 'O’quvchi kabineti']),
+        }, [UI.icon('card'), 'O’quvchi kabineti']),
         h('button', {
           class: 'btn sm primary', type: 'button',
           onclick: function () { location.hash = 'kirish'; renderLogin(null); }
@@ -1472,6 +1533,19 @@
         ]),
         h('div', { class: 'hero-badge' }, [h('b', {}, 'AlBayan'), h('span', {}, 'Cairo')])
       ])
+    ]);
+
+    /* Izohlar tasmasi — hero ostida sekin yurib turadi.
+       Tasdiqlangan izoh 3 tadan kam bo'lsa ko'rinmaydi.                */
+    var revTrack = h('div', { class: 'rev-track', id: 'rev-track' });
+    var revBand = h('section', { class: 'rev-band', id: 'rev-band', hidden: true }, [
+      h('div', { class: 'rev-band-head' }, [
+        h('span', { class: 'rev-band-t' }, 'O’quvchilarimiz nima deydi'),
+        h('button', {
+          class: 'btn sm gold', type: 'button', onclick: function () { openReview(); }
+        }, [UI.icon('edit'), h('span', {}, 'Izoh qoldirish')])
+      ]),
+      h('div', { class: 'rev-marquee' }, revTrack)
     ]);
 
     /* Ko'rsatkichlar — hero ostida alohida to'q tasma.
@@ -1674,6 +1748,23 @@
       faqBox
     ]);
 
+    /* ---------- Izohlar (pastda, to'liq ro'yxat) ---------- */
+    var revGrid = h('div', { class: 'rev-grid', id: 'rev-grid' });
+    var revSec = h('section', { class: 'site-sec reveal', id: 'izohlar' }, [
+      h('div', { class: 'sec-mid' }, [
+        h('div', { class: 'sec-eyebrow center' }, 'Izohlar'),
+        h('h2', {}, 'O’quvchilarimiz nima deydi'),
+        h('p', { class: 'sec-note center', id: 'rev-lead' },
+          'Izohlarni o’quvchilarning o’zi yozadi. Markaz ko’rib chiqqach saytda chiqadi.')
+      ]),
+      revGrid,
+      h('div', { class: 'rev-add' }, [
+        h('button', {
+          class: 'btn gold lg', type: 'button', onclick: function () { openReview(); }
+        }, [UI.icon('edit'), h('span', {}, 'Izoh qoldirish')])
+      ])
+    ]);
+
     /* ---------- Pastdagi chaqiruv tasmasi ---------- */
     var ctaBand = h('section', { class: 'cta-band reveal' }, [
       h('div', { class: 'cta-ico' }, UI.icon('calendar')),
@@ -1737,8 +1828,8 @@
     wrap.appendChild(siteBackdrop());
     wrap.appendChild(top);
     wrap.appendChild(h('div', { class: 'site-wrap' },
-      [hero, statsBand, levelsSec, priceSec, feats, teachers,
-        timetable, apply, faq, ctaBand, foot]));
+      [hero, revBand, statsBand, levelsSec, priceSec, feats, teachers,
+        timetable, apply, revSec, faq, ctaBand, foot]));
     A.I18N.apply(wrap);
     fillPublic();
     siteMotion(top);
@@ -1797,6 +1888,7 @@
       paintTeachers(d.teachers || []);
       paintSlots(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes, d.lessonTimes);
       paintFaq(d.faq || []);
+      paintReviews(d.reviews || []);
       setLeadCourse(d.courses || []);
       paintTimePick(d.workStart || '08:00', d.workEnd || '22:00', d.lessonMinutes || 90, d.breakMinutes, d.lessonTimes);
       if (A._siteSeen) {
@@ -1846,7 +1938,7 @@
           sub: d.tgQabulLabel || '', url: tgUrl(d.tgQabul) });
       }
       if (d.tgChannel) {
-        out.push({ ico: 'bot', cls: 'soc-tg', name: 'Telegram kanal',
+        out.push({ ico: 'megaphone', cls: 'soc-tg', name: 'Telegram kanal',
           sub: '', url: tgUrl(d.tgChannel) });
       }
       if (d.instagram) {
@@ -1905,6 +1997,119 @@
       var t = String(v || '').trim();
       if (/^https?:/i.test(t)) return t;
       return 'https://youtube.com/' + (t.charAt(0) === '@' ? t : '@' + t);
+    }
+
+    /* --- Izohlar --- */
+    function stars(n) {
+      var box = h('span', { class: 'rev-stars', 'aria-label': n + ' / 5' });
+      for (var i = 1; i <= 5; i++) {
+        box.appendChild(h('span', { class: 'rev-star' + (i <= n ? ' on' : '') }, '★'));
+      }
+      return box;
+    }
+    function revCard(r, small) {
+      return h('figure', { class: 'rev-card' + (small ? ' sm' : '') }, [
+        h('div', { class: 'rev-top' }, [
+          h('span', { class: 'rev-ava' }, String(r.name || '?').trim().charAt(0).toUpperCase()),
+          h('div', {}, [
+            h('b', {}, r.name),
+            r.about ? h('span', { class: 'rev-about' }, r.about) : null
+          ].filter(Boolean)),
+          stars(r.rating)
+        ]),
+        h('blockquote', {}, r.text)
+      ]);
+    }
+    function paintReviews(list) {
+      list = list || [];
+      /* Pastdagi to'liq ro'yxat */
+      UI.clear(revGrid);
+      var lead = document.getElementById('rev-lead');
+      if (!list.length) {
+        revGrid.appendChild(h('p', { class: 'muted rev-empty' },
+          'Hozircha izoh yo’q — birinchi bo’lib siz yozing.'));
+      } else {
+        list.slice(0, 12).forEach(function (r) { revGrid.appendChild(revCard(r)); });
+        if (lead) {
+          lead.textContent = 'Izohlarni o’quvchilarning o’zi yozadi. Markaz ko’rib ' +
+            'chiqqach saytda chiqadi.';
+        }
+      }
+      /* Tepadagi yuradigan tasma — kamida 3 ta izoh bo'lsa */
+      var band = document.getElementById('rev-band');
+      if (!band) return;
+      band.hidden = list.length < 3;
+      if (band.hidden) return;
+      UI.clear(revTrack);
+      /* Uzluksiz yurishi uchun ro'yxat IKKI marta qo'yiladi */
+      [0, 1].forEach(function (k) {
+        var half = h('div', { class: 'rev-half', 'aria-hidden': k ? 'true' : null });
+        list.slice(0, 10).forEach(function (r) { half.appendChild(revCard(r, true)); });
+        revTrack.appendChild(half);
+      });
+      if (A._siteSeen) A._siteSeen(revGrid);
+    }
+
+    /* Izoh qoldirish oynasi */
+    function openReview() {
+      var rName = UI.field({ label: 'Ismingiz', id: 'rev-name', required: true, placeholder: 'Masalan: Zubayr' });
+      var rAbout = UI.field({
+        label: 'Qaysi guruhdasiz (ixtiyoriy)', id: 'rev-about',
+        placeholder: 'Masalan: B1 guruhi'
+      });
+      var rText = UI.field({
+        label: 'Izohingiz', id: 'rev-text', type: 'textarea', required: true,
+        placeholder: 'Darslar qanday o’tyapti, nima yoqdi?'
+      });
+      var pick = 5;
+      var starBox = h('div', { class: 'rev-pick' });
+      function paintPick() {
+        UI.clear(starBox);
+        for (var i = 1; i <= 5; i++) {
+          (function (n) {
+            starBox.appendChild(h('button', {
+              class: 'rev-pick-b' + (n <= pick ? ' on' : ''), type: 'button',
+              'aria-label': n + ' yulduz',
+              onclick: function () { pick = n; paintPick(); }
+            }, '★'));
+          })(i);
+        }
+      }
+      paintPick();
+      var rErr = h('div', { class: 'err-msg', hidden: true });
+      UI.modal({
+        title: 'Izoh qoldirish',
+        body: [
+          h('p', { class: 'form-note' },
+            'Izohingiz markaz ko’rib chiqqandan keyin saytda chiqadi.'),
+          rName.wrap, rAbout.wrap,
+          h('div', { class: 'field' }, [h('label', {}, 'Bahoyingiz'), starBox]),
+          rText.wrap, rErr
+        ],
+        actions: [
+          { label: 'Bekor qilish' },
+          {
+            label: 'Yuborish', cls: 'primary gold', onClick: function (close, btn) {
+              var nm = rName.input.value.trim(), tx = rText.input.value.trim();
+              rErr.hidden = true;
+              if (nm.length < 2) { rErr.hidden = false; rErr.textContent = 'Ismingizni yozing.'; return; }
+              if (tx.length < 10) { rErr.hidden = false; rErr.textContent = 'Izohni biroz to’liqroq yozing.'; return; }
+              UI.busy(btn, async function () {
+                try {
+                  await D.api('POST', 'api/review', {
+                    name: nm, text: tx, rating: pick, about: rAbout.input.value.trim()
+                  });
+                  close();
+                  UI.toast('Rahmat! Izohingiz markazga yuborildi.', 'ok');
+                } catch (ex) {
+                  rErr.hidden = false;
+                  rErr.textContent = ex.message || 'Yuborilmadi. Birozdan keyin urinib ko’ring.';
+                }
+              });
+            }
+          }
+        ]
+      });
     }
 
     /* --- Ishonch qatori --- */

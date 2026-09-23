@@ -126,6 +126,40 @@ function tashkentDate(at) {
   ok('Bugungi sana Toshkent bo’yicha', saved.skipped || saved.date === today, JSON.stringify(saved));
   ok('Bugun uchun dars topildi', saved.skipped || saved.bugungiDars > 0, JSON.stringify(saved));
 
+  /* ---------- 4. Dars holati: hozir / kelayotgan / tugagan ---------- */
+  section('4. Darslar holati bo’yicha tartiblanadi');
+  const ph = await page.evaluate(() => {
+    const A = window.A;
+    /* Soatni 12:30 deb olamiz — sinov kun bo'yi bir xil natija bersin */
+    const now = A.hm('12:30');
+    const L = [
+      { id: 'a', start: '08:45', end: '10:15' },
+      { id: 'b', start: '12:00', end: '13:30' },
+      { id: 'c', start: '15:30', end: '17:00' },
+      { id: 'd', start: '10:30', end: '12:00' },
+      { id: 'e', start: '18:30', end: '20:00' }
+    ];
+    return {
+      hozir: A.lessonPhase(L[1], now),
+      tugagan: A.lessonPhase(L[0], now),
+      keyingi: A.lessonPhase(L[2], now),
+      chegara: A.lessonPhase(L[3], now),          // 12:00 da tugadi
+      tartib: A.sortLessons(L, now).map(x => x.id),
+      endsiz: A.lessonPhase({ start: '11:30' }, now),   // tugash vaqti yozilmagan
+      hmBuzuq: A.hm('xx:yy'),
+      hmTogri: A.hm('09:05')
+    };
+  });
+  eq('12:00–13:30 dars hozir ketyapti', ph.hozir, 'hozir');
+  eq('08:45–10:15 dars tugagan', ph.tugagan, 'tugadi');
+  eq('15:30 dagi dars hali kelmagan', ph.keyingi, 'keyin');
+  eq('Aynan tugash daqiqasida — tugagan', ph.chegara, 'tugadi');
+  eq('Tugash vaqti yozilmasa 90 daqiqa deb olinadi', ph.endsiz, 'hozir');
+  eq('Buzuq vaqt null qaytaradi', ph.hmBuzuq, null);
+  eq('09:05 = 545 daqiqa', ph.hmTogri, 545);
+  ok('Tartib: hozirgi dars birinchi, keyin kelayotganlari, oxirida tugaganlari',
+    ph.tartib.join(',') === 'b,c,e,d,a', ph.tartib.join(','));
+
   await ctx.close();
   await browser.close();
 

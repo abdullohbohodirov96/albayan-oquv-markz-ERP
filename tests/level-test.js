@@ -103,7 +103,7 @@ const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
     eq(lg + ': test boshlandi', r.status, 200);
     eq(lg + ': til qaytdi', (r.json || {}).lang, lg);
     ok(lg + ': javob maydoni yo’q', !/"answer"/.test(r.text));
-    ok(lg + ': savollar soni 30', ((r.json || {}).questions || []).length === 30,
+    ok(lg + ': savollar soni 20', ((r.json || {}).questions || []).length === 20,
       String(((r.json || {}).questions || []).length));
     ok(lg + ': darajalar nomi shu tilda', ((r.json || {}).levels || []).length === 6);
   }
@@ -139,6 +139,51 @@ const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
   ok('Har darajada kamida 2 xil tur bor',
     Object.keys(perLevelKinds).every(l => perLevelKinds[l].size >= 2),
     Object.keys(perLevelKinds).map(l => l + ':' + perLevelKinds[l].size).join(' '));
+
+  /* ---------- 1b. Savollar soni va vaqt chegarasi ---------- */
+  section('1b. 20 ta savol va 10 daqiqa vaqt');
+  eq('Jami savol 20 ta', qs.length, 20);
+  eq('Javobdagi "total" ham 20', (s1.json || {}).total, 20);
+  const perLevelN = {};
+  qs.forEach(q => { perLevelN[q.level] = (perLevelN[q.level] || 0) + 1; });
+  ok('Darajalar bo’yicha taqsimot A1–B2: 3 ta, C1–C2: 4 ta',
+    JSON.stringify(perLevelN) === JSON.stringify({ A1: 3, A2: 3, B1: 3, B2: 3, C1: 4, C2: 4 }),
+    JSON.stringify(perLevelN));
+  eq('Vaqt chegarasi 10 daqiqa (600 soniya)', (s1.json || {}).limitSec, 600);
+  ok('Savollar takrorlanmaydi', new Set(qs.map(q => q.id)).size === qs.length,
+    qs.map(q => q.id).join(','));
+  /* Sahifadagi "20 ta savol · 10 daqiqa" yozuvi server bilan bir xil
+     bo'lishi kerak — aks holda odamga noto'g'ri va'da beriladi. */
+  const appJs = fs.readFileSync(require('path').join(__dirname, '..', 'js', 'app.js'), 'utf8');
+  ok('Sayt matni ham "20 ta savol · 10 daqiqa" deydi',
+    appJs.indexOf('20 ta savol · 10 daqiqa') > 0);
+  ok('Ruscha va arabcha matnda ham shu raqamlar',
+    appJs.indexOf('20 вопросов · 10 минут') > 0 && appJs.indexOf('١٠ دقائق') > 0);
+
+  section('   Vaqt tugagach javob qabul qilinmaydi');
+  {
+    const pathMod = require('path');
+    const { createStore } = require(pathMod.join(__dirname, '..', 'server', 'store'));
+    const lv0 = require(pathMod.join(__dirname, '..', 'server', 'levels'));
+    const st0 = createStore();
+    if (st0.ready) await st0.ready;
+    const sT = await start();
+    const sesDoc = await st0.get(lv0.SESS + sT.json.id);
+    ok('Sessiyada muddat yozilgan', !!(sesDoc && sesDoc.deadline), JSON.stringify(sesDoc && Object.keys(sesDoc)));
+    ok('Muddat taxminan 10 daqiqadan keyin',
+      Math.abs(Number(sesDoc.deadline) - Date.now() - 600000) < 30000,
+      String(Number(sesDoc.deadline) - Date.now()));
+    /* Vaqtni "o'tkazib yuboramiz" — soatni kutib o'tirmaymiz */
+    sesDoc.deadline = Date.now() - 120000;
+    sesDoc.expiresAt = Date.now() - 60000;
+    await st0.set(lv0.SESS + sT.json.id, sesDoc);
+    const late = await submit({ sessionId: sT.json.id, answers: [] });
+    eq('Kechikkan javob rad etildi', late.status, 400);
+    ok('Sabab aytilgan', /muddat/i.test(late.text), late.text.slice(0, 120));
+    const plc = await req('/api/collection?name=placements', { cookie: dir });
+    ok('Rad etilgandan keyin natija yozilmadi',
+      !Object.values((plc.json || {}).items || {}).some(p => p && p.sessionId === sT.json.id));
+  }
 
   /* ---------- 2. Savollar to'plami boshqa yo'l bilan ham chiqmaydi ---------- */
   section('2. Savollar bazasi (javoblari bilan) yopiq');
@@ -226,6 +271,31 @@ const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
   eq('Daraja C2', (best.json || {}).level, 'C2');
   eq('Hamma ball to’g’ri', (best.json || {}).score, (best.json || {}).total);
 
+  section('   C2 uchun 20 tadan 19 tasi to’g’ri bo’lishi shart');
+  /* Har bir daraja o'tilgan, lekin ikkita xato bor (18/20).
+     Daraja C2 emas, C1 chiqishi kerak. */
+  const s3b = await start();
+  const nearly = [];
+  let skipped = 0;
+  for (const q of s3b.json.questions) {
+    const right = await rightChoice(s3b.json.id, q);
+    /* Xatoni faqat 4 savolli darajalarga qo'yamiz — shunda o'sha daraja
+       ham o'tilgan bo'lib qoladi (4 tadan 3 tasi to'g'ri). */
+    if (skipped < 2 && (q.level === 'C1' || q.level === 'C2') &&
+      !nearly.some(x => x.lvl === q.level)) {
+      nearly.push({ id: q.id, choice: (right + 1) % q.options.length, lvl: q.level });
+      skipped++;
+    } else {
+      nearly.push({ id: q.id, choice: right, lvl: q.level });
+    }
+  }
+  const near = await submit({ sessionId: s3b.json.id, answers: nearly.map(a => ({ id: a.id, choice: a.choice })) });
+  eq('18 ta to’g’ri', (near.json || {}).score, 18);
+  eq('C2 berilmadi, C1 chiqdi', (near.json || {}).level, 'C1');
+  ok('C1 va C2 darajalari baribir o’tilgan (3/4)',
+    ((near.json || {}).perLevel || {}).C2.ok === 3 && ((near.json || {}).perLevel || {}).C1.ok === 3,
+    JSON.stringify((near.json || {}).perLevel));
+
   section('   Arab tilida ham baholash to’g’ri ishlaydi');
   const sAr = await start('ar');
   const arRight = [];
@@ -246,7 +316,7 @@ const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
   }
   const mid = await submit({ sessionId: s4.json.id, answers: partial });
   eq('Daraja A2', (mid.json || {}).level, 'A2');
-  ok('B1 o’tilmadi', ((mid.json || {}).perLevel || {}).B1.ok < 3,
+  ok('B1 o’tilmadi', ((mid.json || {}).perLevel || {}).B1.ok < 2,
     JSON.stringify((mid.json || {}).perLevel));
 
   /* ---------- 7. Natija bazaga yozildi ---------- */

@@ -1178,7 +1178,9 @@ const COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students
   /* O'quv qismi */
   'modules', 'topics', 'materials', 'homework', 'lessonlog',
   'holidays', 'pauses', 'makeups', 'questions', 'feedback',
-  'quizzes', 'quizres', 'asks', 'parents', 'files'];
+  'quizzes', 'quizres', 'asks', 'parents', 'files',
+  /* Saytdagi izohlar — markaz tasdiqlaydi */
+  'reviews'];
 
 async function apiBootstrap(user) {
   const all = await store.all();
@@ -1497,6 +1499,8 @@ async function handleApi(req, res, url) {
     testFail(ip);
     return send(res, 200, {
       id: t.id, total: t.total, questions: t.questions,
+      /* Testga berilgan vaqt (soniya) — sahifa shu bo'yicha sanoq chizadi */
+      limitSec: t.limitSec,
       lang: t.lang, rtl: t.rtl, levels: levels.levelList(lg)
     });
   }
@@ -1597,6 +1601,20 @@ async function handleApi(req, res, url) {
         .filter(x => /^\d{1,2}:\d{2}(–\d{1,2}:\d{2})?$/.test(x));
       /* Ochiq Telegram manzillari: kanal va qabul. Bot nomidan alohida —
          o'quvchi botga emas, odamga yoki kanalga yozadi.               */
+      /* Izohlar: FAQAT markaz tasdiqlaganlari. Yuboruvchining IP si va
+         boshqa ichki maydonlari bu yerga umuman chiqmaydi.             */
+      out.reviews = (await store.list('reviews/'))
+        .filter(r => r.path.split('/').length === 2)
+        .map(r => r.data).filter(x => x && x.status === 'ochiq')
+        .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+        .slice(0, 24)
+        .map(x => ({
+          name: String(x.name || '').slice(0, 40),
+          text: String(x.text || '').slice(0, 500),
+          rating: Math.min(5, Math.max(1, Number(x.rating) || 5)),
+          about: String(x.about || '').slice(0, 40),
+          date: String(x.createdAt || '').slice(0, 10)
+        }));
       out.tgChannel = String(s.tgChannel || '').slice(0, 60);
       out.tgQabul = String(s.tgQabul || '').slice(0, 60);
       out.tgQabulLabel = String(s.tgQabulLabel || '').slice(0, 60);
@@ -1670,6 +1688,45 @@ async function handleApi(req, res, url) {
   /* ---------- Saytdagi forma: yangi murojaat ----------
      Kirishsiz ishlaydi. Har bir so'rov leads bo'limiga tushadi va
      administratorlarga xabar beriladi (ichki suhbat + Telegram bot).      */
+  /* ---------- Saytdagi izoh (sharh) ----------
+     Kirishsiz yoziladi, lekin DARHOL SAYTGA CHIQMAYDI: markaz ko'rib,
+     tasdiqlagandan keyingina ko'rinadi. Shuning uchun saytda hech qachon
+     tekshirilmagan yoki soxta izoh turmaydi.
+
+     Yuboruvchining IP si va yuborilgan vaqti ichkarida saqlanadi (spam
+     bo'lsa topish uchun), lekin /api/public ga CHIQMAYDI.               */
+  if (route === 'review' && req.method === 'POST') {
+    if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov. Birozdan keyin urinib ko’ring.' });
+    const body = await readBody(req);
+    const name = String(body.name || '').trim().slice(0, 40);
+    const text = String(body.text || '').trim().slice(0, 500);
+    /* Bahoni AVVAL tekshiramiz, keyin chegaraga solamiz — aks holda
+       0 ham 1 ga aylanib, "bahosiz" izoh o'tib ketardi.                */
+    const rawRating = Math.round(Number(body.rating));
+    const rating = Number.isFinite(rawRating) ? Math.min(5, Math.max(1, rawRating)) : 0;
+    const about = String(body.about || '').trim().slice(0, 40);
+    if (name.length < 2) return send(res, 400, { error: 'Ismingizni yozing.' });
+    if (text.length < 10) return send(res, 400, { error: 'Izohni biroz to’liqroq yozing.' });
+    if (!Number.isFinite(rawRating) || rawRating < 1 || rawRating > 5) {
+      return send(res, 400, { error: 'Bahoni tanlang (1 dan 5 gacha).' });
+    }
+
+    const ip = clientIp(req);
+    /* Bir IP dan kuniga 3 tadan ko'p izoh qabul qilinmaydi */
+    const kun = new Date().toISOString().slice(0, 10);
+    const bor = (await store.list('reviews/')).map(r => r.data).filter(Boolean);
+    const bugun = bor.filter(r => r.ip === ip && String(r.createdAt || '').slice(0, 10) === kun);
+    if (bugun.length >= 3) return send(res, 429, { error: 'Bugun uchun izoh qabul qilindi. Rahmat!' });
+
+    const id = 'rev_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    await store.set('reviews/' + id, {
+      id, name, text, rating, about,
+      status: 'yangi',                 // markaz tasdiqlaguncha saytda ko'rinmaydi
+      ip, createdAt: stamp()
+    });
+    return send(res, 200, { ok: true });
+  }
+
   if (route === 'lead' && req.method === 'POST') {
     if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov. Birozdan keyin urinib ko’ring.' });
     const body = await readBody(req);

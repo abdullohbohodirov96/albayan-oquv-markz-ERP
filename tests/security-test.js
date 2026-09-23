@@ -399,6 +399,9 @@ async function login(l, p) {
                    tuziladi);
        lessonTimes — markaz qo'lda yozgan aniq dars vaqtlari; yozilgan
                    bo'lsa sayt aynan shuni ko'rsatadi;
+       reviews   — markaz TASDIQLAGAN izohlar (ism, baho, matn). Yozgan
+                   odamning IP si va boshqa ichki maydonlari chiqmaydi —
+                   pastda alohida tekshiriladi;
        tgChannel, tgQabul, tgQabulLabel — ochiq Telegram manzillari
                    (kanal va qabul). Markaz o'zi yozadi.
      Bularning hammasi SOZLAMADA markaz qo'li bilan yoziladi va aynan
@@ -406,9 +409,48 @@ async function login(l, p) {
   const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
     'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes', 'taglines',
     'youtube', 'heroBadge', 'stats', 'faq', 'heroProof', 'levels',
-    'breakMinutes', 'lessonTimes', 'tgChannel', 'tgQabul', 'tgQabulLabel'];
+    'breakMinutes', 'lessonTimes', 'tgChannel', 'tgQabul', 'tgQabulLabel', 'reviews'];
   ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
+  /* --- Saytdagi izohlar ---
+     Izoh kirishsiz yoziladi, lekin TASDIQLANMAGUNCHA saytga chiqmaydi.
+     Yozgan odamning IP si ham /api/public ga chiqmasligi kerak.        */
+  section('   Izoh tasdiqlanmaguncha saytga chiqmaydi');
+  const revText = 'Sinov izohi ' + Date.now();
+  const revPost = await req('/api/review', {
+    method: 'POST',
+    body: { name: 'Sinov Izohchi', text: revText + ' — darslar juda yaxshi o’tmoqda.', rating: 5, about: 'B1 guruhi' }
+  });
+  eq('Izoh qabul qilindi', revPost.status, 200);
+  const pubR1 = await req('/api/public');
+  ok('Tasdiqlanmagan izoh saytda YO’Q',
+    !new RegExp(revText).test(pubR1.text), pubR1.text.slice(0, 200));
+
+  const revAll = await req('/api/collection?name=reviews', { cookie: dirCookie });
+  const mineRev = Object.values(revAll.json.items || {}).filter(r => (r.text || '').indexOf(revText) >= 0)[0];
+  ok('Izoh bazaga tushdi', !!mineRev, JSON.stringify(Object.keys(revAll.json.items || {}).length));
+  eq('Holati "yangi"', (mineRev || {}).status, 'yangi');
+
+  /* Markaz tasdiqlaydi */
+  await put('reviews/' + (mineRev || {}).id, Object.assign({}, mineRev, { status: 'ochiq' }), dirCookie);
+  const pubR2 = await req('/api/public');
+  ok('Tasdiqlangandan keyin saytda chiqdi', new RegExp(revText).test(pubR2.text), pubR2.text.slice(0, 300));
+  const rKeys = ['name', 'text', 'rating', 'about', 'date'];
+  ok('Izohda faqat ochiq maydonlar',
+    (pubR2.json.reviews || []).every(r => Object.keys(r).every(k => rKeys.indexOf(k) >= 0)),
+    JSON.stringify((pubR2.json.reviews || [])[0] || {}));
+  ok('Izoh yozgan odamning IP si chiqmaydi',
+    !/"ip"/.test(JSON.stringify(pubR2.json.reviews || [])),
+    JSON.stringify((pubR2.json.reviews || [])[0] || {}));
+
+  section('   Bo’sh yoki qisqa izoh qabul qilinmaydi');
+  eq('Ismsiz rad etildi',
+    (await req('/api/review', { method: 'POST', body: { name: '', text: 'juda yaxshi dars', rating: 5 } })).status, 400);
+  eq('Qisqa izoh rad etildi',
+    (await req('/api/review', { method: 'POST', body: { name: 'Kimdir', text: 'zo’r', rating: 5 } })).status, 400);
+  eq('Bahosiz rad etildi',
+    (await req('/api/review', { method: 'POST', body: { name: 'Kimdir', text: 'darslar juda yaxshi', rating: 0 } })).status, 400);
+
   const tKeys = ['id', 'name', 'tag', 'bio', 'levels', 'audience', 'country', 'years'];
   ok('Ustozda faqat ochiq maydonlar',
     (pub.json.teachers || []).every(t => Object.keys(t).every(k => tKeys.indexOf(k) >= 0)),

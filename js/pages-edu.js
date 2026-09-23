@@ -1104,7 +1104,7 @@
 
     box.appendChild(h('div', { class: 'ts-head' }, [
       h('b', {}, 'Bugungi darslar'),
-      h('span', { class: 'small muted' }, A.dateLabel(today))
+      h('span', { class: 'small muted' }, A.dateLabel(today) + ' · ' + A.nowTime())
     ]));
 
     if (!lessons.length) {
@@ -1113,22 +1113,45 @@
       return box;
     }
 
-    var row = h('div', { class: 'ts-row' });
-    A.sortBy(lessons, 'start').forEach(function (l) {
+    /* Ustozning bir kunda bir nechta darsi bo'ladi. Ro'yxat soat bo'yicha
+       emas, HOLATI bo'yicha tartiblanadi: ayni paytda ketayotgan dars
+       eng tepada, keyin kelayotganlari, oxirida tugab bo'lganlari.     */
+    var nowMin = A.hm(A.nowTime());
+    function lessonCard(l) {
       var g = D.one('groups', l.groupId);
       var marked = l.attendance && Object.keys(l.attendance).length > 0;
       var active = l.groupId === currentGroupId && currentDate === today;
-      row.appendChild(h('button', {
-        class: 'ts-card' + (marked ? ' done' : '') + (active ? ' active' : ''),
+      var ph = A.lessonPhase(l, nowMin);
+      return h('button', {
+        class: 'ts-card ph-' + ph + (marked ? ' done' : '') + (active ? ' active' : ''),
         type: 'button',
         onclick: function () { App.go('attendance', { groupId: l.groupId, date: today }); }
       }, [
-        h('span', { class: 'ts-time' }, l.start),
+        h('span', { class: 'ts-time' }, l.start + (l.end ? '–' + l.end : '')),
         h('span', { class: 'ts-name' }, g ? A.groupLabel(g) : ''),
-        marked ? UI.pill('Belgilangan', 'ok') : UI.pill('Belgilanmagan', 'warn')
-      ]));
-    });
-    box.appendChild(row);
+        ph === 'hozir' ? UI.pill('Hozir ketyapti', 'info') : null,
+        marked ? UI.pill('Belgilangan', 'ok')
+          : UI.pill(ph === 'tugadi' ? 'Belgilanmagan' : 'Rejada', ph === 'tugadi' ? 'warn' : 'info')
+      ].filter(Boolean));
+    }
+    function lessonRow(title, list) {
+      if (!list.length) return null;
+      var row = h('div', { class: 'ts-row' });
+      list.forEach(function (l) { row.appendChild(lessonCard(l)); });
+      return h('div', { class: 'ts-part' }, [
+        /* Sarlavha va soni alohida — tarjima aynan sarlavhaga tushadi */
+        h('div', { class: 'ts-sub small muted' }, [
+          h('span', {}, title), h('span', {}, ' · ' + list.length)
+        ]),
+        row
+      ]);
+    }
+    var sorted = A.sortLessons(lessons, nowMin);
+    var kelayotgan = sorted.filter(function (l) { return A.lessonPhase(l, nowMin) !== 'tugadi'; });
+    var tugagan = sorted.filter(function (l) { return A.lessonPhase(l, nowMin) === 'tugadi'; });
+    [lessonRow('Hozirgi va kelayotgan darslar', kelayotgan),
+    lessonRow('Tugagan darslar', tugagan)]
+      .filter(Boolean).forEach(function (n) { box.appendChild(n); });
     return box;
   }
 
@@ -1146,6 +1169,9 @@
     var auto = null;
     if (!route.groupId && !route.date) {
       var mine = Q.lessonsOn(today, App.user).filter(function (l) { return l.status !== 'bekor'; });
+      /* Ayni paytda ketayotgan dars birinchi ochiladi; bo'lmasa —
+         eng yaqin kelayotgani; u ham bo'lmasa — oxirgi tugagani.      */
+      mine = A.sortLessons(mine);
       if (mine.length) auto = { groupId: mine[0].groupId, date: today };
     }
 

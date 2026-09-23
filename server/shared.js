@@ -23,6 +23,8 @@ function writePermFor(docPath) {
     courses: 'group.edit',
     rooms: 'group.edit',
     leads: 'lead.edit',
+    /* Saytdagi izohlar: markaz tasdiqlaydi yoki o'chiradi */
+    reviews: 'settings.edit',
     funnels: 'settings.edit',
     staff: 'staff.edit',
     teachers: 'staff.edit',      // saytdagi ustoz profillari
@@ -139,6 +141,8 @@ function visibleData(user, all) {
       case 'groups': case 'courses': case 'rooms': case 'memberships':
         return A.can(user, 'group.view') || A.can(user, 'student.view');
       case 'leads': case 'funnels': return A.can(user, 'nav.leads');
+      /* Saytdagi izohlar — sozlamani boshqaradiganlarga (tasdiqlash uchun) */
+      case 'reviews': return A.can(user, 'settings.edit');
       /* Daraja testi natijalari — murojaatlar bilan ishlaydiganlarga.
          Savollar ('testq') va sessiyalar ('testsess') hech kimga chiqmaydi. */
       case 'placements': return A.can(user, 'lead.view');
