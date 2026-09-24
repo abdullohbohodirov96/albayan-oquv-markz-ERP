@@ -93,7 +93,10 @@ const ID = n => R + '_' + n;
   eq('Qolgan avans 0', Math.max(0, received - allocated), 0);
 
   section('   Oktabr tushumi soxta ko’paymadi');
-  const octIncome = payments.filter(p => p.month === '2026-10' && !p.voided)
+  /* FAQAT shu sinov yaratgan o'quvchi bo'yicha: bazada boshqa sinovlarning
+     oktabr to'lovlari ham bo'lishi mumkin, ular bu tekshiruvga aloqasiz. */
+  const octIncome = payments
+    .filter(p => p.studentId === ID('av1') && p.month === '2026-10' && !p.voided)
     .reduce((s, p) => s + (p.type === 'refund' ? -1 : 1) * p.amount, 0);
   eq('Oktabr tushumi 0 so’m', octIncome, 0);
 

@@ -1522,7 +1522,8 @@
         ]),
         h('div', { class: 'hero-rule', 'aria-hidden': 'true' }),
         h('p', { class: 'hero-lead', id: 'site-about' },
-          'Alifbodan erkin suhbatgacha. Darsni arab ustozlar olib boradi — siz birinchi kundan arabcha gapira boshlaysiz.'),
+          'Alifbodan erkin suhbatgacha. Ayollar va erkaklar uchun alohida guruhlar. ' +
+          'Darsni arab ustozlar olib boradi — siz birinchi kundan arabcha gapira boshlaysiz.'),
         h('div', { class: 'hero-cta' }, [
           h('button', {
             class: 'btn gold xl', type: 'button',
@@ -1613,6 +1614,7 @@
           h('ul', { class: 'why-list' }, [
             whyRow('Darsni ona tili arab tili bo’lgan ustozlar olib boradi'),
             whyRow('Bir dastur, olti daraja — sakrab o’tish yo’q'),
+            whyRow('Ayollar va erkaklar uchun alohida guruhlar'),
             whyRow('Kichik guruh: har bir o’quvchiga vaqt yetadi'),
             whyRow('Har dars davomat — ota-ona kabinetdan ko’rib turadi'),
             whyRow('Uy vazifasi va natija kabinetda saqlanadi')
@@ -2020,36 +2022,47 @@
 
     /* Ijtimoiy tarmoqlar. Manzillarni markaz Sozlamada yozadi —
        yozilmagani ko'rinmaydi.                                          */
+    /* Ijtimoiy tarmoqlar. Telegram va Instagram logotiplari — o'sha
+       xizmatlarning rasmiy belgilari (markaz rahbari yuborgan fayllar),
+       assets/ papkasida turadi. Tugmada asosiysi LOGOTIP; yozuv esa
+       qaysi kanal ekanini ajratish uchun kichik qilib beriladi.        */
     function socialList(d) {
       var out = [];
-      if (d.tgQabul) {
-        out.push({ ico: 'chat', cls: 'soc-tg', name: 'Telegram — qabul',
-          sub: d.tgQabulLabel || '', url: tgUrl(d.tgQabul) });
-      }
       if (d.tgChannel) {
-        out.push({ ico: 'megaphone', cls: 'soc-tg', name: 'Telegram kanal',
-          sub: '', url: tgUrl(d.tgChannel) });
+        out.push({ logo: 'tg', name: 'Telegram kanal', sub: '', url: tgUrl(d.tgChannel) });
       }
       if (d.instagram) {
-        out.push({ ico: 'camera', cls: 'soc-ig', name: 'Instagram',
-          sub: '', url: instaUrl(d.instagram) });
+        out.push({ logo: 'ig', name: 'Instagram', sub: '', url: instaUrl(d.instagram) });
+      }
+      if (d.telegram) {
+        out.push({ logo: 'tg', name: 'Telegram bot', sub: '', url: tgUrl(d.telegram) });
+      }
+      /* Qabul manzillari — filial nomi bilan */
+      if (d.tgQabul) {
+        out.push({ logo: 'tg', name: 'Qabul', sub: d.tgQabulLabel || '', url: tgUrl(d.tgQabul) });
+      }
+      if (d.tgQabul2) {
+        out.push({ logo: 'tg', name: 'Qabul', sub: d.tgQabulLabel2 || '', url: tgUrl(d.tgQabul2) });
       }
       if (d.youtube) {
-        out.push({ ico: 'play', cls: 'soc-yt', name: 'YouTube', sub: '', url: ytUrl(d.youtube) });
-      }
-      /* Bot — oxirida: u odam emas, dastur */
-      if (d.telegram) {
-        out.push({ ico: 'bot', cls: 'soc-tg', name: 'Telegram bot',
-          sub: '', url: tgUrl(d.telegram) });
+        out.push({ logo: 'yt', name: 'YouTube', sub: '', url: ytUrl(d.youtube) });
       }
       return out;
     }
+    var SOC_LOGO = {
+      tg: { src: 'assets/logo-telegram.png', alt: 'Telegram' },
+      ig: { src: 'assets/logo-instagram.png', alt: 'Instagram' }
+    };
     function socBtn(l, big) {
+      var lg = SOC_LOGO[l.logo];
       return h('a', {
-        class: 'soc-btn ' + l.cls + (big ? ' big' : ''),
-        href: l.url, target: '_blank', rel: 'noopener'
+        class: 'soc-btn soc-' + l.logo + (big ? ' big' : ''),
+        href: l.url, target: '_blank', rel: 'noopener',
+        title: l.name + (l.sub ? ' · ' + l.sub : '')
       }, [
-        h('span', { class: 'soc-ico' }, UI.icon(l.ico)),
+        lg
+          ? h('img', { class: 'soc-logo', src: lg.src, alt: '', width: '48', height: '48', loading: 'lazy' })
+          : h('span', { class: 'soc-ico' }, UI.icon('play')),
         h('span', { class: 'soc-txt' }, [
           h('b', {}, l.name),
           l.sub ? h('span', {}, l.sub) : null

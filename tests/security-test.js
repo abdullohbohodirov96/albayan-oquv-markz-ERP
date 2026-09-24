@@ -409,7 +409,9 @@ async function login(l, p) {
   const allowed = ['centerName', 'phone', 'address', 'workStart', 'workEnd', 'about',
     'telegram', 'instagram', 'courses', 'teachers', 'lessonMinutes', 'taglines',
     'youtube', 'heroBadge', 'stats', 'faq', 'heroProof', 'levels',
-    'breakMinutes', 'lessonTimes', 'tgChannel', 'tgQabul', 'tgQabulLabel', 'reviews'];
+    'breakMinutes', 'lessonTimes', 'tgChannel', 'tgQabul', 'tgQabulLabel',
+    /* Ikkinchi filialning qabul manzili */
+    'tgQabul2', 'tgQabulLabel2', 'reviews'];
   ok('Faqat sayt uchun ochiq maydonlar', pubKeys.every(k => allowed.indexOf(k) >= 0),
     pubKeys.join(', '));
   /* --- Saytdagi izohlar ---

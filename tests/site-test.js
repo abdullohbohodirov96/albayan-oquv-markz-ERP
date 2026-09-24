@@ -512,6 +512,95 @@ async function api(p, opts = {}) {
   ok('Sinov izohlari tozalandi',
     !JSON.stringify(pubZ.json.reviews || []).includes(NAME1), 'tozalanmadi');
 
+  /* ================= 4c. Ijtimoiy tarmoq tugmalari ================= */
+  /* Telegram va Instagram logotiplari — o'sha xizmatlarning rasmiy
+     belgilari. Tugmalar sozlamadagi manzillardan tuziladi: bo'sh
+     qolgan manzil saytda ham chiqmaydi.                             */
+  section('4c. Ijtimoiy tarmoq tugmalari');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const socSt = (await api('/api/doc?path=' + encodeURIComponent('meta/settings'), { cookie: dir })).json.data;
+  await api('/api/doc?path=' + encodeURIComponent('meta/settings'), {
+    method: 'PUT', cookie: dir,
+    body: {
+      data: Object.assign({}, socSt, {
+        tgChannel: '@albayanuz',
+        instagram: 'https://www.instagram.com/albayan.cairo/',
+        telegram: 'AlBayan_cairobot',
+        tgQabul: '@Albayan_qabul1', tgQabulLabel: 'Taxtapul filiali',
+        tgQabul2: '@albayantinchlik', tgQabulLabel2: 'Tinchlik filiali',
+        youtube: ''
+      })
+    }
+  });
+  await page.goto(BASE);
+  await page.waitForSelector('#foot-soc .soc-btn', { timeout: 15000 });
+  await page.evaluate(() => document.getElementById('foot-soc').scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(900);
+  const soc = await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('#foot-soc .soc-btn'));
+    return b.map(x => {
+      const img = x.querySelector('img.soc-logo');
+      const r = img ? img.getBoundingClientRect() : null;
+      return {
+        name: (x.querySelector('b') || {}).textContent || '',
+        sub: (x.querySelector('.soc-txt span') || {}).textContent || '',
+        href: x.getAttribute('href'),
+        logo: img ? img.getAttribute('src') : '',
+        loaded: img ? img.naturalWidth > 0 : false,
+        w: r ? Math.round(r.width) : 0,
+        target: x.getAttribute('target'), rel: x.getAttribute('rel')
+      };
+    });
+  });
+  eq('Beshta tugma bor', soc.length, 5);
+  ok('Tartibi: kanal, Instagram, bot, ikkita qabul',
+    soc.map(x => x.name).join(',') === 'Telegram kanal,Instagram,Telegram bot,Qabul,Qabul',
+    soc.map(x => x.name).join(','));
+  ok('Ikkinchi filial qo’shildi',
+    soc[3].sub === 'Taxtapul filiali' && soc[4].sub === 'Tinchlik filiali',
+    soc[3].sub + ' | ' + soc[4].sub);
+  ok('Ikkinchi qabul manzili to’g’ri', /albayantinchlik$/.test(soc[4].href), soc[4].href);
+  ok('Har bir tugmada rasmli logotip bor',
+    soc.every(x => /logo-(telegram|instagram)\.png$/.test(x.logo)), JSON.stringify(soc.map(x => x.logo)));
+  ok('Instagram logotipi Instagram tugmasida',
+    /logo-instagram/.test(soc[1].logo), soc[1].logo);
+  ok('Qolganlari Telegram logotipi',
+    [0, 2, 3, 4].every(i => /logo-telegram/.test(soc[i].logo)), JSON.stringify(soc.map(x => x.logo)));
+  ok('Logotiplar haqiqatan yuklandi', soc.every(x => x.loaded), JSON.stringify(soc.map(x => x.loaded)));
+  ok('Logotip ko’rinadigan o’lchamda (≥ 30px)', soc.every(x => x.w >= 30),
+    JSON.stringify(soc.map(x => x.w)));
+  ok('Havolalar yangi oynada va xavfsiz ochiladi',
+    soc.every(x => x.target === '_blank' && /noopener/.test(x.rel || '')),
+    JSON.stringify(soc.map(x => x.target + '/' + x.rel)));
+  /* Logotip fayllari serverdan ham beriladi */
+  for (const f of ['/assets/logo-telegram.png', '/assets/logo-instagram.png']) {
+    const r = await fetch(API + f);
+    ok('Serverdan ochiladi: ' + f + ' (' + r.status + ')',
+      r.status === 200 && /image\/png/.test(r.headers.get('content-type') || ''),
+      r.status + ' ' + r.headers.get('content-type'));
+  }
+  section('   Bo’sh qolgan manzil saytda chiqmaydi');
+  await api('/api/doc?path=' + encodeURIComponent('meta/settings'), {
+    method: 'PUT', cookie: dir,
+    /* Telegram bot manzili bot sozlamasidan olinadi — uni ham bo'shatamiz */
+    body: {
+      data: Object.assign({}, socSt, {
+        tgChannel: '@albayanuz', instagram: '', tgQabul: '', tgQabul2: '', youtube: '',
+        bot: Object.assign({}, socSt.bot || {}, { username: '' })
+      })
+    }
+  });
+  await page.goto(BASE);
+  await page.waitForSelector('#foot-soc', { timeout: 15000 });
+  await page.waitForTimeout(900);
+  const soc2 = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#foot-soc .soc-btn')).map(x => (x.querySelector('b') || {}).textContent));
+  ok('Faqat to’ldirilgani chiqdi', soc2.length === 1 && soc2[0] === 'Telegram kanal', soc2.join(','));
+  /* Sozlamani joyiga qaytaramiz */
+  await api('/api/doc?path=' + encodeURIComponent('meta/settings'), {
+    method: 'PUT', cookie: dir, body: { data: socSt }
+  });
+
   /* ================= 5. Telefon ko'rinishi ================= */
   section('5. Telefon ko’rinishi');
   for (const w of [360, 390, 430]) {

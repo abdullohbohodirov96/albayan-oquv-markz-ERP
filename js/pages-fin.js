@@ -1711,6 +1711,16 @@
         help: 'Telegram — qabul tugmasi tagida kichik yozuv bo’lib chiqadi.'
       },
       {
+        name: 'tgQabul2', label: 'Telegram — qabul (2-filial)', value: s.tgQabul2,
+        placeholder: '@albayantinchlik',
+        help: 'Ikkinchi filial uchun. Bo’sh qoldirsangiz saytda chiqmaydi.'
+      },
+      {
+        name: 'tgQabulLabel2', label: 'Ikkinchi qabul qaysi filial', value: s.tgQabulLabel2,
+        placeholder: 'masalan: Tinchlik filiali',
+        help: 'Ikkinchi qabul tugmasi tagida kichik yozuv bo’lib chiqadi.'
+      },
+      {
         /* Hero'da harf-harf yozilib turadigan iboralar. Har qatorda bittasi. */
         name: 'taglines', label: 'Saytda yozilib turadigan iboralar', type: 'textarea',
         value: s.taglines, full: true,

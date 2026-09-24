@@ -12,19 +12,66 @@ const src = fs.readFileSync(path.join(__dirname, 'artifact.html'), 'utf8');
 const headTags = [];
 const body = src.replace(/^[\s\S]*?(?=<div id="boot")/, function (top) {
   top.replace(/<title>[\s\S]*?<\/title>|<style>[\s\S]*?<\/style>|<(?:link|meta)\b[^>]*>/gi, function (tag) {
+    /* Sarlavha va tavsif index.html uchun pastdagi shablonda — to'liqroq
+       va qidiruv tizimiga moslangan. Shuning uchun artifact.html dagi
+       qisqa nusxasi ko'chirilmaydi (ikkita <title> bo'lib qolmasin).   */
+    if (/^<title>/i.test(tag.trim())) return '';
+    if (/name=["']description["']/i.test(tag)) return '';
+    if (/rel=["']apple-touch-icon["']/i.test(tag)) return '';
     headTags.push('  ' + tag.trim());
     return '';
   });
   return '';
 });
 
+/* ---------------- Qidiruv tizimlari va ijtimoiy tarmoqlar uchun ----------------
+   SITE_URL — saytning asosiy manzili. O'z domeningiz bo'lsa, uni shu yerga
+   yozing (yoki SITE_URL muhit o'zgaruvchisida bering): havolalar, canonical
+   va sitemap shunga qarab tuziladi.                                        */
+const SITE_URL = (process.env.SITE_URL || 'https://albayan-oquv-markz-erp.onrender.com')
+  .replace(/\/+$/, '');
+const SITE_NAME = 'AlBayan Cairo';
+const SITE_DESC = 'AlBayan Cairo — Toshkentdagi arab tili o‘quv markazi. ' +
+  'Darslarni ona tili arab tili bo‘lgan ustozlar olib boradi. Ayollar va ' +
+  'erkaklar uchun alohida guruhlar. A1 dan C2 gacha olti daraja, kichik ' +
+  'guruhlar, ertalabki va kechki smenalar. Bepul daraja aniqlash testi.';
+
 const head = `<!doctype html>
 <html lang="uz">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="AlBayan Cairo o'quv markazi boshqaruv tizimi">
+<title>${SITE_NAME} — Toshkentda arab tili o‘quv markazi</title>
+<meta name="description" content="${SITE_DESC}">
 <meta name="theme-color" content="#1e335e">
+<link rel="canonical" href="${SITE_URL}/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+
+<!-- Logotip: brauzer yorlig'i, xatcho'p, telefon ekrani -->
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/icon-16.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/assets/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/icon-180.png">
+<meta name="msapplication-TileColor" content="#1e335e">
+<meta name="msapplication-TileImage" content="/assets/icon-192.png">
+
+<!-- Havola ulashilganda chiqadigan kartochka (Telegram, Facebook, WhatsApp) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="${SITE_NAME}">
+<meta property="og:title" content="${SITE_NAME} — Toshkentda arab tili o‘quv markazi">
+<meta property="og:description" content="${SITE_DESC}">
+<meta property="og:url" content="${SITE_URL}/">
+<meta property="og:image" content="${SITE_URL}/assets/icon-512.png">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta property="og:locale" content="uz_UZ">
+<meta property="og:locale:alternate" content="ru_RU">
+<meta property="og:locale:alternate" content="ar_AR">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${SITE_NAME} — arab tili o‘quv markazi">
+<meta name="twitter:description" content="${SITE_DESC}">
+<meta name="twitter:image" content="${SITE_URL}/assets/icon-512.png">
 <style>
   :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
   body{margin:0;font:14px system-ui,-apple-system,'Segoe UI',sans-serif;background:#f3f5fa}
@@ -36,9 +83,79 @@ ${headTags.join('\n')}
 <body>
 `;
 
-const html = head + body.trimStart() + '\n</body>\n</html>\n';
+/* ---------------- Qidiruv tizimi uchun tuzilgan ma'lumot (JSON-LD) ----------
+   Google shu yozuvga qarab saytning logotipini, nomini, manzilini va ish
+   vaqtini taniydi — qidiruv natijasida logotip shu bilan chiqadi.
+   Telefon va manzil serverda SOZLAMALARDAN yangilanadi (server/seo.js),
+   bu yerdagilari — standart qiymat.                                       */
+const LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': ['EducationalOrganization', 'LocalBusiness'],
+      '@id': SITE_URL + '/#markaz',
+      name: SITE_NAME,
+      alternateName: ['Al Bayan Cairo', 'AlBayan', 'Al-Bayan', 'Albayan Cairo o‘quv markazi', 'البيان'],
+      url: SITE_URL + '/',
+      logo: { '@type': 'ImageObject', url: SITE_URL + '/assets/icon-512.png', width: 512, height: 512 },
+      image: SITE_URL + '/assets/icon-512.png',
+      description: SITE_DESC,
+      address: { '@type': 'PostalAddress', addressLocality: 'Toshkent', addressCountry: 'UZ' },
+      areaServed: { '@type': 'City', name: 'Toshkent' },
+      knowsLanguage: ['ar', 'uz', 'ru'],
+      sameAs: ['https://www.instagram.com/albayan.cairo/']
+    },
+    {
+      '@type': 'WebSite',
+      '@id': SITE_URL + '/#sayt',
+      url: SITE_URL + '/',
+      name: SITE_NAME,
+      inLanguage: 'uz',
+      publisher: { '@id': SITE_URL + '/#markaz' }
+    },
+    {
+      '@type': 'Course',
+      name: 'Arab tili — A1 dan C2 gacha',
+      description: 'Alifbodan erkin suhbatgacha olti daraja. Darslarni ona tili ' +
+        'arab tili bo‘lgan ustozlar olib boradi.',
+      inLanguage: 'uz',
+      teaches: 'Arab tili',
+      provider: { '@id': SITE_URL + '/#markaz' },
+      hasCourseInstance: {
+        '@type': 'CourseInstance',
+        courseMode: 'onsite',
+        courseWorkload: 'PT4H30M',
+        location: { '@type': 'Place', address: { '@type': 'PostalAddress', addressLocality: 'Toshkent', addressCountry: 'UZ' } }
+      }
+    }
+  ]
+};
+const ldTag = '<script type="application/ld+json">' +
+  JSON.stringify(LD).replace(/</g, '\\u003c') + '</script>\n';
+
+const html = head + ldTag + body.trimStart() + '\n</body>\n</html>\n';
 fs.writeFileSync(path.join(__dirname, 'index.html'), html);
+
+/* ---------------- robots.txt va sitemap.xml ---------------- */
+fs.writeFileSync(path.join(__dirname, 'robots.txt'),
+  'User-agent: *\n' +
+  'Allow: /\n' +
+  '# Ichki tizim sahifalari qidiruvga kerak emas\n' +
+  'Disallow: /api/\n' +
+  'Sitemap: ' + SITE_URL + '/sitemap.xml\n');
+fs.writeFileSync(path.join(__dirname, 'sitemap.xml'),
+  '<?xml version="1.0" encoding="UTF-8"?>\n' +
+  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+  '  <url>\n' +
+  '    <loc>' + SITE_URL + '/</loc>\n' +
+  '    <lastmod>' + new Date().toISOString().slice(0, 10) + '</lastmod>\n' +
+  '    <changefreq>weekly</changefreq>\n' +
+  '    <priority>1.0</priority>\n' +
+  '  </url>\n' +
+  '</urlset>\n');
+
 console.log('index.html yangilandi (' + headTags.length + ' ta head tegi ko’chirildi).');
+console.log('robots.txt va sitemap.xml yangilandi (' + SITE_URL + ').');
 
 /* ---------------- Versiya: fayllar mazmunidan hisoblanadi ----------------
    sw.js dagi VERSION shu yerda yoziladi. Fayl o'zgarsa — versiya ham o'zgaradi,

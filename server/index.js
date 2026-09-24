@@ -20,6 +20,7 @@ const curriculum = require('./curriculum');
 const lms = require('./lms');
 const quiz = require('./quiz');
 const progress = require('./progress');
+const seo = require('./seo');
 const parents = require('./parents');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
@@ -1618,6 +1619,9 @@ async function handleApi(req, res, url) {
       out.tgChannel = String(s.tgChannel || '').slice(0, 60);
       out.tgQabul = String(s.tgQabul || '').slice(0, 60);
       out.tgQabulLabel = String(s.tgQabulLabel || '').slice(0, 60);
+      /* Ikkinchi qabul manzili (ikkinchi filial) */
+      out.tgQabul2 = String(s.tgQabul2 || '').slice(0, 60);
+      out.tgQabulLabel2 = String(s.tgQabulLabel2 || '').slice(0, 60);
       /* Saytning hero qismida yozilib turadigan qatorlar.
          Markaz o'zi yozadi (Sozlamalar → Ochiq sayt). Har qatorda bitta
          ibora. Bo'sh bo'lsa mijoz standart iboralarni ko'rsatadi.        */
@@ -2505,6 +2509,9 @@ async function handleApi(req, res, url) {
         }
       }
       await store.set(p, body.data);
+      /* Markaz ma'lumoti o'zgardi — qidiruv tizimi uchun tayyorlangan
+         nusxani tashlaymiz, yangi nom/telefon darrov chiqsin.        */
+      if (p === 'meta/settings') seoCache = { at: 0, key: '', buf: null };
       await writeAudit(user, body.action || 'Ma’lumot saqlandi', body.entity || p, body.details || '');
       // Bot navbatchisini uyg'otamiz (tasdiq/ e'lon darhol ketsin, bo'sh vaqtda esa baza tinch)
       if (p.indexOf('botreq/') === 0 || p.indexOf('botout/') === 0) {
@@ -2532,16 +2539,20 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json; charset=utf-8'
+  '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8', '.xml': 'application/xml; charset=utf-8'
 };
 
 /**
  * Faqat brauzerga kerakli fayllar tarqatiladi.
  * .env, .git, server kodi, baza va testlar hech qachon berilmaydi.
  */
-const PUBLIC_FILES = new Set(['/index.html', '/manifest.webmanifest', '/sw.js', '/favicon.ico']);
+const PUBLIC_FILES = new Set(['/index.html', '/manifest.webmanifest', '/sw.js', '/favicon.ico',
+  /* Qidiruv tizimlari shu ikki faylni so'raydi */
+  '/robots.txt', '/sitemap.xml']);
 const PUBLIC_DIRS = ['/css/', '/js/', '/assets/'];
-const ALLOWED_EXT = new Set(['.html', '.js', '.css', '.png', '.jpg', '.svg', '.ico', '.webmanifest']);
+const ALLOWED_EXT = new Set(['.html', '.js', '.css', '.png', '.jpg', '.svg', '.ico', '.webmanifest',
+  '.txt', '.xml']);
 
 function isPublicPath(rel) {
   if (rel.indexOf('\0') >= 0) return false;
@@ -2551,6 +2562,22 @@ function isPublicPath(rel) {
   if (!PUBLIC_DIRS.some(d => rel.indexOf(d) === 0)) return false;
   if (rel.slice(1).split('/').length > 3) return false;         // chuqur joylashuv yo'q
   return ALLOWED_EXT.has(path.extname(rel).toLowerCase());
+}
+
+/* Bosh sahifaga sozlamalardagi ma'lumotni qo'shadi (qidiruv tizimi uchun).
+   Sozlama o'qilmasa yoki xato bo'lsa — fayl o'zgarishsiz qaytadi.      */
+let seoCache = { at: 0, key: '', buf: null };
+async function seoIndex(req, data) {
+  const url = seo.siteUrl(req, process.env);
+  const now = Date.now();
+  if (seoCache.buf && seoCache.key === url + '|' + data.length && now - seoCache.at < 60000) {
+    return seoCache.buf;
+  }
+  let s = null;
+  try { s = await store.get('meta/settings'); } catch (e) { s = null; }
+  const buf = Buffer.from(seo.inject(data.toString('utf8'), s, url), 'utf8');
+  seoCache = { at: now, key: url + '|' + data.length, buf };
+  return buf;
 }
 
 function serveStatic(req, res, pathname) {
@@ -2573,7 +2600,11 @@ function serveStatic(req, res, pathname) {
   fs.stat(file, (se, st) => {
     fs.readFile(file, (err, data) => {
       if (err) {
-        if (rel !== '/index.html') return serveStatic(req, res, '/index.html');
+        /* robots.txt va sitemap.xml o'rniga sahifa berilmasin — qidiruv
+           tizimi buni "fayl bor" deb o'ylab, HTML ni o'qishga urinardi. */
+        const noFallback = rel === '/robots.txt' || rel === '/sitemap.xml' ||
+          rel === '/favicon.ico';
+        if (rel !== '/index.html' && !noFallback) return serveStatic(req, res, '/index.html');
         return send(res, 404, 'Topilmadi');
       }
       const tag = st ? '"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"' : null;
@@ -2587,6 +2618,26 @@ function serveStatic(req, res, pathname) {
         'X-Content-Type-Options': 'nosniff',
         'Cache-Control': codeFile ? 'no-cache' : 'public, max-age=86400'
       };
+      /* Bosh sahifaga qidiruv tizimi uchun markaz ma'lumoti qo'shiladi:
+         nomi, telefoni, manzili, ish vaqti va ijtimoiy tarmoqlari.
+         Sozlama o'qilmasa — fayl o'zgarishsiz beriladi.               */
+      if (rel === '/index.html') {
+        return seoIndex(req, data).then(buf => {
+          const t2 = '"' + buf.length.toString(16) + '-' +
+            (st ? Math.floor(st.mtimeMs).toString(16) : '0') + '"';
+          if (req.headers['if-none-match'] === t2) {
+            res.writeHead(304, { 'Cache-Control': 'no-cache', ETag: t2 });
+            return res.end();
+          }
+          head.ETag = t2;
+          res.writeHead(200, head);
+          res.end(buf);
+        }).catch(() => {
+          if (tag) head.ETag = tag;
+          res.writeHead(200, head);
+          res.end(data);
+        });
+      }
       if (tag) head.ETag = tag;
       res.writeHead(200, head);
       res.end(data);

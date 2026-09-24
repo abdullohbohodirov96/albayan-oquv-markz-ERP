@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+# Ichki tizim sahifalari qidiruvga kerak emas
+Disallow: /api/
+Sitemap: https://albayan-oquv-markz-erp.onrender.com/sitemap.xml
