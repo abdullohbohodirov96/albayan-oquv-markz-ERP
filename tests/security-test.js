@@ -19,7 +19,11 @@ async function req(path, opts = {}) {
   const res = await fetch(BASE + path, {
     method: opts.method || 'GET',
     headers: Object.assign(opts.body ? { 'Content-Type': 'application/json' } : {},
-      opts.cookie ? { Cookie: opts.cookie } : {}),
+      opts.cookie ? { Cookie: opts.cookie } : {},
+      /* Kerak bo'lsa boshqa IP dan kelgandek qilamiz — bir IP dan kuniga
+         3 ta izoh chegarasi (to'g'ri qoida) boshqa sinovlar bilan
+         to'qnashmasin.                                                */
+      opts.ip ? { 'X-Forwarded-For': opts.ip } : {}),
     body: opts.body ? JSON.stringify(opts.body) : undefined,
     redirect: 'manual'
   });
@@ -28,6 +32,27 @@ async function req(path, opts = {}) {
   try { json = JSON.parse(text); } catch (e) { json = null; }
   return { status: res.status, json, text, cookie: (res.headers.get('set-cookie') || '').split(';')[0] };
 }
+/* So'rovni ATAYLAB kichik bo'laklarda yuboradi — haqiqiy tarmoqda ham
+   uzun matn shunday bo'linadi. fetch buni boshqarib bo'lmaydi, shuning
+   uchun bu yerda oddiy http moduli ishlatiladi.                       */
+function rawPost(path, method, body, cookie) {
+  const http = require('http');
+  const buf = Buffer.from(JSON.stringify(body), 'utf8');
+  return new Promise((resolve, reject) => {
+    const r = http.request({
+      host: 'localhost', port: Number(PORT), path, method,
+      headers: Object.assign({ 'Content-Type': 'application/json' }, cookie ? { Cookie: cookie } : {})
+    }, res => {
+      let t = ''; res.setEncoding('utf8');
+      res.on('data', c => { t += c; });
+      res.on('end', () => { let j = null; try { j = JSON.parse(t); } catch (e) { } resolve({ status: res.statusCode, text: t, json: j }); });
+    });
+    r.on('error', reject);
+    for (let i = 0; i < buf.length; i += 1000) r.write(buf.slice(i, i + 1000));
+    r.end();
+  });
+}
+
 async function login(l, p) {
   const r = await req('/api/login', { method: 'POST', body: { login: l, password: p } });
   return r.status === 200 ? r.cookie : null;
@@ -419,8 +444,9 @@ async function login(l, p) {
      Yozgan odamning IP si ham /api/public ga chiqmasligi kerak.        */
   section('   Izoh tasdiqlanmaguncha saytga chiqmaydi');
   const revText = 'Sinov izohi ' + Date.now();
+  const revIp = '198.51.100.' + (10 + (Date.now() % 40));
   const revPost = await req('/api/review', {
-    method: 'POST',
+    method: 'POST', ip: revIp,
     body: { name: 'Sinov Izohchi', text: revText + ' — darslar juda yaxshi o’tmoqda.', rating: 5, about: 'B1 guruhi' }
   });
   eq('Izoh qabul qilindi', revPost.status, 200);
@@ -468,6 +494,24 @@ async function login(l, p) {
     !/parol|token|hash|salt|DATABASE|secret/i.test(pub.text), pub.text.slice(0, 120));
   const pubPost = await req('/api/public', { method: 'POST', body: { centerName: 'Boshqa' } });
   ok('POST bilan o’zgartirib bo’lmaydi', pubPost.status !== 200, String(pubPost.status));
+
+  /* ---------- 12. Uzun matn tarmoqda bo'lakka bo'linsa ham buzilmasin ----------
+     Tarmoq so'rov tanasini ixtiyoriy joyda bo'laklarga bo'ladi. Agar server
+     har bir bo'lakni alohida matnga aylantirsa, o'zbek/arab harfi ikki
+     bo'lak orasida qolib "�" ga aylanadi: o'quvchi ismi buziladi, zaxiradan
+     tiklashda esa nazorat summasi mos kelmay qoladi.                        */
+  section('12. Uzun matn tarmoq bo’laklariga bo’linganda');
+  const uzArab = 'O’quvchi — العربية «Al Bayan» ';
+  const uzun = uzArab.repeat(400);                    // ~10 KB, ko'p baytli
+  const putRaw = await rawPost('/api/doc?path=leads/lead_chunk', 'PUT',
+    { data: { id: 'lead_chunk', name: 'Bo’lak sinovi', note: uzun, status: 'yangi' } }, dirCookie);
+  ok('Uzun matnli yozuv saqlandi (' + putRaw.status + ')', putRaw.status === 200, putRaw.text.slice(0, 120));
+  const backRaw = await req('/api/doc?path=leads/lead_chunk', { cookie: dirCookie });
+  const backNote = (backRaw.json && backRaw.json.data && backRaw.json.data.note) || '';
+  ok('Matn aynan saqlangan', backNote === uzun,
+    'uzunlik ' + backNote.length + ' (kutilgan ' + uzun.length + ')');
+  ok('Buzilgan belgi yo’q (�)', backNote.indexOf('�') < 0);
+  await req('/api/doc?path=leads/lead_chunk', { method: 'DELETE', cookie: dirCookie });
 
   console.log(out.join('\n'));
   console.log('\n' + '─'.repeat(52));

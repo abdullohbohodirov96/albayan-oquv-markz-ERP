@@ -8,7 +8,7 @@
    5. HTML ham, JS/CSS ham BITTA versiya keshidan beriladi.                  */
 'use strict';
 
-const VERSION = 'albayan-d965382a04a7';
+const VERSION = 'albayan-6a3bf3af01f3';
 const SHELL = [
   './index.html',
   './css/app.css',
@@ -53,13 +53,26 @@ self.addEventListener('activate', event => {
     await self.clients.claim();
     // Avvalgi versiyada avtomatik yangilash yo'q edi: ochiq ommaviy sahifani
     // yangi versiyada qayta ochamiz. ERP oynalaridagi formaga tegmaymiz.
-    if (upgrading) {
-      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      await Promise.all(windows.filter(client => !new URL(client.url).hash)
-        .map(client => client.navigate(client.url).catch(() => {})));
-    }
+    //
+    // MUHIM: bu yerda KUTILMAYDI. client.navigate() yangi sahifani shu
+    // ishchidan so'raydi; agar uni activate ichida kutsak, faollashuv
+    // navigatsiyani, navigatsiya esa faollashuvni kutadi va sahifa
+    // brauzer muhlati tugaguncha (~40 soniya) qotib qoladi.
+    if (upgrading) renavigate();
   })());
 });
+
+/** Ochiq oynalarni yangi versiyada qayta ochish (activate ni bloklamaydi) */
+function renavigate() {
+  self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then(windows => {
+      windows.forEach(client => {
+        if (new URL(client.url).hash) return;        // ERP oynasiga tegmaymiz
+        try { client.navigate(client.url).catch(() => { }); } catch (e) { }
+      });
+    })
+    .catch(() => { });
+}
 
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();

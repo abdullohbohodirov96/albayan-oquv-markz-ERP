@@ -142,6 +142,27 @@ async function loginAndOpenMenu(page) {
     };
   });
 }
+/** Sahifa o'zi qayta yuklanayotgan paytda ham ishlaydigan kutish.
+    page.waitForFunction navigatsiya vaqtida uzilib qolishi mumkin —
+    bu yerda har safar yangi kontekstda qayta so'raymiz.            */
+async function waitFor(page, fn, arg, ms, note) {
+  const until = Date.now() + (ms || 20000);
+  let tries = 0, lastErr = '';
+  while (Date.now() < until) {
+    tries++;
+    /* Navigatsiya paytida page.evaluate uzoq muddat osilib qolishi mumkin —
+       shuning uchun har bir urinishga qisqa muhlat beramiz.               */
+    const attempt = page.evaluate(fn, arg).catch(e => {
+      lastErr = String(e.message || e).split('\n')[0]; return false;
+    });
+    const res = await Promise.race([attempt, sleep(1500).then(() => null)]);
+    if (res === true) return true;
+    if (res === null) lastErr = 'javob bermadi (navigatsiya)';
+    await sleep(250);
+  }
+  if (note) { note.tries = tries; note.lastErr = lastErr; }
+  return false;
+}
 async function closeMenu(page) {
   await page.evaluate(() => { const x = document.querySelector('.modal .x-btn'); if (x) x.click(); });
   await page.waitForTimeout(250);
@@ -162,6 +183,9 @@ async function closeMenu(page) {
 
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true });
+  /* Sinov faqat o'z serverimizga tegsin: shrift va CDN so'rovlari tarmoqni
+     kutib turmasin. Bu telefonda internet sekin bo'lgan holatga ham yaqin. */
+  await ctx.route(url => url.hostname !== '127.0.0.1', r => r.abort());
   const page = await ctx.newPage();
   page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi: ' + e.message); });
   await page.goto(BASE);
@@ -195,10 +219,29 @@ async function closeMenu(page) {
 
   /* ---------- 3. Eski profil avtomatik yangilanadimi ---------- */
   section('3. Eski brauzer profilida yangi versiya avtomatik ochiladi');
-  await page.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r && r.update()));
-  await page.waitForFunction(ver =>
-    (document.querySelector('meta[name="app-version"]') || {}).content === ver,
-  newVer, { timeout: 20000 });
+  /* Sahifa shu vaqtda O'ZI qayta yuklanadi (hech kim tugma bosmaydi).
+     Shuning uchun avval "load" hodisasiga quloq solamiz, keyin yangilanishni
+     boshlaymiz: aks holda tekshiruv navigatsiyaga urilib qoladi.          */
+  let navs = 0;
+  const onNav = () => { navs++; };
+  page.on('framenavigated', onNav);
+  const t0 = Date.now();
+  await page.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r && r.update()))
+    .catch(() => { /* shu payt sahifa yangilanib ketgan bo'lishi mumkin */ });
+  const note = {};
+  const gotVersion = await waitFor(page, ver =>
+    (document.querySelector('meta[name="app-version"]') || {}).content === ver, newVer, 60000, note);
+  const took = Date.now() - t0;
+  page.off('framenavigated', onNav);
+  note.navs = navs; note.ms = took;
+  ok('Sahifa o’zi qayta yuklandi (hech kim tugma bosmadi)', navs > 0, JSON.stringify(note));
+  ok('Yangi versiya o’zi ochildi', gotVersion,
+    'meta app-version ' + newVer + ' bo’lmadi; ' + JSON.stringify(note));
+  /* Xizmat ishchisi activate ichida client.navigate() ni KUTMASLIGI kerak:
+     kutsa, faollashuv navigatsiyani kutadi va yangilanish brauzer muhlati
+     tugaguncha (~40 s) cho'ziladi. Foydalanuvchi buni "sayt qotdi" deb biladi. */
+  ok('Yangilanish darhol bo’ldi (' + Math.round(took / 1000) + ' s)', gotVersion && took < 15000,
+    JSON.stringify(note));
   ok('Yangilash tugmasi ko’rinmadi', !await page.locator('#pwa-bar').count());
 
   /* ---------- 4. Yangi interfeys ---------- */

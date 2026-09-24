@@ -72,6 +72,10 @@
     'Ariza va savollar uchun odam yoziladigan manzil.': ['Адрес, куда пишут человеку по заявкам и вопросам.', 'Where people write to a real person about applications and questions.', 'العنوان الذي يُكتب فيه إلى شخص للطلبات والأسئلة.'],
     'Saytda "Telegram kanal" tugmasi bo’lib chiqadi.': ['На сайте появится кнопка «Telegram-канал».', 'It appears on the website as a “Telegram channel” button.', 'يظهر في الموقع زرّ «قناة تيليجرام».'],
     'Telegram — qabul tugmasi tagida kichik yozuv bo’lib chiqadi.': ['Появится маленькой подписью под кнопкой «Telegram — приём».', 'Appears as a small line under the “Telegram — admissions” button.', 'يظهر سطراً صغيراً تحت زرّ «تيليجرام — القبول».'],
+    'Telegram — qabul (2-filial)': ['Telegram — приём (2-й филиал)', 'Telegram — admissions (2nd branch)', 'تيليجرام — القبول (الفرع الثاني)'],
+    'Ikkinchi filial uchun. Bo’sh qoldirsangiz saytda chiqmaydi.': ['Для второго филиала. Оставите пустым — на сайте не появится.', 'For the second branch. Leave it empty and it does not appear on the website.', 'للفرع الثاني. إن تركته فارغاً فلن يظهر في الموقع.'],
+    'Ikkinchi qabul qaysi filial': ['Второй приём — какой филиал', 'Second admissions branch', 'فرع القبول الثاني'],
+    'Ikkinchi qabul tugmasi tagida kichik yozuv bo’lib chiqadi.': ['Появится маленькой подписью под кнопкой второго приёма.', 'Appears as a small line under the second admissions button.', 'يظهر سطراً صغيراً تحت زرّ القبول الثاني.'],
     /* --- Bog'lanish tugmalari --- */
     'Qo’ng’iroq': ['Позвонить', 'Call', 'اتصال'],
     'SMS': ['СМС', 'SMS', 'رسالة'],

@@ -82,17 +82,26 @@ const BODY_MAX_FILE = Number(process.env.BODY_MAX_FILE_BYTES || 16e6);
 function readBody(req, max) {
   const cap = Number(max) || BODY_MAX;
   return new Promise((resolve, reject) => {
-    let d = '';
+    /* MUHIM: bo'laklar avval BAYT ko'rinishida to'planadi, matnga esa
+       oxirida bir marta o'giriladi. Har bir bo'lakni alohida matnga
+       aylantirish xavfli: o'zbek "’" yoki arab harfi ikki bo'lak
+       orasida bo'linsa "�" ga aylanadi va yozuv jimgina buziladi. */
+    const chunks = [];
+    let size = 0;
     req.on('data', c => {
-      d += c;
-      if (d.length > cap) {
+      const b = Buffer.isBuffer(c) ? c : Buffer.from(c);
+      size += b.length;
+      if (size > cap) {
         const e = new Error('So’rov juda katta');
         e.tooBig = true;
         reject(e); req.destroy();
+        return;
       }
+      chunks.push(b);
     });
     req.on('end', () => {
-      if (!d) return resolve({});
+      if (!size) return resolve({});
+      const d = Buffer.concat(chunks).toString('utf8');
       try { resolve(JSON.parse(d)); } catch (e) { reject(new Error('Noto’g’ri JSON')); }
     });
     req.on('error', reject);
