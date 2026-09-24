@@ -23,7 +23,7 @@ const head = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="AlBayan Cairo o'quv markazi boshqaruv tizimi">
+<meta name="description" content="Al Bayan Cairo — Toshkentdagi arab tili o‘quv markazi. Misrlik ustozlar bilan arab tilini bosqichma-bosqich o‘rganing. Kurslar va bog‘lanish ma’lumotlari.">
 <meta name="theme-color" content="#1e335e">
 <style>
   :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}

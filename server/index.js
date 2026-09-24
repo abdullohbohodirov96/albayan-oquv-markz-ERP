@@ -21,6 +21,7 @@ const lms = require('./lms');
 const quiz = require('./quiz');
 const progress = require('./progress');
 const parents = require('./parents');
+const seo = require('./seo');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
 function backupReadSafe(name) {
@@ -1547,7 +1548,7 @@ async function handleApi(req, res, url) {
       const s = (await store.get('meta/settings')) || {};
       if (s.centerName) out.centerName = String(s.centerName);
       out.phone = String(s.phone || '');
-      out.address = String(s.address || '');
+      out.address = String(s.address || seo.DEFAULT_ADDRESS);
       out.workStart = String(s.workStart || '');
       out.workEnd = String(s.workEnd || '');
       out.about = String(s.about || '');
@@ -2599,6 +2600,24 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   try {
     if (url.pathname.indexOf('/api/') === 0) return await handleApi(req, res, url);
+    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+      const html = await fs.promises.readFile(path.join(ROOT, 'index.html'), 'utf8');
+      const settings = (await store.get('meta/settings')) || {};
+      const page = seo.render(html, settings, req.headers.host || 'localhost');
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache',
+        'X-Content-Type-Options': 'nosniff' });
+      return res.end(page);
+    }
+    if (req.method === 'GET' && url.pathname === '/robots.txt') {
+      const origin = seo.origin(req.headers.host || 'localhost');
+      return send(res, 200, 'User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ' + origin + '/sitemap.xml\n',
+        { 'Content-Type': 'text/plain; charset=utf-8' });
+    }
+    if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
+      const origin = seo.origin(req.headers.host || 'localhost');
+      return send(res, 200, '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>' + origin + '/</loc></url></urlset>',
+        { 'Content-Type': 'application/xml; charset=utf-8' });
+    }
     return serveStatic(req, res, url.pathname);
   } catch (e) {
     if (e && e.tooBig) {

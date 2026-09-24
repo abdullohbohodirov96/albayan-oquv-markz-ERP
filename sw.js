@@ -4,15 +4,11 @@
    2. /api/ so'rovlari HECH QACHON keshlanmaydi — maxfiy ma'lumot brauzerda qolmaydi.
    3. Internet yo'qligida to'lov yoki boshqa yozuv "muvaffaqiyatli" deb ko'rsatilmaydi:
       so'rov xato qaytaradi va ilova buni ochiq aytadi.
-   4. VERSION ni `node build.js` fayllar mazmunidan hisoblab yozadi — qo'lda
-      tahrirlash shart emas. Shu sabab har bir yangi chiqarilishda brauzer yangi
-      ishchini ko'radi va foydalanuvchiga "Yangilash" taklifi chiqadi.
-   5. HTML ham, JS/CSS ham BITTA versiya keshidan beriladi: yangi HTML eski JS
-      bilan aralashib qolmaydi. Yangi versiya faqat foydalanuvchi roziligidan
-      keyin (SKIP_WAITING) ishga tushadi.                                    */
+   4. VERSION ni `node build.js` fayllar mazmunidan hisoblab yozadi.
+   5. HTML ham, JS/CSS ham BITTA versiya keshidan beriladi.                  */
 'use strict';
 
-const VERSION = 'albayan-6ffb3f38da73';
+const VERSION = 'albayan-4cd4dba7d755';
 const SHELL = [
   './index.html',
   './css/app.css',
@@ -42,6 +38,7 @@ self.addEventListener('install', event => {
     const cache = await caches.open(VERSION);
     // bitta fayl yuklanmasa ham o'rnatish buzilmasin
     await Promise.all(SHELL.map(u => cache.add(u).catch(() => { })));
+    await self.skipWaiting();
   })());
 });
 
@@ -49,10 +46,18 @@ self.addEventListener('activate', event => {
   event.waitUntil((async () => {
     const names = await caches.keys();
     // faqat SHU ilovaning eski keshlari o'chiriladi, boshqalarga tegilmaydi
+    const upgrading = names.some(n => n !== VERSION && /^(albayan|albyana)-/.test(n));
     await Promise.all(names
       .filter(n => n !== VERSION && /^(albayan|albyana)-/.test(n))
       .map(n => caches.delete(n)));
     await self.clients.claim();
+    // Avvalgi versiyada avtomatik yangilash yo'q edi: ochiq ommaviy sahifani
+    // yangi versiyada qayta ochamiz. ERP oynalaridagi formaga tegmaymiz.
+    if (upgrading) {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      await Promise.all(windows.filter(client => !new URL(client.url).hash)
+        .map(client => client.navigate(client.url).catch(() => {})));
+    }
   })());
 });
 
@@ -74,13 +79,13 @@ self.addEventListener('fetch', event => {
   // 2) Faqat GET va o'z manzilimiz
   if (req.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  // 3) HTML — avval tarmoq, keyin kesh (yangilanish tez yetib borsin)
+  // 3) HTML — joriy versiya keshidan
   const isHtml = req.mode === 'navigate' ||
     (req.headers.get('accept') || '').indexOf('text/html') >= 0;
 
   // 3) HTML — shu versiya keshidan (JS/CSS bilan bir xil to'plamdan).
   //    Yangi chiqarilish brauzerga sw.js orqali yetadi: u o'zgargani uchun
-  //    yangi ishchi o'rnatiladi va ilova "Yangilash" tugmasini ko'rsatadi.
+  //    yangi ishchi o'rnatilgach ochiq sahifa avtomatik qayta yuklanadi.
   if (isHtml) {
     event.respondWith((async () => {
       const cache = await caches.open(VERSION);
