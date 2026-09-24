@@ -136,26 +136,7 @@ const ldTag = '<script type="application/ld+json">' +
 const html = head + ldTag + body.trimStart() + '\n</body>\n</html>\n';
 fs.writeFileSync(path.join(__dirname, 'index.html'), html);
 
-/* ---------------- robots.txt va sitemap.xml ---------------- */
-fs.writeFileSync(path.join(__dirname, 'robots.txt'),
-  'User-agent: *\n' +
-  'Allow: /\n' +
-  '# Ichki tizim sahifalari qidiruvga kerak emas\n' +
-  'Disallow: /api/\n' +
-  'Sitemap: ' + SITE_URL + '/sitemap.xml\n');
-fs.writeFileSync(path.join(__dirname, 'sitemap.xml'),
-  '<?xml version="1.0" encoding="UTF-8"?>\n' +
-  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-  '  <url>\n' +
-  '    <loc>' + SITE_URL + '/</loc>\n' +
-  '    <lastmod>' + new Date().toISOString().slice(0, 10) + '</lastmod>\n' +
-  '    <changefreq>weekly</changefreq>\n' +
-  '    <priority>1.0</priority>\n' +
-  '  </url>\n' +
-  '</urlset>\n');
-
 console.log('index.html yangilandi (' + headTags.length + ' ta head tegi ko’chirildi).');
-console.log('robots.txt va sitemap.xml yangilandi (' + SITE_URL + ').');
 
 /* ---------------- Versiya: fayllar mazmunidan hisoblanadi ----------------
    sw.js dagi VERSION shu yerda yoziladi. Fayl o'zgarsa — versiya ham o'zgaradi,

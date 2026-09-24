@@ -97,7 +97,11 @@ async function api(p, o = {}) {
   eq('Ikkita sarlavha yo’q', (html.match(/<title>/gi) || []).length, 1);
   const desc = (html.match(/<meta name="description" content="([^"]*)"/i) || [])[1] || '';
   ok('Tavsif bor (' + desc.length + ' belgi)', desc.length >= 70 && desc.length <= 320, desc);
-  ok('Tavsif sozlamadagi matnga moslandi', /noldan erkin suhbatgacha/.test(desc), desc);
+  /* Tavsif sozlamadan tuziladi: markaz nomi, manzili va telefoni bilan —
+     qidiruv natijasida odam manzilni darrov ko'radi.                    */
+  ok('Tavsifda markaz nomi bor', desc.indexOf(NAME) === 0, desc.slice(0, 80));
+  ok('Tavsifda manzil bor', desc.indexOf(ADDR) > 0, desc);
+  ok('Tavsifda telefon bor', desc.indexOf(PHONE) > 0, desc);
   ok('Canonical havola bor', /<link rel="canonical" href="https?:\/\/[^"]+"/.test(html));
   ok('Robots: indeksga ruxsat', /<meta name="robots" content="[^"]*index/.test(html),
     (html.match(/<meta name="robots"[^>]*>/) || [])[0]);

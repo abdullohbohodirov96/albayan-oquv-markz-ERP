@@ -65,6 +65,11 @@
     }
   };
 
+  function hidePreRender() {
+    var initial = document.getElementById('seo-prerender');
+    if (initial) initial.remove();
+  }
+
   /* ---------- Manzil satri (hash) bilan ishlash ---------- */
   function routeToHash(r) {
     if (!r || !r.name) return '#dashboard';
@@ -266,6 +271,7 @@
   }
 
   function renderLogin(msg) {
+    hidePreRender();
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
     var wrap = document.getElementById('auth');
@@ -351,6 +357,7 @@
      O'quvchi 4 xonali kodini kiritadi va o'z ma'lumotini ko'radi:
      guruhi, jadvali, keyingi to'lovi va davomati. Xodimlar tizimiga aloqasi yo'q. */
   function renderKabinet(prefill) {
+    hidePreRender();
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
     var wrap = document.getElementById('auth');
@@ -870,6 +877,7 @@
      darajani o'zboshimchalik bilan yozib bo'lmaydi.
      Uch til: o'zbek, rus, arab (arabchada sahifa o'ngdan chapga). */
   function renderTest() {
+    hidePreRender();
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
     var wrap = document.getElementById('auth');
@@ -1457,6 +1465,7 @@
      kabi) kodda yozilmaydi. Ular Sozlamalardan keladi va bo'sh bo'lsa
      bo'lim umuman ko'rinmaydi — saytda tekshirilmagan gap turmasin.   */
   function renderLanding() {
+    hidePreRender();
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
     var wrap = document.getElementById('auth');
@@ -1957,11 +1966,11 @@
       if (d.address) { show('site-addr-row'); setText('site-addr', d.address); setText('foot-addr', d.address); }
       if (d.workStart && d.workEnd) {
         show('site-time-row');
-        var hrs = 'Dushanba–Shanba · ' + d.workStart + '–' + d.workEnd;
+        var hrs = 'Ish vaqti: ' + d.workStart + '–' + d.workEnd;
         setText('site-time', hrs);
         setText('foot-hours', hrs);
         var hh = document.getElementById('hero-hours');
-        if (hh) { hh.hidden = false; hh.textContent = 'Har kuni ' + d.workStart + '–' + d.workEnd; }
+        if (hh) { hh.hidden = false; hh.textContent = hrs; }
       }
       if (d.telegram) {
         show('site-tg-row');
@@ -2539,6 +2548,7 @@
 
   /* ---------- Ustoz profili (ochiq sahifa) ---------- */
   function renderTeacher(t, list) {
+    hidePreRender();
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = true;
     var wrap = document.getElementById('auth');
@@ -2682,12 +2692,11 @@
     App.user = user;
     try { sessionStorage.setItem('albyana_session', user.id); } catch (e) { }
     if (restPromise) {
-      var boot = document.getElementById('boot');
-      boot.hidden = false;
       document.getElementById('auth').hidden = true;
       try { await restPromise; } catch (e) { console.error(e); }
       restPromise = null;
     }
+    hidePreRender();
     document.getElementById('auth').hidden = true;
     document.getElementById('boot').hidden = true;
     document.getElementById('app').hidden = false;
@@ -2906,7 +2915,9 @@
       else renderLogin(null);
     } catch (e) {
       console.error(e);
+      hidePreRender();
       var boot = document.getElementById('boot');
+      boot.hidden = false;
       UI.clear(boot);
       boot.appendChild(h('div', { class: 'login' }, [
         h('h1', {}, 'Tizimni ochib bo’lmadi'),

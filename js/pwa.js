@@ -1,6 +1,6 @@
 /* Albyana ERP — telefonga o'rnatish (PWA) va ulanish holati.
    — Xizmat ishchisini ro'yxatdan o'tkazadi (faqat http/https da).
-   — Yangi versiya chiqqanda "Yangilash" tugmasi ko'rsatadi.
+   — Yangi versiya chiqqanda, saqlanmagan ish bo'lmasa, avtomatik yangilaydi.
    — Internet uzilganda ochiq ogohlantirish chiqaradi.
    Hech qanday to'lov yoki yozuv internetsiz "saqlandi" deb ko'rsatilmaydi. */
 (function (global) {
@@ -71,13 +71,14 @@
       global.navigator.standalone === true;
   }
 
-  /* ---------- Yangilanish ----------
-     Avtomatik qayta yuklash YO'Q: faqat foydalanuvchi "Yangilash" ni bossa.
-     Saqlanmagan ma'lumot bo'lsa — avval so'raladi. */
+  /* ---------- Yangilanish ---------- */
   var updating = false;
+  var pendingWorker = null;
+  var pendingReload = false;
 
   /** Ekranda saqlanmagan ma'lumot bormi (ochiq oyna yoki to'ldirilgan forma) */
   function hasUnsaved() {
+    if (A && A.UI && A.UI.hasUnsaved && A.UI.hasUnsaved()) return true;
     var backs = document.querySelectorAll('#modal-root .modal-back');
     for (var i = 0; i < backs.length; i++) {
       if (typeof backs[i].__isDirty === 'function' && backs[i].__isDirty()) return true;
@@ -87,55 +88,65 @@
       var f = fields[j];
       if (f.type === 'hidden' || f.disabled || f.readOnly) continue;
       if (f.id === 'global-search' || f.type === 'search') continue;
+      if (f.tagName === 'SELECT') {
+        var initialIndex = 0;
+        for (var k = 0; k < f.options.length; k++) {
+          if (f.options[k].defaultSelected) { initialIndex = k; break; }
+        }
+        if (f.selectedIndex !== initialIndex) return true;
+        continue;
+      }
       if ((f.value || '') !== (f.defaultValue || '')) return true;
     }
     return false;
   }
 
   function doUpdate(worker) {
+    if (updating || !worker) return;
     updating = true;
-    if (worker) worker.postMessage({ type: 'SKIP_WAITING' });
-    // yangi ishchi boshqaruvni olganda qayta yuklaymiz
-    setTimeout(function () { if (updating) location.reload(); }, 1500);
+    worker.postMessage({ type: 'SKIP_WAITING' });
   }
 
-  function offerUpdate(worker) {
-    bar('Yangi versiya tayyor.', [{
-      label: 'Yangilash', cls: 'primary', onClick: function () {
-        if (!hasUnsaved()) return doUpdate(worker);
-        if (A && A.UI && A.UI.confirm) {
-          A.UI.confirm('Saqlanmagan ma’lumot bor',
-            'Yangilansa, kiritganlaringiz yo’qoladi. Baribir yangilansinmi?',
-            'Ha, yangilansin', true).then(function (yes) { if (yes) doUpdate(worker); });
-        } else {
-          doUpdate(worker);
-        }
-      }
-    }, {
-      label: 'Keyinroq', onClick: hideBar
-    }], 'info');
+  function tryUpdate() {
+    if (pendingReload && !hasUnsaved()) {
+      pendingReload = false;
+      location.reload();
+      return;
+    }
+    if (pendingWorker && !hasUnsaved()) doUpdate(pendingWorker);
   }
 
   async function register() {
     if (!('serviceWorker' in navigator)) return null;
     if (location.protocol !== 'http:' && location.protocol !== 'https:') return null;
     try {
+      var hadController = !!navigator.serviceWorker.controller;
       // updateViaCache: 'none' — sw.js har safar serverdan tekshiriladi (keshdan emas)
       reg = await navigator.serviceWorker.register('sw.js', { scope: './', updateViaCache: 'none' });
-      if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        pendingWorker = reg.waiting;
+        tryUpdate();
+      }
       reg.addEventListener('updatefound', function () {
         var w = reg.installing;
         if (!w) return;
         w.addEventListener('statechange', function () {
-          if (w.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(w);
+          if (w.state === 'installed' && navigator.serviceWorker.controller) {
+            pendingWorker = w;
+            tryUpdate();
+          }
         });
       });
-      // yangi ishchi boshqaruvni oldi — faqat biz so'raganimizda qayta yuklaymiz
+      // Yangi ishchi boshqaruvni oldi — sahifani darhol yangi kod bilan ochamiz.
       navigator.serviceWorker.addEventListener('controllerchange', function () {
-        if (!updating) return;
+        if (!hadController) return;
         updating = false;
-        location.reload();
+        pendingWorker = null;
+        pendingReload = true;
+        tryUpdate();
       });
+      // Tahrirlanayotgan forma saqlangach yangilanishni davom ettiramiz.
+      setInterval(tryUpdate, 3000);
       // yangilanishni tekshirish: ochilganda, oynaga qaytganda va har soatda
       try { reg.update(); } catch (e) { }
       document.addEventListener('visibilitychange', function () {

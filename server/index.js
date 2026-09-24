@@ -1548,7 +1548,7 @@ async function handleApi(req, res, url) {
       const s = (await store.get('meta/settings')) || {};
       if (s.centerName) out.centerName = String(s.centerName);
       out.phone = String(s.phone || '');
-      out.address = String(s.address || '');
+      out.address = String(s.address || seo.DEFAULT_ADDRESS);
       out.workStart = String(s.workStart || '');
       out.workEnd = String(s.workEnd || '');
       out.about = String(s.about || '');
@@ -2509,9 +2509,6 @@ async function handleApi(req, res, url) {
         }
       }
       await store.set(p, body.data);
-      /* Markaz ma'lumoti o'zgardi — qidiruv tizimi uchun tayyorlangan
-         nusxani tashlaymiz, yangi nom/telefon darrov chiqsin.        */
-      if (p === 'meta/settings') seoCache = { at: 0, key: '', buf: null };
       await writeAudit(user, body.action || 'Ma’lumot saqlandi', body.entity || p, body.details || '');
       // Bot navbatchisini uyg'otamiz (tasdiq/ e'lon darhol ketsin, bo'sh vaqtda esa baza tinch)
       if (p.indexOf('botreq/') === 0 || p.indexOf('botout/') === 0) {
@@ -2547,9 +2544,9 @@ const MIME = {
  * Faqat brauzerga kerakli fayllar tarqatiladi.
  * .env, .git, server kodi, baza va testlar hech qachon berilmaydi.
  */
-const PUBLIC_FILES = new Set(['/index.html', '/manifest.webmanifest', '/sw.js', '/favicon.ico',
-  /* Qidiruv tizimlari shu ikki faylni so'raydi */
-  '/robots.txt', '/sitemap.xml']);
+/* robots.txt va sitemap.xml fayl emas — ular serverda tuziladi
+   (pastdagi yo'llarga qarang), shuning uchun bu ro'yxatda yo'q. */
+const PUBLIC_FILES = new Set(['/index.html', '/manifest.webmanifest', '/sw.js', '/favicon.ico']);
 const PUBLIC_DIRS = ['/css/', '/js/', '/assets/'];
 const ALLOWED_EXT = new Set(['.html', '.js', '.css', '.png', '.jpg', '.svg', '.ico', '.webmanifest',
   '.txt', '.xml']);
@@ -2562,22 +2559,6 @@ function isPublicPath(rel) {
   if (!PUBLIC_DIRS.some(d => rel.indexOf(d) === 0)) return false;
   if (rel.slice(1).split('/').length > 3) return false;         // chuqur joylashuv yo'q
   return ALLOWED_EXT.has(path.extname(rel).toLowerCase());
-}
-
-/* Bosh sahifaga sozlamalardagi ma'lumotni qo'shadi (qidiruv tizimi uchun).
-   Sozlama o'qilmasa yoki xato bo'lsa — fayl o'zgarishsiz qaytadi.      */
-let seoCache = { at: 0, key: '', buf: null };
-async function seoIndex(req, data) {
-  const url = seo.siteUrl(req, process.env);
-  const now = Date.now();
-  if (seoCache.buf && seoCache.key === url + '|' + data.length && now - seoCache.at < 60000) {
-    return seoCache.buf;
-  }
-  let s = null;
-  try { s = await store.get('meta/settings'); } catch (e) { s = null; }
-  const buf = Buffer.from(seo.inject(data.toString('utf8'), s, url), 'utf8');
-  seoCache = { at: now, key: url + '|' + data.length, buf };
-  return buf;
 }
 
 function serveStatic(req, res, pathname) {
@@ -2600,10 +2581,8 @@ function serveStatic(req, res, pathname) {
   fs.stat(file, (se, st) => {
     fs.readFile(file, (err, data) => {
       if (err) {
-        /* robots.txt va sitemap.xml o'rniga sahifa berilmasin — qidiruv
-           tizimi buni "fayl bor" deb o'ylab, HTML ni o'qishga urinardi. */
-        const noFallback = rel === '/robots.txt' || rel === '/sitemap.xml' ||
-          rel === '/favicon.ico';
+        /* favicon o'rniga sahifa berilmasin */
+        const noFallback = rel === '/favicon.ico';
         if (rel !== '/index.html' && !noFallback) return serveStatic(req, res, '/index.html');
         return send(res, 404, 'Topilmadi');
       }
@@ -2618,26 +2597,6 @@ function serveStatic(req, res, pathname) {
         'X-Content-Type-Options': 'nosniff',
         'Cache-Control': codeFile ? 'no-cache' : 'public, max-age=86400'
       };
-      /* Bosh sahifaga qidiruv tizimi uchun markaz ma'lumoti qo'shiladi:
-         nomi, telefoni, manzili, ish vaqti va ijtimoiy tarmoqlari.
-         Sozlama o'qilmasa — fayl o'zgarishsiz beriladi.               */
-      if (rel === '/index.html') {
-        return seoIndex(req, data).then(buf => {
-          const t2 = '"' + buf.length.toString(16) + '-' +
-            (st ? Math.floor(st.mtimeMs).toString(16) : '0') + '"';
-          if (req.headers['if-none-match'] === t2) {
-            res.writeHead(304, { 'Cache-Control': 'no-cache', ETag: t2 });
-            return res.end();
-          }
-          head.ETag = t2;
-          res.writeHead(200, head);
-          res.end(buf);
-        }).catch(() => {
-          if (tag) head.ETag = tag;
-          res.writeHead(200, head);
-          res.end(data);
-        });
-      }
       if (tag) head.ETag = tag;
       res.writeHead(200, head);
       res.end(data);
@@ -2650,6 +2609,32 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
   try {
     if (url.pathname.indexOf('/api/') === 0) return await handleApi(req, res, url);
+    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
+      const html = await fs.promises.readFile(path.join(ROOT, 'index.html'), 'utf8');
+      const settings = (await store.get('meta/settings')) || {};
+      const page = seo.render(html, settings, req.headers.host || 'localhost');
+      /* Sahifa sozlamaga qarab o'zgaradi, shuning uchun ETag uning
+         MAZMUNIDAN hisoblanadi: o'zgarmagan bo'lsa brauzer qayta
+         yuklab o'tirmaydi, o'zgarsa darrov yangisini oladi.          */
+      const etag = '"' + crypto.createHash('sha1').update(page).digest('hex').slice(0, 16) + '"';
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, { 'Cache-Control': 'no-cache', ETag: etag });
+        return res.end();
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache',
+        'X-Content-Type-Options': 'nosniff', ETag: etag });
+      return res.end(page);
+    }
+    if (req.method === 'GET' && url.pathname === '/robots.txt') {
+      const origin = seo.origin(req.headers.host || 'localhost');
+      return send(res, 200, 'User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ' + origin + '/sitemap.xml\n',
+        { 'Content-Type': 'text/plain; charset=utf-8' });
+    }
+    if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
+      const origin = seo.origin(req.headers.host || 'localhost');
+      return send(res, 200, '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>' + origin + '/</loc></url></urlset>',
+        { 'Content-Type': 'application/xml; charset=utf-8' });
+    }
     return serveStatic(req, res, url.pathname);
   } catch (e) {
     if (e && e.tooBig) {

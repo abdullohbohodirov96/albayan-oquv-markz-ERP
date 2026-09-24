@@ -1278,48 +1278,63 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 
 /* --- Ijtimoiy tarmoq tugmalari (ariza bloki va footer) ---
    Telegram va Instagram logotiplari — o'sha xizmatlarning rasmiy
-   belgilari (assets/logo-*.png). Tugmada asosiysi logotip: u katta va
-   o'z rangida turadi, yozuv esa yonida kichik.                        */
-.soc-btn{display:inline-flex;align-items:center;gap:12px;padding:10px 16px 10px 10px;
-  border-radius:14px;font-size:13px;font-weight:600;color:var(--st-ink-2);
-  text-decoration:none;background:var(--st-card);border:1px solid var(--st-line);
-  box-shadow:0 1px 2px rgba(16,28,51,.04);
-  transition:box-shadow .2s,border-color .18s,color .18s,transform .14s cubic-bezier(.22,.8,.3,1)}
-.soc-btn .soc-logo{width:38px;height:38px;flex:none;display:block;
-  transition:transform .2s cubic-bezier(.22,.8,.3,1)}
-.soc-btn .soc-ico{width:38px;height:38px;flex:none;border-radius:11px;display:grid;place-items:center;
-  background:var(--st-n7)}
-.soc-btn .soc-ico .ico{width:19px;height:19px;color:var(--st-gold-2)}
+   belgilari (assets/logo-*.png). Tugmada asosiysi LOGOTIP: u katta,
+   o'z rangida va oq doira ichida turadi; yozuv esa yonida kichik.
+   Ustiga kelganda logotip ostida o'sha tarmoqning rangi yonadi.       */
+.soc-btn{position:relative;display:inline-flex;align-items:center;gap:13px;
+  padding:11px 18px 11px 11px;border-radius:16px;font-size:13px;font-weight:600;
+  color:var(--st-ink-2);text-decoration:none;overflow:hidden;
+  background:var(--st-card);border:1px solid var(--st-line);
+  box-shadow:0 1px 2px rgba(16,28,51,.05);
+  transition:box-shadow .22s,border-color .2s,color .2s,
+    transform .18s cubic-bezier(.22,.8,.3,1)}
+/* Logotip uchun oq yostiq — rangli belgi har qanday fonda toza ko'rinadi */
+.soc-btn .soc-logo{width:40px;height:40px;flex:none;display:block;border-radius:12px;
+  background:#fff;padding:2px;box-sizing:border-box;
+  box-shadow:0 1px 3px rgba(16,28,51,.14);
+  transition:transform .22s cubic-bezier(.22,.8,.3,1),box-shadow .22s}
+.soc-btn .soc-ico{width:40px;height:40px;flex:none;border-radius:12px;display:grid;
+  place-items:center;background:var(--st-n7)}
+.soc-btn .soc-ico .ico{width:20px;height:20px;color:var(--st-gold-2)}
 .soc-btn .soc-txt{display:flex;flex-direction:column;line-height:1.25;min-width:0}
-.soc-btn .soc-txt b{font-size:14px;color:var(--st-ink);font-weight:700;white-space:nowrap}
+.soc-btn .soc-txt b{font-size:14.5px;color:var(--st-ink);font-weight:700;white-space:nowrap}
 .soc-btn .soc-txt span{font-size:11.5px;color:var(--st-mut);white-space:nowrap}
-.soc-btn:hover{border-color:var(--st-line-2);color:var(--st-ink);
-  box-shadow:0 8px 22px -12px rgba(16,28,51,.42);transform:translateY(-2px)}
-.soc-btn:hover .soc-logo{transform:scale(1.07)}
-.soc-btn:focus-visible{outline:2px solid var(--st-gold);outline-offset:2px}
+/* Ustiga kelganda: tugma ko'tariladi, chetida o'sha tarmoqning rangi chiqadi */
+.soc-btn::before{content:'';position:absolute;inset:0;border-radius:inherit;
+  opacity:0;transition:opacity .22s;pointer-events:none}
+.soc-btn.soc-tg::before{background:linear-gradient(120deg,rgba(55,174,226,.16),rgba(55,174,226,0) 62%)}
+.soc-btn.soc-ig::before{background:linear-gradient(120deg,rgba(214,41,118,.16),rgba(245,148,66,.10) 62%)}
+.soc-btn:hover{color:var(--st-ink);transform:translateY(-3px);
+  box-shadow:0 14px 28px -16px rgba(16,28,51,.5)}
+.soc-btn.soc-tg:hover{border-color:rgba(55,174,226,.55)}
+.soc-btn.soc-ig:hover{border-color:rgba(214,41,118,.45)}
+.soc-btn:hover::before{opacity:1}
+.soc-btn:hover .soc-logo{transform:scale(1.08) rotate(-3deg);
+  box-shadow:0 6px 14px -6px rgba(16,28,51,.45)}
+.soc-btn:active{transform:translateY(-1px)}
+.soc-btn:focus-visible{outline:2px solid var(--st-gold);outline-offset:3px}
 
 /* Ariza blokidagi katta ko'rinish — to'q fonda */
 .apply-soc{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px}
 .apply-soc[hidden]{display:none}
-.soc-btn.big{padding:11px 16px 11px 11px;background:rgba(255,255,255,.08);
+.soc-btn.big{padding:11px 18px 11px 11px;background:rgba(255,255,255,.08);
   border-color:rgba(255,255,255,.18);box-shadow:none}
 .soc-btn.big .soc-txt b{color:#fff}
 .soc-btn.big .soc-txt span{color:#a9b8d6}
-.soc-btn.big:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
-.soc-btn.big .soc-logo{width:40px;height:40px}
+.soc-btn.big:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.42)}
+.soc-btn.big .soc-logo{width:42px;height:42px}
 
 /* Footerdagi ro'yxat — logotiplar yonma-yon */
 #foot-soc{display:flex;flex-wrap:wrap;gap:10px}
 
 @media (max-width:620px){
-  .soc-btn{padding:9px 13px 9px 9px;gap:10px}
-  .soc-btn .soc-logo,.soc-btn.big .soc-logo{width:34px;height:34px}
+  .soc-btn{padding:10px 15px 10px 10px;gap:11px;width:100%}
+  .soc-btn .soc-logo,.soc-btn.big .soc-logo{width:38px;height:38px}
   .apply-soc{flex-direction:column}
-  .apply-soc .soc-btn{width:100%}
 }
 @media (prefers-reduced-motion:reduce){
-  .soc-btn,.soc-btn .soc-logo{transition:none}
-  .soc-btn:hover{transform:none}
+  .soc-btn,.soc-btn .soc-logo,.soc-btn::before{transition:none}
+  .soc-btn:hover,.soc-btn:active{transform:none}
   .soc-btn:hover .soc-logo{transform:none}
 }
 
