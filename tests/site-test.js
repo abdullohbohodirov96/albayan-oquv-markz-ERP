@@ -416,43 +416,57 @@ async function api(p, opts = {}) {
   ok('Izoh saytda chiqdi', v1.text.includes(NAME1), v1.text.slice(0, 200));
   ok('Izoh kartalari chizildi', v1.grid >= 1, String(v1.grid));
   ok('Yulduzchalar ko’rinadi', v1.stars >= 1, String(v1.stars));
-  const nOchiq = (pubB.json.reviews || []).length;
-  if (nOchiq >= 3) {
-    ok('3 tadan ko’p izohda tepadagi tasma ochiladi', v1.band, 'band=' + v1.band);
-    ok('Tasma uzluksiz yurishi uchun ro’yxat ikki marta qo’yilgan', v1.halves === 2, String(v1.halves));
-    ok('Tasmada ham "Izoh qoldirish" tugmasi bor', v1.top);
-  } else {
-    ok('3 tadan kam izohda tepadagi tasma yopiq', !v1.band, 'band=' + v1.band);
-    /* Tasma kamida 3 ta izohda ochiladi — yetmaganini sinov o'zi
-       qo'shadi, oxirida esa o'zi o'chiradi.                          */
-    for (let i = 0; i < 3 - nOchiq; i++) {
-      const rid = 'rev_sinov_' + R + '_' + i;
-      await api('/api/doc?path=' + encodeURIComponent('reviews/' + rid), {
-        method: 'PUT', cookie: dir,
-        body: {
-          data: {
-            id: rid, name: 'Sinov Tasma ' + i, text: 'Guruhda gapirish ko’p, natija tez sezildi.',
-            rating: 5, about: 'A2 guruhi', status: 'ochiq', createdAt: '2026-09-01 10:00'
-          }
-        }
-      });
-      revIds.push(rid);
-    }
-    await page.goto(BASE);
-    await page.waitForSelector('#rev-band:not([hidden])', { timeout: 15000 });
-    const v2 = await page.evaluate(() => ({
-      band: !!document.querySelector('#rev-band:not([hidden])'),
-      halves: document.querySelectorAll('#rev-track .rev-half').length,
-      cards: document.querySelectorAll('#rev-track .rev-card').length,
-      top: Array.from(document.querySelectorAll('#rev-band button')).some(b => /Izoh qoldirish/.test(b.textContent)),
-      anim: getComputedStyle(document.querySelector('#rev-track')).animationName
-    }));
-    ok('3 ta izohda tepadagi tasma ochildi', v2.band);
-    ok('Tasma uzluksiz yurishi uchun ro’yxat ikki marta qo’yilgan', v2.halves === 2, String(v2.halves));
-    ok('Tasmada izoh kartalari bor', v2.cards >= 6, String(v2.cards));
-    ok('Tasma yuradi (animatsiya ulangan)', /rev/i.test(v2.anim || ''), v2.anim);
-    ok('Tasmada ham "Izoh qoldirish" tugmasi bor', v2.top);
-  }
+  /* Tasma BITTA tasdiqlangan izoh bilan ham ochiladi — markaz birinchi
+     izohni tasdiqlashi bilan sayt tirik bo'lib qoladi.                 */
+  ok('Bitta izoh bo’lsa ham tepadagi tasma ochiq', v1.band, 'band=' + v1.band);
+  ok('Tasma uzluksiz yurishi uchun ro’yxat ikki marta qo’yilgan', v1.halves === 2, String(v1.halves));
+  ok('Tasmada ham "Izoh qoldirish" tugmasi bor', v1.top);
+
+  section('   Tasma aylanishi: chetlari xira, tezligi bir tekis');
+  const mq = await page.evaluate(() => {
+    const t = document.getElementById('rev-track');
+    const m = document.getElementById('rev-marquee');
+    const hv = t.querySelectorAll('.rev-half');
+    const edge = m.querySelector('.rev-edge');
+    const mask = document.querySelector('.rev-mask');
+    return {
+      halves: hv.length,
+      halfW: hv[0] ? Math.round(hv[0].getBoundingClientRect().width) : 0,
+      view: Math.round(m.getBoundingClientRect().width),
+      dur: parseFloat(getComputedStyle(t).animationDuration) || 0,
+      name: getComputedStyle(t).animationName,
+      edges: m.querySelectorAll('.rev-edge').length,
+      blur: edge ? (getComputedStyle(edge).backdropFilter || getComputedStyle(edge).webkitBackdropFilter || '') : '',
+      mask: mask ? (getComputedStyle(mask).maskImage || getComputedStyle(mask).webkitMaskImage || '') : '',
+      overflow: getComputedStyle(m).overflow
+    };
+  });
+  ok('Tasma aylanadi (animatsiya ulangan)', /rev/i.test(mq.name || ''), mq.name);
+  ok('Bitta yarim ekrandan keng — oraliqda bo’sh joy qolmaydi',
+    mq.halfW >= mq.view, mq.halfW + ' < ' + mq.view);
+  /* Tezlik kartalar soniga bog'liq emas: taxminan 62 piksel/soniya */
+  const speed = mq.dur ? mq.halfW / mq.dur : 0;
+  /* Tezlik izohlar soniga bog'liq bo'lmasligi kerak: kod uni har safar
+     hisoblab qo'yadi (~62 px/s). CSS dagi qat'iy vaqt bilan bu chegaraga
+     tushmaydi — shuning uchun chegara tor.                             */
+  ok('Tezlik bir tekis (' + Math.round(speed) + ' px/s)', speed >= 52 && speed <= 75,
+    JSON.stringify(mq));
+  ok('Chetlarda ikkita xira qatlam bor', mq.edges === 2, String(mq.edges));
+  ok('Chetdagi qatlam xiralashtiradi (blur)', /blur\(/.test(mq.blur), mq.blur);
+  ok('Karta chetda asta-sekin yo’qoladi (mask)', /gradient/.test(mq.mask), mq.mask.slice(0, 60));
+  ok('Tasmadan tashqarisi ko’rinmaydi', mq.overflow === 'hidden', mq.overflow);
+
+  section('   Tasma birinchi blokdan keyin darrov turadi');
+  const order = await page.evaluate(() => {
+    const hero = document.querySelector('.site-hero');
+    const band = document.getElementById('rev-band');
+    const stat = document.getElementById('stat-band');
+    const y = e => e ? Math.round(e.getBoundingClientRect().top + window.scrollY) : null;
+    return { hero: y(hero), band: y(band), stat: y(stat), statHidden: stat ? stat.hidden : null };
+  });
+  ok('Tasma hero blokdan keyin', order.band > order.hero, JSON.stringify(order));
+  ok('Tasma ko’rsatkichlar tasmasidan oldin',
+    order.stat === null || order.statHidden || order.band < order.stat, JSON.stringify(order));
 
   section('   Saytdan izoh yozish oynasi');
   await page.evaluate(() => {

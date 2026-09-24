@@ -154,6 +154,42 @@ async function api(p, o = {}) {
   });
   ok('Tugma ariza formasiga olib bordi', atForm);
 
+  /* ================= 2b. Izohlar tasmasi ================= */
+  section('2b. Telefonda izohlar tasmasi');
+  {
+    /* Tasma ko'rinishi uchun kamida bitta tasdiqlangan izoh kerak */
+    const rid = 'rev_tel_' + R;
+    await put('reviews/' + rid, {
+      id: rid, name: 'Telefon Tasma', text: 'Guruhda gapirish ko’p, natija tez sezildi.',
+      rating: 5, about: 'A2 guruhi', status: 'ochiq', createdAt: today + ' 10:00'
+    });
+    await page.goto(BASE);
+    await page.waitForSelector('#rev-band:not([hidden])', { timeout: 20000 });
+    await page.waitForTimeout(1600);
+    const mq = await page.evaluate(() => {
+      const t = document.getElementById('rev-track');
+      const m = document.getElementById('rev-marquee');
+      const hv = t.querySelectorAll('.rev-half');
+      const e = m.querySelector('.rev-edge');
+      return {
+        halves: hv.length,
+        halfW: hv[0] ? Math.round(hv[0].getBoundingClientRect().width) : 0,
+        view: Math.round(m.getBoundingClientRect().width),
+        dur: parseFloat(getComputedStyle(t).animationDuration) || 0,
+        edges: m.querySelectorAll('.rev-edge').length,
+        blur: e ? (getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter || '') : '',
+        cardW: (() => { const c = document.querySelector('#rev-track .rev-card'); return c ? Math.round(c.getBoundingClientRect().width) : 0; })()
+      };
+    });
+    ok('Telefonda ham tasma aylanadi', mq.halves === 2 && mq.dur > 0, JSON.stringify(mq));
+    ok('Bo’sh joy qolmaydi', mq.halfW >= mq.view, mq.halfW + ' < ' + mq.view);
+    ok('Chetlari xira', mq.edges === 2 && /blur\(/.test(mq.blur), JSON.stringify(mq));
+    ok('Karta telefon ekraniga sig’adi', mq.cardW > 0 && mq.cardW <= mq.view, JSON.stringify(mq));
+    ok('Tasma sahifani yon tomonga siljitmaydi', (await ovf()) <= 1, String(await ovf()));
+    await page.screenshot({ path: path.join(SHOTS, 'telefon-tasma.png') });
+    await api('/api/doc?path=' + encodeURIComponent('reviews/' + rid), { method: 'DELETE', cookie: dir });
+  }
+
   /* ================= 3. Izoh qoldirish ================= */
   section('3. Telefondan izoh qoldirish');
   await page.goto(BASE);

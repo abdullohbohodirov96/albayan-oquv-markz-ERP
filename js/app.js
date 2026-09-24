@@ -1561,9 +1561,17 @@
       ])
     ]);
 
-    /* Izohlar tasmasi — hero ostida sekin yurib turadi.
-       Tasdiqlangan izoh 3 tadan kam bo'lsa ko'rinmaydi.                */
+    /* Izohlar tasmasi — hero ostida, birinchi blokdan keyin darrov.
+       Kartalar uzluksiz aylanib turadi: chapdan xira bo'lib chiqadi,
+       o'ngga xira bo'lib kirib ketadi. Tezlik kartalar soniga qarab
+       sozlanadi — ikkita izoh bilan ham bir tekis yuradi.            */
     var revTrack = h('div', { class: 'rev-track', id: 'rev-track' });
+    var revMarquee = h('div', { class: 'rev-marquee', id: 'rev-marquee' }, [
+      h('div', { class: 'rev-mask' }, revTrack),
+      /* Chetlardagi xiralik — orqadagi kartani xiralashtiradi */
+      h('div', { class: 'rev-edge l', 'aria-hidden': 'true' }),
+      h('div', { class: 'rev-edge r', 'aria-hidden': 'true' })
+    ]);
     var revBand = h('section', { class: 'rev-band', id: 'rev-band', hidden: true }, [
       h('div', { class: 'rev-band-head' }, [
         h('span', { class: 'rev-band-t' }, 'O’quvchilarimiz nima deydi'),
@@ -1571,7 +1579,7 @@
           class: 'btn sm gold', type: 'button', onclick: function () { openReview(); }
         }, [UI.icon('edit'), h('span', {}, 'Izoh qoldirish')])
       ]),
-      h('div', { class: 'rev-marquee' }, revTrack)
+      revMarquee
     ]);
 
     /* Ko'rsatkichlar — hero ostida alohida to'q tasma.
@@ -1891,9 +1899,20 @@
       }
       window.addEventListener('scroll', onScroll, { passive: true });
       window.addEventListener('resize', onScroll, { passive: true });
+      /* Ekran o'lchami o'zgarsa tasma qaytadan yig'iladi — nusxalar
+         soni ekran kengligiga bog'liq.                              */
+      var reTmr = null;
+      function onResize() {
+        onScroll();
+        clearTimeout(reTmr);
+        reTmr = setTimeout(function () { if (A._revRebuild) A._revRebuild(); }, 220);
+      }
+      window.addEventListener('resize', onResize, { passive: true });
       A._ctaOff = function () {
         window.removeEventListener('scroll', onScroll);
         window.removeEventListener('resize', onScroll);
+        window.removeEventListener('resize', onResize);
+        clearTimeout(reTmr);
       };
       check();
     })();
@@ -2090,8 +2109,10 @@
         h('blockquote', {}, r.text)
       ]);
     }
+    var REVIEWS = null;
     function paintReviews(list) {
       list = list || [];
+      REVIEWS = list;
       /* Pastdagi to'liq ro'yxat */
       UI.clear(revGrid);
       var lead = document.getElementById('rev-lead');
@@ -2105,20 +2126,49 @@
             'chiqqach saytda chiqadi.';
         }
       }
-      /* Tepadagi yuradigan tasma — kamida 3 ta izoh bo'lsa */
+      /* Tepadagi aylanib turadigan tasma. Bitta tasdiqlangan izoh
+         bo'lsa ham chiqadi — markaz uni tasdiqlashi bilan sayt tirik
+         bo'lib qoladi.                                               */
       var band = document.getElementById('rev-band');
       if (!band) return;
-      band.hidden = list.length < 3;
+      band.hidden = list.length < 1;
       if (band.hidden) return;
-      UI.clear(revTrack);
-      /* Uzluksiz yurishi uchun ro'yxat IKKI marta qo'yiladi */
-      [0, 1].forEach(function (k) {
-        var half = h('div', { class: 'rev-half', 'aria-hidden': k ? 'true' : null });
-        list.slice(0, 10).forEach(function (r) { half.appendChild(revCard(r, true)); });
-        revTrack.appendChild(half);
-      });
+      buildMarquee(list.slice(0, 10));
       if (A._siteSeen) A._siteSeen(revGrid);
     }
+
+    /* Tasmani yig'ish: ro'yxat ikkita teng yarmga bo'linadi va
+       -50% ga suriladi — shunda ulanish joyi ko'rinmaydi. Har bir
+       yarim ekrandan kengroq bo'lishi kerak, aks holda oraliqda
+       bo'sh joy qolardi; shuning uchun ro'yxat kerak bo'lsa bir
+       necha marta takrorlanadi.                                     */
+    function buildMarquee(list) {
+      if (!list.length) return;
+      var SPEED = 62;                       // piksel/soniya — bir tekis tezlik
+      UI.clear(revTrack);
+      function half(copies, hidden) {
+        var box = h('div', { class: 'rev-half', 'aria-hidden': hidden ? 'true' : null });
+        for (var c = 0; c < copies; c++) {
+          list.forEach(function (r) { box.appendChild(revCard(r, true)); });
+        }
+        return box;
+      }
+      /* Avval bitta nusxa bilan o'lchaymiz */
+      var probe = half(1, true);
+      revTrack.appendChild(probe);
+      var one = probe.getBoundingClientRect().width || 0;
+      var need = 1;
+      var vis = revMarquee.getBoundingClientRect().width || 0;
+      if (one > 0 && vis > 0) need = Math.max(1, Math.ceil((vis + 80) / one));
+      UI.clear(revTrack);
+      revTrack.appendChild(half(need, false));
+      revTrack.appendChild(half(need, true));
+      /* Tezlik kartalar soniga bog'liq bo'lmasin */
+      var total = one * need;
+      revTrack.style.animationDuration = total > 0
+        ? Math.max(12, Math.round(total / SPEED)) + 's' : '';
+    }
+    A._revRebuild = function () { if (REVIEWS) buildMarquee(REVIEWS.slice(0, 10)); };
 
     /* Izoh qoldirish oynasi */
     function openReview() {

@@ -1320,16 +1320,33 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .rev-band-t{font-size:11px;letter-spacing:.2em;text-transform:uppercase;
   font-weight:700;color:var(--st-gold)}
 
-/* Yuradigan tasma: ro'yxat ikki marta qo'yilgan, shuning uchun uzluksiz */
-.rev-marquee{position:relative;overflow:hidden;
-  -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
-  mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
-.rev-track{display:flex;width:max-content;animation:revRun 46s linear infinite}
+/* Aylanib turadigan tasma.
+   Ro'yxat ikki teng yarmga qo'yilgan va -50% ga suriladi — ulanish joyi
+   ko'rinmaydi. Chetlarda ikki qatlam bor: birinchisi kartani asta-sekin
+   shaffof qiladi (mask), ikkinchisi orqadagini xiralashtiradi (blur).
+   Shuning uchun karta chapdan xira bo'lib chiqadi va o'ngga xira bo'lib
+   kirib ketadi.                                                        */
+.rev-marquee{position:relative;overflow:hidden}
+.rev-mask{
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 13%,#000 87%,transparent 100%);
+  mask-image:linear-gradient(90deg,transparent 0,#000 13%,#000 87%,transparent 100%)}
+.rev-track{display:flex;width:max-content;animation:revRun 34s linear infinite;
+  will-change:transform}
 .rev-half{display:flex;gap:14px;padding-inline-end:14px}
 .rev-marquee:hover .rev-track,.rev-marquee:focus-within .rev-track{animation-play-state:paused}
 @keyframes revRun{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 [dir="rtl"] .rev-track{animation-name:revRunRtl}
 @keyframes revRunRtl{from{transform:translateX(0)}to{transform:translateX(50%)}}
+
+/* Chetlardagi xiralik */
+.rev-edge{position:absolute;top:-4px;bottom:-4px;width:15%;min-width:54px;max-width:150px;
+  pointer-events:none;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
+.rev-edge.l{left:0;
+  -webkit-mask-image:linear-gradient(90deg,#000 0,#000 30%,transparent 100%);
+  mask-image:linear-gradient(90deg,#000 0,#000 30%,transparent 100%)}
+.rev-edge.r{right:0;
+  -webkit-mask-image:linear-gradient(270deg,#000 0,#000 30%,transparent 100%);
+  mask-image:linear-gradient(270deg,#000 0,#000 30%,transparent 100%)}
 
 /* Izoh kartasi */
 .rev-card{margin:0;background:var(--st-card);border:1px solid var(--st-line);
@@ -1378,6 +1395,10 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 @media (prefers-reduced-motion:reduce){
   .rev-track{animation:none}
   .rev-marquee{overflow-x:auto}
+  /* Harakat o'chirilganda chetdagi xiralik ham kerak emas — odam
+     tasmani o'zi surib ko'radi, kartalar to'liq ko'rinishi kerak.  */
+  .rev-edge{display:none}
+  .rev-mask{-webkit-mask-image:none;mask-image:none}
   .rev-card:hover{transform:none}
   .rev-pick-b{transition:none}
   .rev-pick-b:hover,.rev-pick-b:active{transform:none}
