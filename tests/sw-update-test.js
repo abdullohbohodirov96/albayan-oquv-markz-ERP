@@ -2,8 +2,8 @@
    Toza brauzerda sinash yetarli emas — shuning uchun bu yerda:
      1) ESKI versiya chiqariladi, brauzer uni ochadi, xizmat ishchisi va kesh hosil bo'ladi;
      2) o'sha manzilga YANGI versiya qo'yiladi (haqiqiy "deploy" kabi);
-     3) o'sha brauzer profilida yangilanish taklifi chiqishi tekshiriladi;
-     4) "Yangilash" bosilgandan keyin yangi menyu ishlashi o'lchanadi.
+     3) o'sha brauzer profilida sahifa o'zi yangilanishi tekshiriladi;
+     4) yangi menyu ishlashi o'lchanadi.
    Ishga tushirish:  node tests/sw-update-test.js                            */
 'use strict';
 const { chromium } = require('playwright');
@@ -193,39 +193,16 @@ async function closeMenu(page) {
   out.push('    Yangi versiya: ' + newVer);
   ok('Versiya o’zgardi', !!newVer && newVer !== oldVer, oldVer + ' → ' + newVer);
 
-  /* ---------- 3. Eski profil yangilanishni ko'radimi ---------- */
-  section('3. Eski brauzer profilida "Yangilash" taklifi chiqadi');
+  /* ---------- 3. Eski profil avtomatik yangilanadimi ---------- */
+  section('3. Eski brauzer profilida yangi versiya avtomatik ochiladi');
   await page.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r && r.update()));
-  let barText = '';
-  for (let i = 0; i < 40; i++) {
-    barText = await page.evaluate(() => {
-      const b = document.getElementById('pwa-bar');
-      return b ? b.textContent : '';
-    });
-    if (barText) break;
-    await sleep(300);
-  }
-  ok('Yangilanish taklifi ko’rindi', /Yangi versiya/.test(barText), JSON.stringify(barText));
-  ok('"Yangilash" tugmasi bor', /Yangilash/.test(barText), JSON.stringify(barText));
+  await page.waitForFunction(ver =>
+    (document.querySelector('meta[name="app-version"]') || {}).content === ver,
+  newVer, { timeout: 20000 });
+  ok('Yangilash tugmasi ko’rinmadi', !await page.locator('#pwa-bar').count());
 
-  const stillOld = await page.evaluate(() =>
-    (document.querySelector('meta[name="app-version"]') || {}).content || '');
-  eq('Sahifa hali eski versiyada (o’zi qayta yuklanmadi)', stillOld, oldVer);
-  const menuWhileWaiting = await loginAndOpenMenu(page);
-  ok('Kutish paytida eski JS va eski CSS birga (aralashmadi)',
-    menuWhileWaiting.maxIco > 100, JSON.stringify(menuWhileWaiting));
-  await closeMenu(page);
-  await page.screenshot({ path: path.join(SHOTS, 'yangilanish-2-taklif.png') });
-
-  /* ---------- 4. "Yangilash" ---------- */
-  section('4. "Yangilash" bosilgandan keyin');
-  await page.evaluate(() => {
-    const b = document.getElementById('pwa-bar');
-    const btn = Array.from(b.querySelectorAll('button')).find(x => /Yangilash/.test(x.textContent));
-    btn.click();
-  });
-  await page.waitForTimeout(2500);
-  await page.waitForLoadState('load');
+  /* ---------- 4. Yangi interfeys ---------- */
+  section('4. Avtomatik yangilanishdan keyin');
   const nowVer = await page.evaluate(() =>
     (document.querySelector('meta[name="app-version"]') || {}).content || '');
   eq('Sahifa yangi versiyada', nowVer, newVer);
