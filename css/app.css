@@ -1107,15 +1107,23 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
    Asosiy fikr: KURS bitta, DARAJA oltita, narx hamma daraja uchun bir
    xil.                                                                 */
 
-/* --- Hero: ishonch qatori (doiralar — naqsh, odam surati emas) --- */
+/* --- Hero: ishonch qatori ---
+   Doiralardagi siluetlar — chizma, haqiqiy odamning surati emas.
+   Yuz chizilmaydi; silueti doiraning pastiga "botib" turadi, shuning
+   uchun overflow yashiriladi.                                        */
 .hero-proof{display:flex;align-items:center;gap:12px;margin-top:20px}
 .proof-dots{display:flex}
 .proof-dot{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
-  font-family:var(--st-ar);font-size:16px;line-height:1;color:var(--st-gold-3);
+  overflow:hidden;
   background:linear-gradient(150deg,var(--st-n5),var(--st-n8));
   border:1.5px solid color-mix(in srgb,var(--st-gold) 55%,transparent);
   margin-inline-start:-10px;box-shadow:0 6px 16px -8px rgba(0,0,0,.8)}
 .proof-dot:first-child{margin-inline-start:0}
+/* Har bir silueti biroz boshqa rangda — bitta odam takrorlanmasin */
+.proof-dot.d1{color:#e8cf95}
+.proof-dot.d2{color:#b9c9e6}
+.proof-dot.d3{color:#93a6c6}
+.proof-person{width:100%;height:100%;display:block}
 .proof-text{font-size:13.5px;font-weight:600;color:#c6d2e8}
 
 /* --- Ko'rsatkichlar tasmasi (hero ostida, to'q rangli) --- */

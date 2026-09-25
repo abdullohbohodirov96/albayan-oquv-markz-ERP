@@ -1477,6 +1477,47 @@
 
     var name = centerNameNow();
 
+    /* Ishonch qatoridagi odam siluetlari. Bu CHIZMA — haqiqiy odamning
+       surati emas va yuz chizilmaydi: faqat bosh va yelka.
+       Uch xil: ro'mol o'ragan, do'ppili va oddiy — markazda ayollar va
+       erkaklar uchun alohida guruhlar borligini bildiradi.            */
+    function personSvg(kind) {
+      var NS = 'http://www.w3.org/2000/svg';
+      var svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('viewBox', '0 0 40 40');
+      svg.setAttribute('class', 'proof-person');
+      svg.setAttribute('aria-hidden', 'true');
+      /* Har bir shakl: [yo'l, ustiga qo'yiladimi]. Ustiga qo'yiladigan
+         qism oqish rangda chiziladi — bir xil rangda bo'lsa silueti
+         ichida ko'rinmay ketardi (ro'mol chekkasi, do'ppi).          */
+      var d = [];
+      if (kind === 'rumol') {
+        /* Ro'mol boshni o'rab, yelkagacha tushadi */
+        d.push(['M20 6.4c-6 0-9.6 4.4-9.6 10.2 0 3.4 1 5.8 2.3 7.5' +
+          'c-4.1 1.6-6.7 4.7-6.7 8.6V35h28v-2.3c0-3.9-2.6-7-6.7-8.6' +
+          'c1.3-1.7 2.3-4.1 2.3-7.5 0-5.8-3.6-10.2-9.6-10.2z', 0]);
+        /* Ro'mol ostidan ko'rinadigan yuz o'rni — chiziqsiz, bo'sh */
+        d.push(['M20 10.8c-3.4 0-5.4 2.6-5.4 6.1s2 6.4 5.4 6.4' +
+          's5.4-2.9 5.4-6.4-2-6.1-5.4-6.1z', 1]);
+      } else if (kind === 'duppi') {
+        d.push(['M20 9.8a6.2 6.2 0 1 0 0 12.4 6.2 6.2 0 0 0 0-12.4z', 0]);
+        d.push(['M20 23.8c-6.6 0-12 3.9-12 8.7V35h24v-2.5c0-4.8-5.4-8.7-12-8.7z', 0]);
+        /* Do'ppi — boshdan kengroq gumbaz */
+        d.push(['M12.2 12.6a7.8 7.8 0 0 1 15.6 0z', 1]);
+      } else {
+        d.push(['M20 8.4a6.6 6.6 0 1 0 0 13.2 6.6 6.6 0 0 0 0-13.2z', 0]);
+        d.push(['M20 23.4c-6.8 0-12.4 4-12.4 9V35h24.8v-2.6c0-5-5.6-9-12.4-9z', 0]);
+      }
+      d.forEach(function (s) {
+        var p = document.createElementNS(NS, 'path');
+        p.setAttribute('d', s[0]);
+        if (s[1]) { p.setAttribute('fill', '#fff'); p.setAttribute('fill-opacity', '.34'); }
+        else { p.setAttribute('fill', 'currentColor'); }
+        svg.appendChild(p);
+      });
+      return svg;
+    }
+
     /* ---------- Tepa panel ---------- */
     var navBtn = function (label, id) {
       return h('button', {
@@ -1543,13 +1584,15 @@
             onclick: function () { location.hash = 'test'; renderTest(); }
           }, ['Darajangizni bepul aniqlang', goIcon()])
         ]),
-        /* Ishonch qatori. Doiralar — NAQSH, odam surati emas: biz
-           o'quvchilarning suratini saytga qo'ymaymiz. Yozuvni markaz
-           Sozlamada o'zi yozadi, bo'sh bo'lsa butun qator ko'rinmaydi. */
+        /* Ishonch qatori. Doiralardagi shakllar — CHIZILGAN siluetlar,
+           haqiqiy odamlarning surati EMAS: biz o'quvchilarning suratini
+           saytga qo'ymaymiz. Yuz ham chizilmaydi — faqat bosh va yelka.
+           Yozuvni markaz Sozlamada o'zi yozadi, bo'sh bo'lsa butun
+           qator ko'rinmaydi.                                          */
         h('div', { class: 'hero-proof', id: 'hero-proof', hidden: true }, [
           h('span', { class: 'proof-dots', 'aria-hidden': 'true' },
-            ['أ', 'ب', 'ج'].map(function (ch) {
-              return h('span', { class: 'proof-dot' }, ch);
+            ['rumol', 'duppi', 'oddiy'].map(function (kind, i) {
+              return h('span', { class: 'proof-dot d' + (i + 1) }, personSvg(kind));
             })),
           h('span', { class: 'proof-text', id: 'hero-proof-text' }, '')
         ]),

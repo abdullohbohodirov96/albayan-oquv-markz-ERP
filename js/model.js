@@ -242,6 +242,23 @@
     return Math.round(fee);
   }
 
+  /** Kelgusida kuchga kiradigan narx o'zgarishi (bo'lmasa null).
+      Narx "qaysi oydan" tanlangani uchun joriy oyda hech nima
+      o'zgarmaydi — shuni ekranda ko'rsatish uchun kerak.          */
+  function feeUpcoming(group, ym) {
+    if (!group) return null;
+    var now = feeForMonth(group, ym);
+    var hist = (group.feeHistory || []).slice().sort(function (a, b) {
+      return String(a.from).localeCompare(String(b.from));
+    });
+    for (var i = 0; i < hist.length; i++) {
+      if (String(hist[i].from) > ym && Math.round(hist[i].fee) !== now) {
+        return { fee: Math.round(hist[i].fee), from: hist[i].from };
+      }
+    }
+    return null;
+  }
+
   /** Chegirma summasi. Manfiyga tushirmaydi. */
   function discountFor(base, discount, ym) {
     if (!discount || !discount.value) return 0;
@@ -610,7 +627,8 @@
     ROLES: ROLES, PERMS: PERMS, PERM_GROUPS: PERM_GROUPS, allPermIds: allPermIds,
     can: can, roleHas: roleHas, scopeGroups: scopeGroups, canSeeGroup: canSeeGroup,
     nextGroupCode: nextGroupCode, groupLabel: groupLabel,
-    feeForMonth: feeForMonth, discountFor: discountFor, invoiceAmountFor: invoiceAmountFor,
+    feeForMonth: feeForMonth, feeUpcoming: feeUpcoming,
+    discountFor: discountFor, invoiceAmountFor: invoiceAmountFor,
     membershipActiveIn: membershipActiveIn, invoiceId: invoiceId, dueDateFor: dueDateFor,
     allocate: allocate, activePayments: activePayments, paidByInvoice: paidByInvoice,
     invoiceRemaining: invoiceRemaining, balanceOf: balanceOf, overdueOf: overdueOf,

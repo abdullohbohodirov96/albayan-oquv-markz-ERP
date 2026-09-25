@@ -108,6 +108,24 @@ async function api(p, opts = {}) {
     /A1 ham, C2 ham bir xil/.test(txt2), txt2.slice(0, 1200));
   ok('Telefon va manzil bor', /200 70 07/.test(txt) && /Chilonzor/.test(txt));
   ok('Parol maydoni yo’q', !(await page.evaluate(() => !!document.getElementById('login-pass'))));
+
+  /* Ishonch qatoridagi doiralar. Ular odam siluetiga o'xshashi kerak
+     (harf emas), lekin HAQIQIY o'quvchining surati bo'lmasligi shart. */
+  const proof = await page.evaluate(() => {
+    const dots = Array.from(document.querySelectorAll('.proof-dot'));
+    return {
+      soni: dots.length,
+      svg: dots.filter(d => d.querySelector('svg.proof-person')).length,
+      rasm: dots.filter(d => d.querySelector('img')).length,
+      matn: dots.map(d => d.textContent.trim()).join(''),
+      xil: new Set(dots.map(d => (d.querySelector('svg') || {}).innerHTML)).size
+    };
+  });
+  eq('Ishonch qatorida uchta doira', proof.soni, 3);
+  eq('Har birida chizilgan odam silueti', proof.svg, 3);
+  eq('Haqiqiy odam surati qo’yilmagan', proof.rasm, 0);
+  ok('Harf yozilmagan', proof.matn === '', proof.matn);
+  ok('Siluetlar bir xil emas', proof.xil === 3, String(proof.xil));
   await page.screenshot({ path: path.join(SHOTS, 'sayt-1280.png'), fullPage: true });
 
   section('   Tepada "Kirish" tugmasi');
@@ -299,7 +317,11 @@ async function api(p, opts = {}) {
 
   section('   Saytda ko’rinishi');
   await page.goto(BASE);
-  await page.waitForSelector('.tch-grid', { timeout: 15000 });
+  /* .tch-grid sahifa chizilishi bilan paydo bo'ladi, KARTALAR esa
+     /api/public javobidan keyin. Faqat gridni kutsak, sekin bazada
+     bo'sh ro'yxat o'lchanib, sinov yolg'on xato berardi.          */
+  await page.waitForSelector('.tch-card', { timeout: 20000 });
+  await page.waitForSelector('.slot', { timeout: 20000 }).catch(() => { });
   const tv = await page.evaluate(() => ({
     cards: document.querySelectorAll('.tch-card').length,
     text: document.body.innerText,

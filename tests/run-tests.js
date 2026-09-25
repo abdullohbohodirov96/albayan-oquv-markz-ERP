@@ -179,6 +179,15 @@ function section(t) { results.push('\n' + t); }
   eq('Noyabrdan yangi narx', A.feeForMonth(g1, '2026-11'), 700000);
   eq('Yaratilgan sentabr hisobi o’zgarmadi',
     A.Fin.monthItems('invoices', YM).find(i => i.studentId === 's1').final, 500000);
+  /* Narx kelgusi oydan o'zgartirilganda joriy oyda hech nima o'zgarmaydi.
+     Buni ekranda aytmasak, "narxni o'zgartirdim, lekin guruhda eski
+     raqam turibdi" degan tushunmovchilik chiqadi.                     */
+  const up = A.feeUpcoming(g1, '2026-09');
+  ok('Kelgusi narx o’zgarishi topildi', !!up, JSON.stringify(up));
+  eq('Kelgusi narx summasi', up && up.fee, 700000);
+  eq('Qaysi oydan', up && up.from, '2026-11');
+  eq('O’sha oyning o’zida ogohlantirish yo’q', A.feeUpcoming(g1, '2026-11'), null);
+  eq('Tarixsiz guruhda ham xato bermaydi', A.feeUpcoming({ fee: 100 }, '2026-09'), null);
 
   /* ---------------- 10. Jadval to'qnashuvi ---------------- */
   section('10. Jadval to’qnashuvi');

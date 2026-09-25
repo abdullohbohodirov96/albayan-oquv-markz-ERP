@@ -186,7 +186,16 @@
     var members = Q.membersOf(g.id);
     var tiles = h('div', { class: 'tiles' });
     tiles.appendChild(UI.tile({ label: 'O’quvchilar', value: members.length, hint: g.limit ? 'limit ' + g.limit : '' }));
-    tiles.appendChild(UI.tile({ label: 'Oylik narx', value: A.som(A.feeForMonth(g, ym)), hint: 'so’m' }));
+    /* Narx kelgusi oydan o'zgartirilgan bo'lsa — shu yerda aytiladi.
+       Aks holda "narxni o'zgartirdim, lekin raqam o'sha" degan
+       tushunmovchilik chiqardi.                                     */
+    var feeNext = A.feeUpcoming(g, ym);
+    tiles.appendChild(UI.tile({
+      label: 'Oylik narx', value: A.som(A.feeForMonth(g, ym)),
+      hint: feeNext
+        ? A.monthLabel(feeNext.from) + ' dan: ' + A.som(feeNext.fee) + ' so’m'
+        : 'so’m'
+    }));
     if (App.can('finance.debts')) {
       var paidMap = A.paidByInvoice(A.Fin.allPayments());
       var gDebt = 0, gCharged = 0;
@@ -377,7 +386,14 @@
       },
       { name: 'startDate', label: 'Boshlanish sanasi', type: 'date', required: true, value: g.startDate },
       { name: 'limit', label: 'O’quvchilar limiti', type: 'number', value: g.limit },
-      { name: 'fee', label: 'Oylik narx (so’m)', type: 'number', required: true, value: g.fee },
+      {
+        /* Narx OYGA bog'liq: quyidagi "qaysi oydan" maydoni qaysi oyni
+           ko'rsatsa, shu yerda o'sha oyning narxi turadi. Ilgari bu
+           maydon g.fee ni ko'rsatardi — shuning uchun oynada 880 000,
+           guruh sahifasida esa 830 000 turib, chalkashlik chiqardi. */
+        name: 'fee', label: 'Oylik narx (so’m)', type: 'number', required: true,
+        value: isNew ? g.fee : A.feeForMonth(g, A.addMonths(A.thisMonth(), 1))
+      },
       {
         name: 'status', label: 'Holat', type: 'select', value: g.status,
         options: [{ value: 'rejalashtirilgan', label: 'Rejalashtirilgan' }, { value: 'faol', label: 'Faol' }, { value: 'yakunlangan', label: 'Yakunlangan' }]
@@ -450,11 +466,32 @@
     // Narx o'zgarishi
     var feeNote = h('div', { class: 'field full' });
     if (!isNew) {
+      /* MUHIM: bu maydon standart holda KEYINGI oyni ko'rsatadi, ya'ni
+         narx bugun o'zgarmaydi. Buni ochiq yozmasak, "narxni
+         o'zgartirdim, lekin guruhda eski raqam turibdi" degan
+         tushunmovchilik chiqadi.                                     */
+      var thisYm = A.thisMonth();
       var feeFrom = UI.field({
         label: 'Yangi narx qaysi oydan kuchga kiradi', type: 'month',
-        value: A.addMonths(A.thisMonth(), 1),
-        help: 'Oldingi oylarning hisoblari o’zgarmaydi.'
+        value: A.addMonths(thisYm, 1),
+        help: 'Narx shu oyning o’zidayoq amal qilishi kerak bo’lsa, ' +
+          A.monthLabel(thisYm) + ' ni tanlang. Allaqachon yaratilgan ' +
+          'hisoblar baribir o’zgarmaydi — ularni Moliya bo’limidan ' +
+          'o’chirib, qaytadan yaratish kerak (to’lov qilingan hisob o’chmaydi).'
       });
+      var feeNow = h('div', { class: 'small muted', style: 'margin-bottom:8px' });
+      function paintFeeNow() {
+        feeNow.textContent = A.monthLabel(thisYm) + ' da amaldagi narx: ' +
+          A.som(A.feeForMonth(g, thisYm)) + ' so’m';
+      }
+      paintFeeNow();
+      /* Oy o'zgarsa — narx maydoni o'sha oyning narxini ko'rsatsin. */
+      feeFrom.input.addEventListener('change', function () {
+        var ym = feeFrom.input.value || A.addMonths(thisYm, 1);
+        var fld = f.get('fee');
+        if (fld && fld.input) fld.input.value = A.feeForMonth(g, ym);
+      });
+      feeNote.appendChild(feeNow);
       feeNote.appendChild(feeFrom.wrap);
       f.node.appendChild(feeNote);
     }
@@ -507,19 +544,32 @@
                 rec.id = A.uid('grp');
                 rec.feeHistory = [{ fee: v.fee, from: A.ymOf(v.startDate) }];
               } else {
+                /* Narx TANLANGAN oyga yoziladi. Solishtirish ham o'sha
+                   oyning amaldagi narxi bilan bo'ladi: ro'yxatning
+                   oxirgi yozuvi bilan solishtirilsa, oraliq oyga narx
+                   qo'yib bo'lmasdi.                                    */
                 rec.feeHistory = (g.feeHistory || []).slice();
-                var last = rec.feeHistory[rec.feeHistory.length - 1];
-                if (!last || last.fee !== v.fee) {
-                  var from = feeNote.querySelector('input') ? feeNote.querySelector('input').value : A.thisMonth();
+                var fromIn = feeNote.querySelector('input');
+                var from = (fromIn && fromIn.value) || A.thisMonth();
+                if (A.feeForMonth(g, from) !== Number(v.fee)) {
                   rec.feeHistory = rec.feeHistory.filter(function (x) { return x.from !== from; });
-                  rec.feeHistory.push({ fee: v.fee, from: from || A.thisMonth() });
+                  rec.feeHistory.push({ fee: Number(v.fee), from: from });
                   rec.feeHistory.sort(function (a, b) { return String(a.from).localeCompare(String(b.from)); });
                 }
+                /* group.fee — tarix bo'lmaganda ishlatiladigan zaxira
+                   qiymat. U BUGUNGI amaldagi narxga teng turishi kerak,
+                   aks holda ikki xil raqam ko'rinadi.                  */
+                rec.fee = A.feeForMonth({ fee: Number(v.fee), feeHistory: rec.feeHistory }, A.thisMonth());
               }
               await D.save('groups', rec);
               await A.Ops.audit(App.user, isNew ? 'Guruh ochildi' : 'Guruh tahrirlandi', rec.name,
                 (isNew ? '' : 'narx: ' + A.som(v.fee)));
-              c(); UI.toast('Saqlandi.', 'ok');
+              c();
+              /* Narx kelgusi oydan kuchga kirsa — shuni aytamiz. */
+              var nx = isNew ? null : A.feeUpcoming(rec, A.thisMonth());
+              UI.toast(nx
+                ? 'Saqlandi. Yangi narx ' + A.monthLabel(nx.from) + ' dan kuchga kiradi.'
+                : 'Saqlandi.', 'ok');
               App.go('group', { id: rec.id });
             });
           }
