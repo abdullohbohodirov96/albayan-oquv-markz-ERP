@@ -1771,6 +1771,23 @@ async function handleApi(req, res, url) {
       Date.parse((l.createdAt || '').replace(' ', 'T') + ':00') > Date.now() - 7 * 864e5)[0];
     if (dup) return send(res, 200, { ok: true, duplicate: true });
 
+    /* Bir IP dan kuniga nechta YANGI ariza qabul qilinadi.
+       Takrorlanish filtri faqat bir xil telefonni to'xtatadi — har
+       safar boshqa raqam yozilsa, bitta odam "Murojaatlar" ro'yxatini
+       va direktorning Telegram xabarlarini ko'mib tashlashi mumkin
+       edi. Chegara kattaroq qilib olingan: bitta uy yoki ofisdan
+       (umumiy IP dan) bir necha kishi ariza qoldirishi normal.      */
+    const leadIp = clientIp(req);
+    const LEAD_DAY_MAX = Number(process.env.LEAD_IP_DAY_MAX || 15);
+    const today = stamp().slice(0, 10);
+    const fromIpToday = leads.filter(l => l.ip === leadIp &&
+      String(l.createdAt || '').slice(0, 10) === today).length;
+    if (fromIpToday >= LEAD_DAY_MAX) {
+      return send(res, 429, {
+        error: 'Arizangiz qabul qilindi. Agar shoshilinch bo’lsa, telefon qiling.'
+      });
+    }
+
     const course = courseId ? await store.get('courses/' + courseId) : null;
     const stages = A.funnelStages(funnel);
     const id = 'led_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
@@ -1783,6 +1800,9 @@ async function handleApi(req, res, url) {
              wantTime ? 'Qulay vaqt: ' + wantTime : ''].filter(Boolean).join(' · '),
       startLevel, wantTime,
       nextContact: A.today(),
+      /* IP faqat toshqinni to'xtatish uchun saqlanadi; u mijozga
+         berilmaydi (leads ro'yxati xodimga ochiq, saytga emas).   */
+      ip: leadIp,
       createdAt: stamp(), viaSite: true
     });
     await writeAudit(null, 'Saytdan murojaat', name, phone + (course ? ' · ' + course.name : ''));

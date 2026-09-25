@@ -142,9 +142,16 @@ function render(html, settings, host) {
     '<meta name="twitter:image" content="' + escapeHtml(url + 'assets/icon-512.png') + '">\n' +
     '<script type="application/ld+json">' + jsonLd + '</script>\n';
 
-  /* JavaScript ishlaguncha (va robot uchun) ko'rinadigan qisqa matn.
-     Sahifa chizilgandan keyin dastur uni olib tashlaydi.               */
-  const intro = '<main id="seo-prerender" style="max-width:860px;margin:24px auto;padding:28px;font:16px/1.6 system-ui,sans-serif;color:#1e335e;background:white;border-radius:18px">' +
+  /* JavaScript O'CHIQ bo'lganda (va uni ishlatmaydigan robot uchun)
+     ko'rinadigan qisqa matn.
+
+     MUHIM: bu matn <noscript> ichida turadi. Ilgari u oddiy blok edi
+     va JavaScript yuklanguncha bir soniya ekranda oq kartochka bo'lib
+     turardi — foydalanuvchi "sayt ochilishidan oldin nimadir chiqyapti"
+     deb ko'rardi. <noscript> ichida bo'lgani uchun endi brauzerda
+     umuman chizilmaydi, lekin HTML ichida qolgani uchun qidiruv
+     tizimlari va JavaScriptsiz brauzerlar uni baribir o'qiydi.       */
+  const intro = '<noscript><main id="seo-prerender" style="max-width:860px;margin:24px auto;padding:28px;font:16px/1.6 system-ui,sans-serif;color:#1e335e;background:white;border-radius:18px">' +
     '<h1>' + escapeHtml(name) + ' — Toshkentda arab tili kurslari</h1>' +
     '<p>Arab tilini ona tili arab tili bo‘lgan ustozlar bilan bosqichma-bosqich ' +
     'o‘rganing. Alifbodan (A1) erkin suhbatgacha (C2) olti daraja. Ayollar va ' +
@@ -152,7 +159,7 @@ function render(html, settings, host) {
     'Bepul daraja aniqlash testi saytda.</p>' +
     '<p><strong>Manzil:</strong> ' + escapeHtml(address) + '</p>' +
     '<p><strong>Telefon:</strong> <a href="tel:' + escapeHtml(phone.replace(/[^+0-9]/g, '')) + '">' + escapeHtml(phone) + '</a></p>' +
-    '<p><a href="' + escapeHtml(social) + '">Instagram sahifasi</a></p></main>\n';
+    '<p><a href="' + escapeHtml(social) + '">Instagram sahifasi</a></p></main></noscript>\n';
 
   return html
     .replace(/<title>[\s\S]*?<\/title>/i, '<title>' + escapeHtml(title) + '</title>')
