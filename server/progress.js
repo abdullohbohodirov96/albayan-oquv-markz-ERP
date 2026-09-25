@@ -49,6 +49,20 @@ async function attendance(store, opts) {
   const from = String((opts && opts.from) || '');
   const to = String((opts && opts.to) || '');
 
+  /* MUHIM: davomat ekrani belgini A'ZOLIK (membership) kaliti bilan
+     yozadi — bitta o'quvchi bir nechta guruhda bo'lishi mumkin.
+     Bu yerda esa O'QUVCHI bo'yicha hisoblanadi, shuning uchun
+     a'zolik kalitini o'quvchiga aylantiramiz. Eski yozuvlarda
+     kalit bevosita o'quvchi id si bo'lishi ham mumkin — ikkalasi
+     ham qo'llab-quvvatlanadi.                                      */
+  const memToStudent = {};
+  if (studentId) {
+    (await listCol(store, 'memberships/')).forEach(m => {
+      if (m && m.id) memToStudent[m.id] = String(m.studentId || '');
+    });
+  }
+  const isMine = key => key === studentId || memToStudent[key] === studentId;
+
   const docs = (await store.list('lessons/')).map(r => r.data).filter(Boolean);
   const sum = { total: 0, keldi: 0, kelmadi: 0, kechikdi: 0, sababli: 0 };
   const last = [];
@@ -59,7 +73,7 @@ async function attendance(store, opts) {
       if (from && date < from) continue;
       if (to && date > to) continue;
       const marks = marksOf(doc, date);
-      const ids = studentId ? (marks[studentId] ? [studentId] : []) : Object.keys(marks);
+      const ids = studentId ? Object.keys(marks).filter(isMine) : Object.keys(marks);
       for (const sid of ids) {
         const v = marks[sid];
         if (!v) continue;

@@ -951,6 +951,24 @@
       });
     }
 
+    /* Bayram va tanaffus kunlari. Jadval baribir rejadagi darslarni
+       chizadi — lekin o'sha kuni dars BO'LMAYDI, shuning uchun kun
+       ochiq belgilanadi. Aks holda ustoz bayram kuniga dars rejalab
+       qo'yardi.                                                     */
+    function holidayOn(dateIso, gid) {
+      var list = D.all('holidays') || [];
+      for (var i = 0; i < list.length; i++) {
+        var hh = list[i];
+        if (!hh) continue;
+        var from = hh.from || hh.date, to = hh.to || hh.from || hh.date;
+        if (!from) continue;
+        if (dateIso < from || dateIso > to) continue;
+        if (hh.scope === 'guruh' && gid && hh.groupId && hh.groupId !== gid) continue;
+        return hh;
+      }
+      return null;
+    }
+
     // Telefon uchun kun tanlash tasmasi
     var strip = h('div', { class: 'day-strip' });
     for (var s = 0; s < 7; s++) {
@@ -973,8 +991,15 @@
     var week = h('div', { class: 'week' });
     for (var i = 0; i < 7; i++) {
       var iso = A.addDays(monday, i);
-      var col = h('div', { class: 'week-col' + (iso === A.today() ? ' today-col' : '') });
+      var hol = holidayOn(iso, groupId);
+      var col = h('div', {
+        class: 'week-col' + (iso === A.today() ? ' today-col' : '') + (hol ? ' holiday-col' : '')
+      });
       col.appendChild(h('h4', {}, [A.WEEKDAYS_SHORT[i], h('em', {}, A.dateLabel(iso).split(' ').slice(0, 2).join(' '))]));
+      if (hol) {
+        col.appendChild(h('div', { class: 'day-off' },
+          [UI.icon('calendar'), h('span', {}, 'Dam olish: ' + (hol.name || 'bayram'))]));
+      }
       var ls = lessonsFor(iso);
       if (!ls.length) col.appendChild(h('div', { class: 'small muted' }, 'Dars yo’q'));
       ls.forEach(function (l) {
