@@ -382,6 +382,30 @@ function section(t) { results.push('\n' + t); }
   eq('Raqamsiz matndan hech nima', A.extractPhone('salom, narxini ayting'), '');
   eq('Juda qisqa raqam olinmaydi', A.extractPhone('12345'), '');
 
+  /* --- 22. Chiqarish sozlamasi: Node versiyasi qat'iy belgilangan ---
+     Belgilanmasa Render har safar eng yangi Node ni oladi. Sinovlar
+     esa boshqa versiyada o'tkaziladi — ya'ni jonli saytda biz hech
+     qachon sinamagan Node ishlaydi. Bundan tashqari eng yangi Node da
+     better-sqlite3 uchun tayyor fayl bo'lmaydi va u yig'ilishga urinib
+     deploy logini xato bilan to'ldiradi.                              */
+  section('22. Chiqarish sozlamasi (Render)');
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+  const major = String(process.versions.node).split('.')[0];
+  ok('package.json da Node versiyasi qat’iy', /^\d+\.x$/.test(pkg.engines && pkg.engines.node || ''),
+    JSON.stringify(pkg.engines));
+  eq('Sinov shu versiyada o’tkazilyapti', (pkg.engines.node || '').split('.')[0], major);
+  const rnd = fs.readFileSync(path.join(__dirname, '..', 'render.yaml'), 'utf8');
+  ok('render.yaml da NODE_VERSION bor', /key:\s*NODE_VERSION/.test(rnd));
+  ok('render.yaml dagi versiya package.json ga mos',
+    new RegExp('key:\\s*NODE_VERSION[\\s\\S]{0,60}value:\\s*"?' + major).test(rnd),
+    (rnd.match(/key:\s*NODE_VERSION[\s\S]{0,60}/) || [''])[0].replace(/\n/g, ' '));
+  /* better-sqlite3 majburiy bo'lsa, u yig'ilmagan joyda butun o'rnatish
+     buziladi. U ixtiyoriy bo'lishi kerak: asosiy baza — PostgreSQL. */
+  ok('better-sqlite3 ixtiyoriy bog’liqlik',
+    !!(pkg.optionalDependencies && pkg.optionalDependencies['better-sqlite3']) &&
+    !(pkg.dependencies && pkg.dependencies['better-sqlite3']),
+    JSON.stringify(pkg.optionalDependencies));
+
   /* ---------------- Natija ---------------- */
   console.log(results.join('\n'));
   console.log('\n' + '─'.repeat(48));

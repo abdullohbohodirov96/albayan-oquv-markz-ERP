@@ -14,6 +14,13 @@ services:
     startCommand: node server/index.js
     healthCheckPath: /api/health
     envVars:
+      # Node ning aynan qaysi versiyasi ishlashi — sinovlar shu versiyada
+      # o'tkaziladi. Belgilanmasa Render eng yangisini oladi (hozir 26),
+      # unda better-sqlite3 uchun tayyor fayl yo'q va u yig'ilishga urinib
+      # xato beradi. Bazamiz PostgreSQL bo'lgani uchun xato zararsiz edi,
+      # lekin logni to'ldirardi va sinalmagan Node da ishlash xavfli.
+      - key: NODE_VERSION
+        value: "22"
       - key: NODE_ENV
         value: production
       - key: APP_NAME
