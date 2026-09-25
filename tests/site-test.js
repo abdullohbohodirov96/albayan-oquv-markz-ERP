@@ -68,6 +68,52 @@ async function api(p, opts = {}) {
     body: { data: { id: R + '_c1', name: 'Arab tili — boshlang’ich', monthlyFee: 450000, active: true, order: -5, note: 'A1 daraja, haftada 3 kun' } }
   });
 
+  /* ================= 0. Javob siqilgan holda keladi =================
+     Sekin internetda sahifa tez ochilishi uchun matnli javoblar
+     siqiladi. Bu MAZMUNGA tegmaydi — brauzer o'zi ochadi va aynan
+     o'sha matnni oladi, faqat tarmoqdagi bayt kamayadi.          */
+  section('0. Javoblar siqilgan holda yuboriladi');
+  {
+    const http0 = require('http');
+    const wire = (p, enc) => new Promise(resolve => {
+      const r = http0.request({
+        host: 'localhost', port: Number(PORT), path: p, method: 'GET',
+        headers: { 'Accept-Encoding': enc }
+      }, res => {
+        let n = 0, chunks = [];
+        res.on('data', c => { n += c.length; chunks.push(c); });
+        res.on('end', () => resolve({
+          bytes: n, enc: res.headers['content-encoding'] || '',
+          vary: res.headers['vary'] || '', code: res.statusCode,
+          buf: Buffer.concat(chunks)
+        }));
+      });
+      r.on('error', () => resolve({ bytes: 0, enc: '', vary: '', code: 0, buf: Buffer.alloc(0) }));
+      r.end();
+    });
+    const zlib0 = require('zlib');
+    for (const p of ['/css/app.css', '/js/i18n.js', '/']) {
+      const xom = await wire(p, 'identity');
+      const siq = await wire(p, 'gzip');
+      ok(p + ' siqilgan holda keldi (' + (siq.enc || 'yo’q') + ')', !!siq.enc, String(siq.code));
+      ok(p + ' hajmi kamaydi (' + Math.round(xom.bytes / 1024) + 'KB → ' +
+        Math.round(siq.bytes / 1024) + 'KB)', siq.bytes < xom.bytes * 0.6,
+        xom.bytes + ' → ' + siq.bytes);
+      ok(p + ' Vary sarlavhasi bor', /accept-encoding/i.test(siq.vary), siq.vary);
+      /* ENG MUHIMI: ochilgandan keyin mazmun AYNAN o'sha bo'lishi kerak */
+      if (siq.enc === 'gzip') {
+        let same = false;
+        try { same = zlib0.gunzipSync(siq.buf).equals(xom.buf); } catch (e) { same = false; }
+        ok(p + ' ochilgandan keyin mazmun aynan o’sha', same);
+      }
+    }
+    /* Siqishni qo'llab-quvvatlamaydigan eski mijoz ham ishlashi kerak */
+    const eski = await wire('/css/app.css', 'identity');
+    ok('Siqishsiz so’ragan mijoz ham javob oladi', eski.code === 200 && eski.bytes > 1000,
+      eski.code + ' / ' + eski.bytes);
+    ok('Unga Content-Encoding qo’yilmaydi', !eski.enc, eski.enc);
+  }
+
   /* ================= 1. Ochiq ma'lumot ================= */
   section('1. /api/public — saytga kerakli ma’lumot');
   const pub = await api('/api/public');

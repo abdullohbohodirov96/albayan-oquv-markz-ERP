@@ -24,13 +24,92 @@
       return D.all('memberships').filter(function (m) { return m.studentId === studentId; });
     },
     membersOf: function (groupId) {
-      return D.all('memberships').filter(function (m) { return m.groupId === groupId && m.status === 'faol'; });
+      return Q._memIndex()[groupId] || [];
+    },
+    /* Balans va muddati o'tgan qarz — BITTA o'tishda hisoblanadi.
+
+       Ilgari har bir qator uchun A.balanceOf chaqirilardi, u esa har
+       safar BARCHA hisob va to'lovlarni boshidan oxirigacha o'qirdi.
+       400 o'quvchili ro'yxatda bu 9000 ta yozuvni 400 marta o'qish
+       degani edi — telefonda ro'yxat bir necha soniya "qotib" turardi.
+
+       Endi natija bitta o'tishda tayyorlanadi va shu CHIZISH davomida
+       saqlanadi. Har chizishdan oldin tozalanadi (App.render), shuning
+       uchun to'lov yozilgach yoki bekor qilingach raqam darhol yangi
+       bo'ladi — eski qiymat ekranda qolib ketmaydi.                  */
+    _bal: null,
+    _gdebt: null,
+    _mem: null,
+    resetCache: function () { Q._bal = null; Q._gdebt = null; Q._mem = null; },
+
+    /* Guruhlar bo'yicha qarz — bitta o'tishda.
+       Ilgari har bir guruh kartasi uchun BARCHA to'lovlardan xarita
+       qurilib, BARCHA hisoblar filtrlanardi. 40 guruh × 9000 yozuv
+       "Guruhlar" ro'yxatini sezilarli sekinlashtirardi.            */
+    groupDebts: function () {
+      if (Q._gdebt) return Q._gdebt;
+      var paid = A.paidByInvoice(A.Fin.allPayments());
+      var map = {};
+      A.Fin.allInvoices().forEach(function (i) {
+        var rem = A.invoiceRemaining(i, paid);
+        if (!rem) return;
+        map[i.groupId] = (map[i.groupId] || 0) + rem;
+      });
+      Q._gdebt = map;
+      return map;
+    },
+    groupDebt: function (groupId) { return Q.groupDebts()[groupId] || 0; },
+
+    /* A'zoliklar guruh bo'yicha guruhlab qo'yiladi — har safar
+       butun ro'yxatni filtrlamaslik uchun.                        */
+    _memIndex: function () {
+      if (Q._mem) return Q._mem;
+      var map = {};
+      D.all('memberships').forEach(function (m) {
+        if (m.status !== 'faol') return;
+        (map[m.groupId] || (map[m.groupId] = [])).push(m);
+      });
+      Q._mem = map;
+      return map;
+    },
+    _balMap: function () {
+      if (Q._bal) return Q._bal;
+      var invoices = A.Fin.allInvoices(), payments = A.Fin.allPayments();
+      var today = A.today();
+      var paid = A.paidByInvoice(payments);
+      var map = {};
+      function row(sid) {
+        return map[sid] || (map[sid] = {
+          charged: 0, received: 0, allocated: 0, debt: 0, advance: 0, overdue: 0
+        });
+      }
+      invoices.forEach(function (i) {
+        var r = row(i.studentId);
+        r.charged += Math.round(i.final);
+        if (i.dueDate && i.dueDate < today) r.overdue += A.invoiceRemaining(i, paid);
+      });
+      A.activePayments(payments).forEach(function (p) {
+        var r = row(p.studentId);
+        var sign = p.type === 'refund' ? -1 : 1;
+        r.received += sign * Math.round(p.amount);
+        (p.allocations || []).forEach(function (a) { r.allocated += sign * Math.round(a.amount); });
+      });
+      Object.keys(map).forEach(function (k) {
+        var r = map[k];
+        r.debt = Math.max(0, r.charged - r.allocated);
+        r.advance = Math.max(0, r.received - r.allocated);
+      });
+      Q._bal = map;
+      return map;
     },
     balance: function (studentId) {
-      return A.balanceOf(studentId, A.Fin.allInvoices(), A.Fin.allPayments());
+      var r = Q._balMap()[studentId];
+      return r ? { charged: r.charged, received: r.received, allocated: r.allocated, debt: r.debt, advance: r.advance }
+        : { charged: 0, received: 0, allocated: 0, debt: 0, advance: 0 };
     },
     overdue: function (studentId) {
-      return A.overdueOf(studentId, A.Fin.allInvoices(), A.Fin.allPayments(), A.today());
+      var r = Q._balMap()[studentId];
+      return r ? r.overdue : 0;
     },
     openInvoices: function (studentId) {
       var paid = A.paidByInvoice(A.Fin.allPayments());

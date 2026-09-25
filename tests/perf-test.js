@@ -133,6 +133,90 @@ function section(t) { out.push('\n' + t); }
   const found = await page.locator('table.tbl tbody tr').count();
   ok('Aniq bitta o’quvchi topildi (' + found + ')', found === 1, String(found));
 
+  /* ---------- 4b. Hisob-kitob bitta o'tishda ----------
+     Ilgari har bir qator uchun BARCHA hisob va to'lovlar boshidan
+     o'qilardi. 2000 o'quvchili ro'yxatda bu telefonni "qotirib"
+     qo'yardi. Endi natija bitta o'tishda tayyorlanadi.
+     Bu yerda IKKI narsa tekshiriladi: tez bo'lishi VA raqamlar
+     eski usul bilan AYNAN bir xil chiqishi.                      */
+  section('4b. Balans hisobi bitta o’tishda');
+  const balx = await page.evaluate(() => {
+    const A = window.A, D = A.Data, Q = A.Q;
+    const ids = D.all('students').slice(0, 200).map(s => s.id);
+
+    const t1 = performance.now();
+    const eski = ids.map(id => A.balanceOf(id, A.Fin.allInvoices(), A.Fin.allPayments()));
+    const eskiMs = Math.round(performance.now() - t1);
+
+    Q.resetCache();
+    const t2 = performance.now();
+    const yangi = ids.map(id => Q.balance(id));
+    const yangiMs = Math.round(performance.now() - t2);
+
+    let farq = 0;
+    for (let i = 0; i < ids.length; i++) {
+      const a = eski[i], c = yangi[i];
+      if (a.charged !== c.charged || a.received !== c.received ||
+        a.allocated !== c.allocated || a.debt !== c.debt || a.advance !== c.advance) farq++;
+    }
+    Q.resetCache();
+    let ovFarq = 0;
+    const today = A.today();
+    ids.forEach(id => {
+      const a = A.overdueOf(id, A.Fin.allInvoices(), A.Fin.allPayments(), today);
+      if (a !== Q.overdue(id)) ovFarq++;
+    });
+
+    /* Guruhlar bo'yicha qarz ham bitta o'tishda */
+    Q.resetCache();
+    const gs = D.all('groups');
+    const paid = A.paidByInvoice(A.Fin.allPayments());
+    const eskiG = {};
+    gs.forEach(g => {
+      let d = 0;
+      A.Fin.allInvoices().filter(i => i.groupId === g.id).forEach(i => { d += A.invoiceRemaining(i, paid); });
+      eskiG[g.id] = d;
+    });
+    const t3 = performance.now();
+    const yangiG = gs.map(g => Q.groupDebt(g.id));
+    const gMs = Math.round(performance.now() - t3);
+    let gFarq = 0;
+    gs.forEach((g, i) => { if (Math.round(eskiG[g.id]) !== Math.round(yangiG[i])) gFarq++; });
+
+    return { n: ids.length, eskiMs, yangiMs, farq, ovFarq, gMs, gFarq, groups: gs.length };
+  });
+  ok('200 ta balans ' + balx.yangiMs + ' ms (eski usul ' + balx.eskiMs + ' ms)',
+    balx.yangiMs <= 60, balx.yangiMs + ' ms');
+  ok('Yangi usul eskisidan tez', balx.yangiMs <= balx.eskiMs, balx.yangiMs + ' vs ' + balx.eskiMs);
+  ok('Balans raqamlari AYNAN bir xil', balx.farq === 0, 'farq: ' + balx.farq);
+  ok('Muddati o’tgan qarz ham bir xil', balx.ovFarq === 0, 'farq: ' + balx.ovFarq);
+  ok('Guruh qarzi ' + balx.gMs + ' ms', balx.gMs <= 40, balx.gMs + ' ms');
+  ok('Guruh qarzi raqamlari bir xil', balx.gFarq === 0, 'farq: ' + balx.gFarq);
+
+  /* Kesh CHIZISHDAN CHIZISHGA saqlanib qolmasligi kerak: aks holda
+     to'lov yozilgach ekranda eski qarz turib qolardi.             */
+  section('   Kesh har chizishda yangilanadi');
+  const fresh = await page.evaluate(() => {
+    const A = window.A, D = A.Data, Q = A.Q;
+    const sid = D.all('students')[0].id;
+    const oldDebt = Q.balance(sid).debt;
+    /* Yangi hisob qo'shamiz — chizishdan keyin qarz oshishi kerak */
+    D.col.invoices['perf_extra'] = {
+      id: 'perf_extra', studentId: sid, groupId: D.all('groups')[0].id,
+      month: '2026-07', base: 700000, discount: 0, final: 700000, dueDate: '2026-07-05'
+    };
+    A.App.render();
+    const newDebt = Q.balance(sid).debt;
+    delete D.col.invoices['perf_extra'];
+    A.App.render();
+    const backDebt = Q.balance(sid).debt;
+    return { oldDebt, newDebt, backDebt };
+  });
+  ok('Yangi hisob darhol qarzga qo’shildi',
+    fresh.newDebt === fresh.oldDebt + 700000,
+    JSON.stringify(fresh));
+  ok('Olib tashlangach qarz qaytdi', fresh.backDebt === fresh.oldDebt, JSON.stringify(fresh));
+
   section('5. Bosh sahifa ham tez');
   const dash = await page.evaluate(() => {
     const t0 = performance.now();

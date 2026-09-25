@@ -66,13 +66,75 @@ function stamp() {
   return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) +
     ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
 }
-function send(res, code, body, headers) {
+/* ---------------- Javobni siqish ----------------
+   Matnli javoblar (JSON, HTML, CSS, JS) tarmoqqa siqilgan holda
+   chiqadi. Bu MA'LUMOTGA TEGMAYDI — brauzer uni o'zi ochadi va
+   aynan o'sha matnni oladi. Faqat yuborilayotgan bayt kamayadi:
+   bir yillik ma'lumotli /api/bootstrap 3 MB dan ~250 KB ga tushadi,
+   ya'ni sekin internetda sahifa bir necha barobar tez ochiladi.
+
+   Rasm, shrift va arxiv fayllar siqilmaydi — ular allaqachon siqiq.
+   Kichik javoblar ham siqilmaydi: siqish foydasidan ko'ra vaqt
+   ko'proq ketadi.                                                  */
+const zlib = require('zlib');
+const COMPRESS_MIN = Number(process.env.COMPRESS_MIN_BYTES || 1024);
+const COMPRESSIBLE = /^(text\/|application\/(json|javascript|manifest\+json|xml)|image\/svg)/i;
+
+function pickEncoding(req) {
+  const acc = String((req && req.headers && req.headers['accept-encoding']) || '').toLowerCase();
+  if (/\bbr\b/.test(acc)) return 'br';
+  if (/\bgzip\b/.test(acc)) return 'gzip';
+  return '';
+}
+function compressBody(enc, buf) {
+  try {
+    if (enc === 'br') {
+      return zlib.brotliCompressSync(buf, {
+        params: {
+          [zlib.constants.BROTLI_PARAM_QUALITY]: 5,          // tez va yetarlicha kuchli
+          [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length
+        }
+      });
+    }
+    if (enc === 'gzip') return zlib.gzipSync(buf, { level: 6 });
+  } catch (e) { /* siqib bo'lmasa — xom holda yuboramiz */ }
+  return null;
+}
+
+/** Javobni kerak bo'lsa siqib yuboradi. `req` berilmasa — siqilmaydi. */
+function sendMaybeZip(req, res, code, head, buf) {
+  const type = String(head['Content-Type'] || '');
+  const enc = COMPRESSIBLE.test(type) && buf.length >= COMPRESS_MIN ? pickEncoding(req) : '';
+  /* Vary — oraliq keshlar siqilgan javobni siqilmaganidan ajratsin */
+  const out = Object.assign({}, head, { Vary: 'Accept-Encoding' });
+  if (enc) {
+    const packed = compressBody(enc, buf);
+    if (packed && packed.length < buf.length) {
+      out['Content-Encoding'] = enc;
+      out['Content-Length'] = String(packed.length);
+      res.writeHead(code, out);
+      return res.end(packed);
+    }
+  }
+  out['Content-Length'] = String(buf.length);
+  res.writeHead(code, out);
+  return res.end(buf);
+}
+
+function send(res, code, body, headers, req) {
   const data = typeof body === 'string' ? body : JSON.stringify(body);
-  res.writeHead(code, Object.assign({
+  const head = Object.assign({
     'Content-Type': typeof body === 'string' ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
     'Cache-Control': 'no-store'
-  }, headers || {}));
-  res.end(data);
+  }, headers || {});
+  const buf = Buffer.from(data, 'utf8');
+  /* So'rov alohida berilmasa — Node javobga ulab qo'ygan so'rovdan
+     olamiz (res.req). Shunda barcha yo'llar siqishdan foyda ko'radi. */
+  const rq = req || res.req;
+  if (rq) return sendMaybeZip(rq, res, code, head, buf);
+  head['Content-Length'] = String(buf.length);
+  res.writeHead(code, head);
+  res.end(buf);
 }
 /* So'rov tanasi. `max` — ruxsat etilgan eng katta hajm (bayt).
    Fayl yuklash uchun kattaroq beriladi: base64 asl fayldan ~1.37 barobar
@@ -479,13 +541,27 @@ async function writeAudit(user, action, entity, details) {
     entity: String(entity || '').slice(0, 120),
     details: String(details || '').slice(0, 300)
   });
-  // tarix cheksiz o'smasin
-  const all = await store.list('audit/');
-  if (all.length > 2000) {
-    all.sort((a, b) => String(a.data.at).localeCompare(String(b.data.at)));
-    for (const old of all.slice(0, all.length - 2000)) await store.del(old.path);
-  }
+  /* Tarix cheksiz o'smasin.
+
+     MUHIM: tozalash HAR BIR yozuvda emas, vaqti-vaqti bilan
+     bajariladi. Ilgari har bir saqlashda butun tarix (2000 qator)
+     o'qilardi — PostgreSQL da bu har bir "Saqlash" bosilishiga
+     qo'shimcha so'rov va kutish demak edi. Chegaradan bir necha
+     yozuv oshib ketishi zarar qilmaydi.                          */
+  auditSinceSweep++;
+  if (auditSinceSweep < AUDIT_SWEEP_EVERY) return;
+  auditSinceSweep = 0;
+  try {
+    const all = await store.list('audit/');
+    if (all.length > AUDIT_KEEP) {
+      all.sort((a, b) => String(a.data.at).localeCompare(String(b.data.at)));
+      for (const old of all.slice(0, all.length - AUDIT_KEEP)) await store.del(old.path);
+    }
+  } catch (e) { /* tozalash bo'lmasa ham yozuv saqlandi */ }
 }
+const AUDIT_KEEP = Number(process.env.AUDIT_KEEP || 2000);
+const AUDIT_SWEEP_EVERY = Number(process.env.AUDIT_SWEEP_EVERY || 50);
+let auditSinceSweep = AUDIT_SWEEP_EVERY;      // birinchi yozuvda bir marta tozalanadi
 
 /* ---------------- To'lovni serverda yaratish ---------------- */
 async function nextReceiptNo(ym) {
@@ -2627,8 +2703,9 @@ function serveStatic(req, res, pathname) {
         'Cache-Control': codeFile ? 'no-cache' : 'public, max-age=86400'
       };
       if (tag) head.ETag = tag;
-      res.writeHead(200, head);
-      res.end(data);
+      /* Matnli fayllar (js, css, html, svg) siqib yuboriladi —
+         mazmuni o'zgarmaydi, faqat tarmoqdagi hajmi kamayadi. */
+      return sendMaybeZip(req, res, 200, head, data);
     });
   });
 }
@@ -2650,9 +2727,10 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(304, { 'Cache-Control': 'no-cache', ETag: etag });
         return res.end();
       }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache',
-        'X-Content-Type-Options': 'nosniff', ETag: etag });
-      return res.end(page);
+      return sendMaybeZip(req, res, 200, {
+        'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache',
+        'X-Content-Type-Options': 'nosniff', ETag: etag
+      }, Buffer.from(page, 'utf8'));
     }
     if (req.method === 'GET' && url.pathname === '/robots.txt') {
       const origin = seo.origin(req.headers.host || 'localhost');

@@ -62,13 +62,8 @@
     list.forEach(function (g) {
       var members = Q.membersOf(g.id);
       var fill = g.limit ? Math.min(100, Math.round(members.length / g.limit * 100)) : 0;
-      var debt = 0;
-      if (App.can('finance.debts')) {
-        var paid = A.paidByInvoice(A.Fin.allPayments());
-        A.Fin.allInvoices().filter(function (i) { return i.groupId === g.id; }).forEach(function (i) {
-          debt += A.invoiceRemaining(i, paid);
-        });
-      }
+      /* Qarz bitta o'tishda tayyorlangan xaritadan olinadi */
+      var debt = App.can('finance.debts') ? Q.groupDebt(g.id) : 0;
       grid.appendChild(h('button', {
         class: 'card', type: 'button',
         style: 'text-align:left;cursor:pointer;padding:0;border-width:1px;font:inherit;color:inherit',

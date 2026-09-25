@@ -45,6 +45,10 @@
 
     render: function () {
       if (!App.user) return;
+      /* Hisob-kitob keshini tozalaymiz: u FAQAT shu chizish davomida
+         yashaydi, shuning uchun ekranda hech qachon eski raqam
+         qolmaydi (to'lov yozilgach darhol yangilanadi).            */
+      if (A.Q && A.Q.resetCache) A.Q.resetCache();
       var view = document.getElementById('view');
       UI.clear(view);
       renderNav();
