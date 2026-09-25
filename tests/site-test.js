@@ -567,7 +567,9 @@ async function api(p, opts = {}) {
   ok('Qolganlari Telegram logotipi',
     [0, 2, 3, 4].every(i => /logo-telegram/.test(soc[i].logo)), JSON.stringify(soc.map(x => x.logo)));
   ok('Logotiplar haqiqatan yuklandi', soc.every(x => x.loaded), JSON.stringify(soc.map(x => x.loaded)));
-  ok('Logotip ko’rinadigan o’lchamda (≥ 30px)', soc.every(x => x.w >= 30),
+  /* Tugmalar ixcham yorliq ko'rinishida — logotip 26 px atrofida,
+     lekin baribir aniq ko'rinadigan o'lchamda turishi kerak.      */
+  ok('Logotip ko’rinadigan o’lchamda (≥ 22px)', soc.every(x => x.w >= 22),
     JSON.stringify(soc.map(x => x.w)));
   ok('Havolalar yangi oynada va xavfsiz ochiladi',
     soc.every(x => x.target === '_blank' && /noopener/.test(x.rel || '')),

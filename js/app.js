@@ -2070,7 +2070,7 @@
         title: l.name + (l.sub ? ' · ' + l.sub : '')
       }, [
         lg
-          ? h('img', { class: 'soc-logo', src: lg.src, alt: '', width: '48', height: '48', loading: 'lazy' })
+          ? h('img', { class: 'soc-logo', src: lg.src, alt: '', width: '32', height: '32', loading: 'lazy' })
           : h('span', { class: 'soc-ico' }, UI.icon('play')),
         h('span', { class: 'soc-txt' }, [
           h('b', {}, l.name),
