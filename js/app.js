@@ -1582,13 +1582,19 @@
       h('div', { class: 'rev-edge l', 'aria-hidden': 'true' }),
       h('div', { class: 'rev-edge r', 'aria-hidden': 'true' })
     ]);
-    var revBand = h('section', { class: 'rev-band', id: 'rev-band', hidden: true }, [
+    /* Hali bironta tasdiqlangan izoh bo'lmasa — tasma o'rniga shu qator.
+       Tasmaning o'zi ko'rinib turadi, aks holda o'quvchi birinchi
+       izohni qoldiradigan joy qolmasdi.                              */
+    var revEmpty = h('p', { class: 'rev-empty', id: 'rev-empty', hidden: true },
+      'Hozircha izoh yo’q — birinchi bo’lib siz yozing.');
+    var revBand = h('section', { class: 'rev-band', id: 'rev-band' }, [
       h('div', { class: 'rev-band-head' }, [
         h('span', { class: 'rev-band-t' }, 'O’quvchilarimiz nima deydi'),
         h('button', {
           class: 'btn sm gold', type: 'button', onclick: function () { openReview(); }
         }, [UI.icon('edit'), h('span', {}, 'Izoh qoldirish')])
       ]),
+      revEmpty,
       revMarquee
     ]);
 
@@ -1793,22 +1799,9 @@
       faqBox
     ]);
 
-    /* ---------- Izohlar (pastda, to'liq ro'yxat) ---------- */
-    var revGrid = h('div', { class: 'rev-grid', id: 'rev-grid' });
-    var revSec = h('section', { class: 'site-sec reveal', id: 'izohlar' }, [
-      h('div', { class: 'sec-mid' }, [
-        h('div', { class: 'sec-eyebrow center' }, 'Izohlar'),
-        h('h2', {}, 'O’quvchilarimiz nima deydi'),
-        h('p', { class: 'sec-note center', id: 'rev-lead' },
-          'Izohlarni o’quvchilarning o’zi yozadi. Markaz ko’rib chiqqach saytda chiqadi.')
-      ]),
-      revGrid,
-      h('div', { class: 'rev-add' }, [
-        h('button', {
-          class: 'btn gold lg', type: 'button', onclick: function () { openReview(); }
-        }, [UI.icon('edit'), h('span', {}, 'Izoh qoldirish')])
-      ])
-    ]);
+    /* Izohlar faqat TEPADAGI tasmada ko'rsatiladi (rev-band).
+       Pastdagi to'liq ro'yxat olib tashlandi — bitta joy yetarli,
+       "Izoh qoldirish" tugmasi ham o'sha tasmaning yonida turadi. */
 
     /* ---------- Pastdagi chaqiruv tasmasi ---------- */
     var ctaBand = h('section', { class: 'cta-band reveal' }, [
@@ -1888,7 +1881,7 @@
     wrap.appendChild(top);
     wrap.appendChild(h('div', { class: 'site-wrap' },
       [hero, revBand, statsBand, levelsSec, priceSec, feats, teachers,
-        timetable, apply, revSec, faq, ctaBand, foot]));
+        timetable, apply, faq, ctaBand, foot]));
     wrap.appendChild(ctaBar);
     /* Hero'dagi "Darsga yozilish" ko'rinib turganda pastki tasma kerak
        emas — u ko'zdan yo'qolgandan keyin chiqadi.                     */
@@ -2135,28 +2128,17 @@
     function paintReviews(list) {
       list = list || [];
       REVIEWS = list;
-      /* Pastdagi to'liq ro'yxat */
-      UI.clear(revGrid);
-      var lead = document.getElementById('rev-lead');
-      if (!list.length) {
-        revGrid.appendChild(h('p', { class: 'muted rev-empty' },
-          'Hozircha izoh yo’q — birinchi bo’lib siz yozing.'));
-      } else {
-        list.slice(0, 12).forEach(function (r) { revGrid.appendChild(revCard(r)); });
-        if (lead) {
-          lead.textContent = 'Izohlarni o’quvchilarning o’zi yozadi. Markaz ko’rib ' +
-            'chiqqach saytda chiqadi.';
-        }
-      }
-      /* Tepadagi aylanib turadigan tasma. Bitta tasdiqlangan izoh
-         bo'lsa ham chiqadi — markaz uni tasdiqlashi bilan sayt tirik
-         bo'lib qoladi.                                               */
+      /* Izohlar faqat tepadagi aylanib turadigan tasmada. Bitta
+         tasdiqlangan izoh bo'lsa ham aylanadi; izoh bo'lmasa
+         tasma o'rnida qisqa qator turadi.                          */
       var band = document.getElementById('rev-band');
       if (!band) return;
-      band.hidden = list.length < 1;
-      if (band.hidden) return;
+      var empty = !list.length;
+      revEmpty.hidden = !empty;
+      revMarquee.hidden = empty;
+      if (empty) { UI.clear(revTrack); return; }
       buildMarquee(list.slice(0, 10));
-      if (A._siteSeen) A._siteSeen(revGrid);
+      if (A._siteSeen) A._siteSeen(band);
     }
 
     /* Tasmani yig'ish: ro'yxat ikkita teng yarmga bo'linadi va

@@ -1390,13 +1390,12 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .rev-card.sm blockquote{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;
   overflow:hidden}
 
-/* Pastdagi to'liq ro'yxat */
-.rev-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-.rev-empty{grid-column:1/-1;text-align:center;padding:10px 0}
-.rev-add{display:flex;justify-content:center;margin-top:22px}
-@media (max-width:980px){ .rev-grid{grid-template-columns:1fr 1fr} }
+/* Hali izoh bo'lmaganda — tasma o'rnidagi qisqa qator */
+.rev-empty{text-align:center;padding:6px 20px 10px;margin:0;
+  font-size:13.5px;color:var(--st-mut)}
+.rev-empty[hidden]{display:none}
+.rev-marquee[hidden]{display:none}
 @media (max-width:620px){
-  .rev-grid{grid-template-columns:1fr}
   .rev-card.sm{width:270px;flex:0 0 270px}
   .rev-band-head{padding:0 16px 12px}
 }

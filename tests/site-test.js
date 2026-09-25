@@ -375,15 +375,17 @@ async function api(p, opts = {}) {
   ok('Ismi ham chiqmaydi', !JSON.stringify(pubA.json.reviews || []).includes(NAME1));
 
   await page.goto(BASE);
-  await page.waitForSelector('#izohlar', { timeout: 15000 });
+  await page.waitForSelector('#rev-band', { timeout: 15000 });
   const v0 = await page.evaluate(() => ({
     text: document.body.innerText,
     band: !!document.querySelector('#rev-band:not([hidden])'),
     btns: Array.from(document.querySelectorAll('button')).filter(b => /Izoh qoldirish/.test(b.textContent)).length,
-    grid: document.querySelectorAll('#izohlar .rev-card').length
+    /* Pastdagi to'liq ro'yxat olib tashlandi — izohlar faqat tasmada */
+    pastki: document.querySelectorAll('#izohlar').length
   }));
   ok('Tasdiqlanmagan izoh saytda ko’rinmaydi', !v0.text.includes(NAME1));
-  ok('Pastda "Izoh qoldirish" tugmasi bor', v0.btns >= 1, String(v0.btns));
+  ok('"Izoh qoldirish" tugmasi bor', v0.btns >= 1, String(v0.btns));
+  ok('Pastdagi ikkinchi izohlar bo’limi yo’q', v0.pastki === 0, String(v0.pastki));
 
   /* Markaz tasdiqlaydi */
   if (revOne) {
@@ -404,13 +406,13 @@ async function api(p, opts = {}) {
   }
 
   await page.goto(BASE);
-  await page.waitForSelector('#izohlar .rev-card, #izohlar .rev-empty', { timeout: 15000 });
+  await page.waitForSelector('#rev-track .rev-card', { timeout: 15000 });
   const v1 = await page.evaluate(() => ({
     text: document.body.innerText,
     band: !!document.querySelector('#rev-band:not([hidden])'),
     halves: document.querySelectorAll('#rev-track .rev-half').length,
-    grid: document.querySelectorAll('#izohlar .rev-card').length,
-    stars: document.querySelectorAll('#izohlar .rev-card .rev-star.on').length,
+    grid: document.querySelectorAll('#rev-track .rev-card').length,
+    stars: document.querySelectorAll('#rev-track .rev-card .rev-star.on').length,
     top: !!Array.from(document.querySelectorAll('#rev-band button')).some(b => /Izoh qoldirish/.test(b.textContent))
   }));
   ok('Izoh saytda chiqdi', v1.text.includes(NAME1), v1.text.slice(0, 200));

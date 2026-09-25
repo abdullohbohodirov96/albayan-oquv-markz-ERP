@@ -193,7 +193,7 @@ async function api(p, o = {}) {
   /* ================= 3. Izoh qoldirish ================= */
   section('3. Telefondan izoh qoldirish');
   await page.goto(BASE);
-  await page.waitForSelector('#izohlar', { timeout: 20000 });
+  await page.waitForSelector('#rev-band', { timeout: 20000 });
   await page.waitForTimeout(1200);
   await page.evaluate(() => {
     const b = Array.from(document.querySelectorAll('button')).filter(x => /Izoh qoldirish/.test(x.textContent)).pop();
