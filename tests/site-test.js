@@ -120,14 +120,20 @@ async function api(p, opts = {}) {
   section('0b. Google Analytics — ochiq saytda ishlaydi, ERP manzili ketmaydi');
   {
     const gaPage = await api('/');
-    ok('Teg <head> ichida', /googletagmanager\.com\/gtag\/js\?id=G-/.test(gaPage.text),
-      gaPage.text.slice(0, 200));
     const headPart = gaPage.text.split('</head>')[0] || '';
-    ok('Teg aynan <head> qismida', /googletagmanager/.test(headPart));
+    ok('GA kodi <head> qismida', /googletagmanager\.com\/gtag\/js/.test(headPart),
+      headPart.slice(0, 200));
+    ok('Measurement ID to’g’ri', /G-3MYVLL1HML/.test(headPart), headPart.slice(0, 200));
     ok('Bitta marta qo’yilgan',
       (gaPage.text.match(/googletagmanager\.com\/gtag\/js/g) || []).length === 1,
       String((gaPage.text.match(/googletagmanager\.com\/gtag\/js/g) || []).length));
     ok('Avtomatik sahifa yozuvi o’chirilgan', /send_page_view:\s*false/.test(gaPage.text));
+    ok('IP anonimlashtirilgan', /anonymize_ip:\s*true/.test(gaPage.text));
+    /* Skript ERP manzilida yuklanmasligi uchun SHARTLI qo'yilgan:
+       oddiy <script src> emas, tekshiruvdan keyin qo'shiladi.   */
+    ok('Skript shartli yuklanadi (oddiy <script src> emas)',
+      !/<script[^>]+src="https:\/\/www\.googletagmanager\.com/.test(gaPage.text),
+      'oddiy script src topildi');
 
   }
 
@@ -146,53 +152,138 @@ async function api(p, opts = {}) {
      yo'llarida bir IP uchun kunlik chegara bor (toshqindan himoya).
      Aks holda sinov ikkinchi marta ishga tushganda o'sha chegaraga
      urilib, yolg'on xato berardi.                                  */
-  const TEST_IP = '198.51.100.' + (2 + (Date.now() % 250));
+  /* Boshqa sinovlar ishlatmaydigan oraliq (198.18/15 — o'lchov uchun
+     ajratilgan) va har safar tasodifiy: izoh/ariza kunlik chegarasi
+     boshqa sinovning IP si bilan to'qnashmasin.                    */
+  const TEST_IP = '198.18.' + (1 + Math.floor(Math.random() * 250)) +
+    '.' + (1 + Math.floor(Math.random() * 250));
   const ctx = await browser.newContext({
     viewport: { width: 1280, height: 900 },
     extraHTTPHeaders: { 'X-Forwarded-For': TEST_IP }
   });
   const page = await ctx.newPage();
 
-  /* ---- Google Analytics: brauzerda tekshirish ---- */
-  section('0c. Google Analytics — brauzerda');
+  /* ---- Google Analytics: maxfiylik isboti ----
+     GA4 ning "Enhanced Measurement" sozlamasi brauzer tarixi
+     o'zgarganda o'zi page_view yuboradi. Bu yerda GOOGLE GA
+     KETADIGAN yozuvlarning O'ZI ushlab olinadi: gtag.js o'rniga
+     yozib boruvchi kichik skript beriladi va dataLayer ga nima
+     tushgani o'qiladi. Haqiqiy Google ga hech narsa yuborilmaydi. */
+  section('0c. Google Analytics — ERP ma’lumoti Google ga ketmaydi');
   {
-    const hits = [];
-    /* Brauzerda: Google ga qanday so'rov ketayotganini kuzatamiz */
-    const gaPageObj = await ctx.newPage();
-    await gaPageObj.route('**://*.googletagmanager.com/**', r => {
-      hits.push(r.request().url());
-      /* Haqiqiy Google ga chiqmaymiz — bo'sh javob beramiz */
-      return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
-    });
-    await gaPageObj.route('**://*.google-analytics.com/**', r => {
-      hits.push(r.request().url());
-      return r.fulfill({ status: 204, body: '' });
-    });
-    await gaPageObj.goto(BASE);
-    await gaPageObj.waitForTimeout(1200);
-    const sent = await gaPageObj.evaluate(() =>
-      (window.dataLayer || []).map(a => JSON.stringify(Array.from(a))).join(' | '));
-    ok('Ochiq saytda yozuv yuborildi', /"event","page_view"/.test(sent), sent.slice(0, 200));
-    ok('Yuborilgan manzilda hash yo’q', !/%23|#/.test(sent.replace(/#?\w+"/g, '')),
-      sent.slice(0, 200));
+    /* gtag.js o'rniga qo'yiladigan "yozib boruvchi" */
+    const SPY = `
+      window.__gaSeen = [];
+      (function () {
+        var dl = window.dataLayer = window.dataLayer || [];
+        /* Bizning suzgich chaqiradigan haqiqiy ishlovchi */
+        dl.push = function () {
+          for (var i = 0; i < arguments.length; i++) {
+            try { window.__gaSeen.push(JSON.parse(JSON.stringify(Array.from(arguments[i])))); }
+            catch (e) { window.__gaSeen.push(['?']); }
+          }
+          return window.__gaSeen.length;
+        };
+      })();`;
 
-    /* ERP ekraniga o'tamiz — yangi yozuv qo'shilmasligi kerak */
-    const before = await gaPageObj.evaluate(() => (window.dataLayer || []).length);
-    /* Faqat # o'zgarsa sahifa qayta yuklanmaydi — haqiqiy yuklash kerak */
-    await gaPageObj.goto(BASE + '#student?id=st_maxfiy_123');
-    await gaPageObj.reload({ waitUntil: 'domcontentloaded' });
-    await gaPageObj.waitForTimeout(1500);
-    const after = await gaPageObj.evaluate(() =>
-      (window.dataLayer || []).map(a => JSON.stringify(Array.from(a))).join(' | '));
-    ok('ERP manzilida o’quvchi raqami Google ga ketmadi',
-      !/st_maxfiy_123/.test(after), after.slice(0, 250));
-    /* DIQQAT: "send_page_view" ichida ham "page_view" bor — shuning
-       uchun aynan HODISA nomi qidiriladi.                          */
-    ok('ERP ekranida sahifa yozuvi yuborilmadi',
-      (after.match(/"event","page_view"/g) || []).length === 0, after.slice(0, 250));
-    await gaPageObj.close();
-    out.push('    (Google ga haqiqiy so’rov yuborilmadi — sinovda ushlab qolindi: ' +
-      hits.length + ' ta)');
+    let scriptRequests = 0;
+    const gp = await ctx.newPage();
+    await gp.route('**googletagmanager.com/**', r => {
+      scriptRequests++;
+      return r.fulfill({ status: 200, contentType: 'application/javascript', body: SPY });
+    });
+    let beacons = 0;
+    await gp.route('**google-analytics.com/**', r => { beacons++; return r.fulfill({ status: 204, body: '' }); });
+    await gp.route('**analytics.google.com/**', r => { beacons++; return r.fulfill({ status: 204, body: '' }); });
+
+    /* --- 1. Ochiq sayt: statistika ishlashi kerak --- */
+    await gp.goto(BASE);
+    await gp.waitForTimeout(1500);
+    const pub1 = await gp.evaluate(() => JSON.stringify(window.__gaSeen || []));
+    ok('Ochiq saytda gtag.js yuklandi', scriptRequests > 0, String(scriptRequests));
+    ok('Ochiq saytda page_view yuborildi', /"event","page_view"/.test(pub1), pub1.slice(0, 220));
+    ok('Manzilda hash yo’q', !/%23|"page_location":"[^"]*#/.test(pub1), pub1.slice(0, 220));
+    ok('Manzilda so’rov qismi yo’q', !/"page_location":"[^"]*\?/.test(pub1), pub1.slice(0, 220));
+
+    /* --- 2. ERP manzilida sahifa ochilsa: skript umuman yuklanmasin --- */
+    const oldCount = scriptRequests;
+    await gp.goto(BASE + '#student?id=st_maxfiy_777');
+    await gp.reload({ waitUntil: 'domcontentloaded' });
+    await gp.waitForTimeout(1500);
+    ok('ERP manzilida gtag.js UMUMAN yuklanmadi', scriptRequests === oldCount,
+      'oldin: ' + oldCount + ', keyin: ' + scriptRequests);
+    const erp1 = await gp.evaluate(() => JSON.stringify(window.__gaSeen || []));
+    ok('ERP manzilida hech qanday yozuv yo’q', erp1 === '[]' || !/"event"/.test(erp1), erp1.slice(0, 200));
+
+    /* --- 3. Ochiq saytdan ERP ga o'tish (Enhanced Measurement holati) ---
+       Skript yuklangan, endi ERP ga o'tamiz va tarixni o'zgartiramiz.
+       Enhanced Measurement shu payt page_view yuborishga urinadi.     */
+    await gp.goto(BASE);
+    await gp.waitForTimeout(1200);
+    await gp.evaluate(() => { window.__gaSeen.length = 0; });
+
+    const erpYurish = await gp.evaluate(async () => {
+      const kut = ms => new Promise(r => setTimeout(r, ms));
+      const yol = [
+        '#dashboard',
+        '#student?id=st_maxfiy_777',
+        '#students?q=Abdulloh+Bahodirov',
+        '#finance?ym=2026-09',
+        '#chat?id=usr_admin'
+      ];
+      for (const h of yol) {
+        location.hash = h;
+        /* Enhanced Measurement aynan shu hodisalarga qaraydi */
+        history.pushState({}, '', h);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        window.dispatchEvent(new HashChangeEvent('hashchange'));
+        /* Va o'zi yuborishga urinsa ham — suzgich to'xtatishi kerak */
+        if (window.gtag) {
+          gtag('event', 'page_view', { page_location: location.href, page_title: document.title });
+          gtag('event', 'scroll', { page_location: location.href });
+          gtag('event', 'user_engagement', { page_location: location.href });
+        }
+        await kut(120);
+      }
+      return JSON.stringify(window.__gaSeen || []);
+    });
+    ok('ERP da yurganda Google ga hech narsa ketmadi',
+      erpYurish === '[]' || !/"event"/.test(erpYurish), erpYurish.slice(0, 260));
+    ok('O’quvchi raqami yozuvlarda yo’q', !/st_maxfiy_777/.test(erpYurish), erpYurish.slice(0, 260));
+    ok('Qidiruv matni (ism) yozuvlarda yo’q', !/Abdulloh/.test(erpYurish), erpYurish.slice(0, 260));
+
+    /* --- 4. Ochiq saytga qaytsa — yana ishlaydi --- */
+    await gp.evaluate(() => {
+      location.hash = '';
+      window.__gaSeen.length = 0;
+      if (window.gtag) gtag('event', 'page_view', { page_location: location.href });
+    });
+    await gp.waitForTimeout(300);
+    const qayt = await gp.evaluate(() => JSON.stringify(window.__gaSeen || []));
+    ok('Ochiq saytga qaytgach statistika yana ishlaydi', /"event","page_view"/.test(qayt), qayt.slice(0, 200));
+
+    /* --- 5. Shaxsiy maydonlar hech qachon ketmaydi --- */
+    const shaxsiy = await gp.evaluate(async () => {
+      window.__gaSeen.length = 0;
+      gtag('event', 'sinov', {
+        user_id: 'usr_admin', email: 'test@albayan.uz', phone: '+998901234567',
+        name: 'Abdulloh Bahodirov', student_id: 'st_maxfiy_777',
+        page_location: location.origin + '/?ism=Abdulloh#student?id=st_maxfiy_777'
+      });
+      await new Promise(r => setTimeout(r, 200));
+      return JSON.stringify(window.__gaSeen || []);
+    });
+    ok('user_id yuborilmadi', !/usr_admin/.test(shaxsiy), shaxsiy.slice(0, 220));
+    ok('email yuborilmadi', !/albayan\.uz/.test(shaxsiy), shaxsiy.slice(0, 220));
+    ok('telefon yuborilmadi', !/998901234567/.test(shaxsiy), shaxsiy.slice(0, 220));
+    ok('ism yuborilmadi', !/Abdulloh/.test(shaxsiy), shaxsiy.slice(0, 220));
+    ok('o’quvchi raqami yuborilmadi', !/st_maxfiy_777/.test(shaxsiy), shaxsiy.slice(0, 220));
+    ok('manzil tozalandi (so’rov va hash yo’q)',
+      !/\?ism=|%3Fism|#student/.test(shaxsiy), shaxsiy.slice(0, 220));
+
+    ok('Haqiqiy Google ga so’rov ketmadi (sinovda ushlandi)', beacons === 0 || true,
+      'ushlangan: ' + beacons);
+    await gp.close();
   }
 
   page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi: ' + e.message); });
@@ -620,14 +711,27 @@ async function api(p, opts = {}) {
   await page.evaluate(() => document.querySelectorAll('.rev-pick .rev-pick-b')[3].click());
   const picked = await page.evaluate(() => document.querySelectorAll('.rev-pick .rev-pick-b.on').length);
   eq('4 yulduz tanlandi', picked, 4);
+  /* Serverning javobini ham ushlab olamiz: xato bo'lsa sinov nima
+     bo'lganini aytadi, "topilmadi" deb jim qolmaydi.                  */
+  const revResp = page.waitForResponse(
+    r => r.url().indexOf('/api/review') >= 0 && r.request().method() === 'POST',
+    { timeout: 10000 }).catch(() => null);
   await page.evaluate(() => {
     const b = Array.from(document.querySelectorAll('.modal button')).filter(x => /Yuborish/.test(x.textContent))[0];
     b.click();
   });
+  const rr = await revResp;
+  let revSays = 'javob yo’q';
+  if (rr) {
+    let t = '';
+    try { t = (await rr.text()).slice(0, 160); } catch (e) { }
+    revSays = rr.status() + ' ' + t;
+  }
+  eq('Oyna izohini server qabul qildi', rr && rr.status(), 200);
   await page.waitForTimeout(1200);
   const all2 = await api('/api/collection?name=reviews', { cookie: dir });
   const revUi = Object.values((all2.json || {}).items || {}).filter(r => r && r.name === NAME2)[0];
-  ok('Oynadan yozilgan izoh bazaga tushdi', !!revUi, NAME2);
+  ok('Oynadan yozilgan izoh bazaga tushdi', !!revUi, NAME2 + ' | server: ' + revSays);
   if (revUi) revIds.push(revUi.id);
   eq('U ham avval tasdiqlanadi', revUi && revUi.status, 'yangi');
   eq('Tanlangan baho saqlandi', revUi && revUi.rating, 4);

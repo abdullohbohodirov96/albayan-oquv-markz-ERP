@@ -57,31 +57,114 @@ const GA_ID = process.env.GA_MEASUREMENT_ID != null
        narsa yuborilmaydi.                                          */
 const GA_TAG = !GA_ID ? '' : `
 <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=${GA_ID}"></script>
 <script>
+(function () {
+  /* ---------------------------------------------------------------
+     Google Analytics 4 — UCH QAVATLI HIMOYA.
+
+     Muammo: bu bitta sahifali dastur. Ochiq sayt ham, ERP ham bitta
+     manzilda ishlaydi, ERP ichida esa manzilda o'quvchi raqami
+     turadi (#student?id=st_123). GA4 ning "Enhanced Measurement"
+     sozlamasi brauzer tarixi o'zgarganda (pushState, popstate,
+     hashchange) O'ZI page_view yuboradi — bu sozlama Google
+     tomonda yoqilgan bo'lib, send_page_view:false uni to'xtatmaydi.
+     Ya'ni ERP ichida yurgan har bir qadam manzili bilan Google ga
+     ketishi mumkin edi.
+
+     Shuning uchun uch qavat qo'yilgan:
+
+       1-qavat. ERP manzilida sahifa ochilsa — gtag.js UMUMAN
+                yuklanmaydi. Skript yo'q, tinglovchi yo'q.
+       2-qavat. Ochiq saytda yuklangach ERP ga o'tilsa, dataLayer ga
+                tushayotgan HAR BIR yozuv suzgichdan o'tadi: ERP
+                manzilida hech narsa o'tmaydi (Enhanced Measurement
+                yuborgan page_view ham).
+       3-qavat. O'tgan yozuvlarda ham manzil tozalanadi: page_location,
+                page_referrer va page_path faqat asosiy manzil bo'ladi
+                (hash va so'rov qismisiz), shaxsiy maydonlar
+                (user_id, email, phone, ism, o'quvchi raqami)
+                o'chiriladi.
+     --------------------------------------------------------------- */
+  var ID = '${GA_ID}';
+  var ERP = /^(dashboard|students|student|groups|group|courses|schedule|attendance|curriculum|learning|finance|staff|reports|progress|progressGroup|chat|tasks|bot|settings|kirish|kabinet|test)\\b/;
+
+  function erpda() {
+    var h = String(location.hash || '').replace(/^#/, '');
+    return !!h && ERP.test(h);
+  }
+  function tozaManzil() { return location.origin + '/'; }
+
+  /* Shaxsiy bo'lishi mumkin bo'lgan maydonlar — hech qachon ketmaydi */
+  var MAXFIY = ['user_id', 'userId', 'email', 'phone', 'name', 'student_id',
+    'studentId', 'login', 'user_properties', 'client_name'];
+
+  function tozala(args) {
+    var p = args[2];
+    if (p && typeof p === 'object') {
+      if ('page_location' in p) p.page_location = tozaManzil();
+      if ('page_referrer' in p) p.page_referrer = tozaManzil();
+      if ('page_path' in p) p.page_path = '/';
+      for (var i = 0; i < MAXFIY.length; i++) { delete p[MAXFIY[i]]; }
+    }
+    return args;
+  }
+  function otsinmi(args) {
+    var turi = args && args[0];
+    if (turi === 'consent') return true;          // rozilik har doim o'tadi
+    return !erpda();                              // ERP da — hech narsa
+  }
+
   window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
+  var dl = window.dataLayer;
+
+  /* dataLayer.push ni o'rab qo'yamiz. gtag.js keyinroq o'z
+     ishlovchisini qo'yadi — setter orqali biz uni ushlab qolamiz,
+     shunda suzgich baribir ustida turadi.                          */
+  var ichki = Array.prototype.push;
+  function suzgich() {
+    var out = [];
+    for (var i = 0; i < arguments.length; i++) {
+      var a = arguments[i];
+      if (!otsinmi(a)) continue;
+      out.push(tozala(a));
+    }
+    if (!out.length) return dl.length;
+    return ichki.apply(dl, out);
+  }
+  try {
+    Object.defineProperty(dl, 'push', {
+      configurable: true,
+      get: function () { return suzgich; },
+      set: function (fn) { ichki = fn; }
+    });
+  } catch (e) { dl.push = suzgich; }
+
+  function gtag() { dl.push(arguments); }
+  window.gtag = gtag;
+
+  /* 1-qavat: ERP manzilida ochilgan bo'lsa — skript ham yuklanmaydi */
+  if (erpda()) return;
+
+  var sc = document.createElement('script');
+  sc.async = true;
+  sc.src = 'https://www.googletagmanager.com/gtag/js?id=' + ID;
+  document.head.appendChild(sc);
+
   gtag('js', new Date());
-  /* Sahifa ko'rildi yozuvini O'ZIMIZ yuboramiz — ERP manzillari
-     (o'quvchi raqami bor sahifalar) Google ga ketmasligi uchun. */
-  gtag('config', '${GA_ID}', { send_page_view: false, anonymize_ip: true });
-  (function () {
-    var ERP = /^#?(dashboard|students?|groups?|schedule|attendance|curriculum|learning|finance|staff|reports|progress|progressGroup|chat|tasks|bot|settings|kirish|kabinet|courses|group|student)\\b/;
-    function ochiqSahifami() {
-      var h = String(location.hash || '').replace(/^#/, '');
-      return !h || !ERP.test(h);
-    }
-    function yubor() {
-      if (!ochiqSahifami()) return;
-      gtag('event', 'page_view', {
-        page_location: location.origin + '/',   // hash va so'rov qismisiz
-        page_title: document.title
-      });
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', yubor);
-    } else { yubor(); }
-  })();
+  /* Avtomatik "sahifa ko'rildi" o'chirilgan — o'zimiz yuboramiz */
+  gtag('config', ID, { send_page_view: false, anonymize_ip: true });
+
+  function yubor() {
+    if (erpda()) return;
+    gtag('event', 'page_view', {
+      page_location: tozaManzil(),
+      page_title: document.title
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', yubor);
+  } else { yubor(); }
+})();
 </script>
 `;
 

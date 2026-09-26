@@ -254,20 +254,30 @@ const get = async (p) => {
   /* =============== 5. IMPORTDAN KELGAN KOD =============== */
   section('5. Excel importidan kelgan kod');
 
-  await put('students/ks3', {
+  /* Yozuvning javobini ham tekshiramiz: agar yozish o'tmasa, sinov
+     "kod null" deb emas, serverning aniq javobi bilan yiqiladi.       */
+  const pks3 = await put('students/ks3', {
     id: 'ks3', firstName: 'Sitora', lastName: 'Umarova',
     phone: '+998901112255', status: 'faol', code: '1234', imported: true
   });
+  ok('Import qilingan o’quvchi yozildi', pks3.status === 200,
+    'status ' + pks3.status + ' ' + JSON.stringify(pks3.data).slice(0, 120));
   const gs8 = await get('students/ks3');
   ok('Importdagi 1234 kodi o’zgarmasdan saqlandi', gs8.data && gs8.data.code === '1234',
-    'olindi: ' + (gs8.data && gs8.data.code));
+    'olindi: ' + JSON.stringify(gs8.data && gs8.data.code) + ', o’qish holati ' + gs8.status);
 
   const kab3 = await fetch(BASE + '/api/kabinet', {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ code: '1234' })
   });
+  const kab3j = await kab3.json().catch(() => null);
   ok('Import qilingan o’quvchi shu kod bilan kabinetga kiradi', kab3.status === 200,
     'status ' + kab3.status);
+  /* Kod AYNAN shu o'quvchini ochishi kerak — boshqa o'quvchini ochsa,
+     yuqoridagi tekshiruv yolg'on "o'tdi" bo'lib qolardi.               */
+  ok('Kabinet aynan shu o’quvchini berdi',
+    !!(kab3j && kab3j.student && kab3j.student.id === 'ks3'),
+    JSON.stringify(kab3j && kab3j.student && kab3j.student.id));
 
   /* =============== YAKUN =============== */
   console.log(out.join('\n'));

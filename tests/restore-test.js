@@ -31,6 +31,19 @@ const login = b => api(b, '/api/login', { method: 'POST', body: { login: 'admin'
 (async () => {
   const s = await login(SRC), d = await login(DST);
   ok('manba serverga kirildi', !!s); ok('sinov (bo’sh) serverga kirildi', !!d);
+
+  /* Sinov o'zgalar qoldirgan ma'lumotga TAYANMAYDI: manbaga o'zining
+     belgili o'quvchisini yozadi. Shunda "manbada ko'proq yozuv bor"
+     sharti har qanday holatda bajariladi va tiklash aynan shu yozuv
+     bo'yicha tekshiriladi.                                           */
+  const MARK = 'tik_' + Date.now().toString(36);
+  const markName = 'Tiklash Belgisi ' + MARK;
+  const put = await api(SRC, '/api/doc?path=' + encodeURIComponent('students/' + MARK), {
+    method: 'PUT', cookie: s,
+    body: { data: { id: MARK, name: markName, phone: '+998900000000', status: 'faol' } }
+  });
+  ok('manbaga belgili o’quvchi yozildi (' + put.status + ')', put.status === 200, put.text.slice(0, 160));
+
   const run = await api(SRC, '/api/backup/run', { method: 'POST', cookie: s, body: {} });
   ok('zaxira yaratildi (' + run.status + ')', run.status === 200 && !!(run.json && run.json.file), run.text.slice(0, 160));
   const name = run.json && run.json.file && run.json.file.name;
@@ -40,7 +53,12 @@ const login = b => api(b, '/api/login', { method: 'POST', body: { login: 'admin'
   const nBefore = Object.keys((before.json || {}).items || {}).length;
   const srcStudents = await api(SRC, '/api/collection?name=students', { cookie: s });
   const nSrc = Object.keys((srcStudents.json || {}).items || {}).length;
-  ok('sinov bazasida o’quvchilar kam edi (' + nBefore + ' < ' + nSrc + ')', nBefore < nSrc);
+  /* Shart — sonlar farqi EMAS (sinov serveri avvalgi yugurishdan keyin
+     to'la bo'lishi mumkin), balki shu yugurish belgisining sinov
+     bazasida YO'Qligi. Aynan u tiklanganini keyin tekshiramiz.        */
+  ok('belgili o’quvchi zaxirada bor', dump.text.indexOf(markName) >= 0, MARK);
+  ok('belgili o’quvchi sinov bazasida hali yo’q (' + nBefore + ' / ' + nSrc + ')',
+    !JSON.stringify((before.json || {}).items || {}).includes(markName));
 
   const noWord = await api(DST, '/api/backup/restore', { method: 'POST', cookie: d, body: { dump: dump.json } });
   ok('tasdiqlash so’zisiz tiklanmadi (' + noWord.status + ')', noWord.status === 400);
@@ -51,6 +69,8 @@ const login = b => api(b, '/api/login', { method: 'POST', body: { login: 'admin'
   const after = await api(DST, '/api/collection?name=students', { cookie: d });
   const nAfter = Object.keys((after.json || {}).items || {}).length;
   ok('tiklangandan keyin o’quvchilar soni mos (' + nAfter + ' = ' + nSrc + ')', nAfter === nSrc);
+  ok('belgili o’quvchi tiklangan bazada paydo bo’ldi',
+    JSON.stringify((after.json || {}).items || {}).includes(markName), markName);
   const TOKEN_RE = /\b\d{6,12}:[A-Za-z0-9_-]{30,}\b/;
   ok('zaxira faylida bot tokeni yo’q', !TOKEN_RE.test(dump.text));
   ok('zaxira faylida parol xeshi bor, ochiq parol yo’q', !/"password"\s*:\s*"[^"]{4,}"/.test(dump.text), (dump.text.match(/"password"[^,]{0,40}/) || [''])[0]);
@@ -58,6 +78,13 @@ const login = b => api(b, '/api/login', { method: 'POST', body: { login: 'admin'
   ok('tiklangandan keyin server sog’lom', hp.status === 200, hp.text.slice(0, 80));
   const relog = await login(DST);
   ok('tiklangandan keyin kirish ishlaydi', !!relog);
+
+  /* Belgini manbadan olib tashlaymiz — keyingi yugurishlar toza boshlanadi */
+  await api(SRC, '/api/doc?path=' + encodeURIComponent('students/' + MARK),
+    { method: 'DELETE', cookie: s });
+  const gone = await api(SRC, '/api/collection?name=students', { cookie: s });
+  ok('sinov belgisi manbadan o’chirildi',
+    !JSON.stringify((gone.json || {}).items || {}).includes(markName));
 
   console.log(out.join('\n'));
   console.log('\n' + '─'.repeat(52));
