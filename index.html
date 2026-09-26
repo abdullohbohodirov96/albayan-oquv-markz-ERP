@@ -3,6 +3,34 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-3MYVLL1HML"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  /* Sahifa ko'rildi yozuvini O'ZIMIZ yuboramiz — ERP manzillari
+     (o'quvchi raqami bor sahifalar) Google ga ketmasligi uchun. */
+  gtag('config', 'G-3MYVLL1HML', { send_page_view: false, anonymize_ip: true });
+  (function () {
+    var ERP = /^#?(dashboard|students?|groups?|schedule|attendance|curriculum|learning|finance|staff|reports|progress|progressGroup|chat|tasks|bot|settings|kirish|kabinet|courses|group|student)\b/;
+    function ochiqSahifami() {
+      var h = String(location.hash || '').replace(/^#/, '');
+      return !h || !ERP.test(h);
+    }
+    function yubor() {
+      if (!ochiqSahifami()) return;
+      gtag('event', 'page_view', {
+        page_location: location.origin + '/',   // hash va so'rov qismisiz
+        page_title: document.title
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', yubor);
+    } else { yubor(); }
+  })();
+</script>
+
 <title>AlBayan Cairo — Toshkentda arab tili o‘quv markazi</title>
 <meta name="description" content="AlBayan Cairo — Toshkentdagi arab tili o‘quv markazi. Darslarni ona tili arab tili bo‘lgan ustozlar olib boradi. Ayollar va erkaklar uchun alohida guruhlar. A1 dan C2 gacha olti daraja, kichik guruhlar, ertalabki va kechki smenalar. Bepul daraja aniqlash testi.">
 <meta name="theme-color" content="#1e335e">
@@ -47,7 +75,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="AlBayan Cairo">
   <link rel="stylesheet" href="css/app.css">
-<meta name="app-version" content="albayan-45f03ce9e1c0">
+<meta name="app-version" content="albayan-5ac3110afbc0">
 </head>
 <body>
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":["EducationalOrganization","LocalBusiness"],"@id":"https://albayan-oquv-markz-erp.onrender.com/#markaz","name":"AlBayan Cairo","alternateName":["Al Bayan Cairo","AlBayan","Al-Bayan","Albayan Cairo o‘quv markazi","البيان"],"url":"https://albayan-oquv-markz-erp.onrender.com/","logo":{"@type":"ImageObject","url":"https://albayan-oquv-markz-erp.onrender.com/assets/icon-512.png","width":512,"height":512},"image":"https://albayan-oquv-markz-erp.onrender.com/assets/icon-512.png","description":"AlBayan Cairo — Toshkentdagi arab tili o‘quv markazi. Darslarni ona tili arab tili bo‘lgan ustozlar olib boradi. Ayollar va erkaklar uchun alohida guruhlar. A1 dan C2 gacha olti daraja, kichik guruhlar, ertalabki va kechki smenalar. Bepul daraja aniqlash testi.","address":{"@type":"PostalAddress","addressLocality":"Toshkent","addressCountry":"UZ"},"areaServed":{"@type":"City","name":"Toshkent"},"knowsLanguage":["ar","uz","ru"],"sameAs":["https://www.instagram.com/albayan.cairo/"]},{"@type":"WebSite","@id":"https://albayan-oquv-markz-erp.onrender.com/#sayt","url":"https://albayan-oquv-markz-erp.onrender.com/","name":"AlBayan Cairo","inLanguage":"uz","publisher":{"@id":"https://albayan-oquv-markz-erp.onrender.com/#markaz"}},{"@type":"Course","name":"Arab tili — A1 dan C2 gacha","description":"Alifbodan erkin suhbatgacha olti daraja. Darslarni ona tili arab tili bo‘lgan ustozlar olib boradi.","inLanguage":"uz","teaches":"Arab tili","provider":{"@id":"https://albayan-oquv-markz-erp.onrender.com/#markaz"},"hasCourseInstance":{"@type":"CourseInstance","courseMode":"onsite","courseWorkload":"PT4H30M","location":{"@type":"Place","address":{"@type":"PostalAddress","addressLocality":"Toshkent","addressCountry":"UZ"}}}}]}</script>

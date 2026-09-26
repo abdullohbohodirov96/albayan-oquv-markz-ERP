@@ -36,11 +36,60 @@ const SITE_DESC = 'AlBayan Cairo — Toshkentdagi arab tili o‘quv markazi. ' +
   'erkaklar uchun alohida guruhlar. A1 dan C2 gacha olti daraja, kichik ' +
   'guruhlar, ertalabki va kechki smenalar. Bepul daraja aniqlash testi.';
 
+/* Google Analytics 4. Bo'sh qoldirilsa (GA_ID='') teg umuman
+   qo'yilmaydi — mahalliy ishlaganda yoki sinovda statistika
+   yuborilmaydi.                                                    */
+const GA_ID = process.env.GA_MEASUREMENT_ID != null
+  ? process.env.GA_MEASUREMENT_ID : 'G-3MYVLL1HML';
+
+/* MUHIM — MAXFIYLIK.
+   Bu bitta sahifali dastur: ochiq sayt ham, ERP ham bitta manzilda
+   ishlaydi va ichki ekranlar manzilida o'quvchi raqami turadi
+   (masalan #student?id=st_123). Agar oddiy teg qo'yilsa, o'sha
+   manzillar Google ga yuborilardi — ya'ni o'quvchilar haqidagi
+   ma'lumot tashqariga chiqardi.
+
+   Shuning uchun:
+     — avtomatik "sahifa ko'rildi" O'CHIRILGAN (send_page_view:false);
+     — yozuv FAQAT ochiq saytda va FAQAT bitta manzil bilan
+       yuboriladi (hash va so'rov qismisiz);
+     — ERP ga kirilgandan keyin (#dashboard, #student, ...) hech
+       narsa yuborilmaydi.                                          */
+const GA_TAG = !GA_ID ? '' : `
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=${GA_ID}"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  /* Sahifa ko'rildi yozuvini O'ZIMIZ yuboramiz — ERP manzillari
+     (o'quvchi raqami bor sahifalar) Google ga ketmasligi uchun. */
+  gtag('config', '${GA_ID}', { send_page_view: false, anonymize_ip: true });
+  (function () {
+    var ERP = /^#?(dashboard|students?|groups?|schedule|attendance|curriculum|learning|finance|staff|reports|progress|progressGroup|chat|tasks|bot|settings|kirish|kabinet|courses|group|student)\\b/;
+    function ochiqSahifami() {
+      var h = String(location.hash || '').replace(/^#/, '');
+      return !h || !ERP.test(h);
+    }
+    function yubor() {
+      if (!ochiqSahifami()) return;
+      gtag('event', 'page_view', {
+        page_location: location.origin + '/',   // hash va so'rov qismisiz
+        page_title: document.title
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', yubor);
+    } else { yubor(); }
+  })();
+</script>
+`;
+
 const head = `<!doctype html>
 <html lang="uz">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">${GA_TAG}
 <title>${SITE_NAME} — Toshkentda arab tili o‘quv markazi</title>
 <meta name="description" content="${SITE_DESC}">
 <meta name="theme-color" content="#1e335e">

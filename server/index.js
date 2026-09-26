@@ -2656,10 +2656,19 @@ const PUBLIC_DIRS = ['/css/', '/js/', '/assets/'];
 const ALLOWED_EXT = new Set(['.html', '.js', '.css', '.png', '.jpg', '.svg', '.ico', '.webmanifest',
   '.txt', '.xml']);
 
+/* Qidiruv tizimlarining tasdiqlash fayllari.
+   Google Search Console sayt sizniki ekanini tasdiqlash uchun ildizda
+   googleXXXX.html faylini so'raydi (Yandex ham shunga o'xshash).
+   Ro'yxatga qo'lda qo'shib yurmaslik uchun QAT'IY namuna beriladi:
+   faqat ildizdagi, faqat shu nomdagi fayllar ochiladi — boshqa
+   hech qanday fayl bu yo'l bilan chiqmaydi.                        */
+const VERIFY_FILE = /^\/(google[0-9a-f]{8,32}\.html|yandex_[0-9a-f]{8,32}\.html)$/i;
+
 function isPublicPath(rel) {
   if (rel.indexOf('\0') >= 0) return false;
   if (rel.indexOf('..') >= 0) return false;
   if (rel.split('/').some(seg => seg.startsWith('.') && seg !== '')) return false;
+  if (VERIFY_FILE.test(rel)) return true;
   if (PUBLIC_FILES.has(rel)) return true;
   if (!PUBLIC_DIRS.some(d => rel.indexOf(d) === 0)) return false;
   if (rel.slice(1).split('/').length > 3) return false;         // chuqur joylashuv yo'q

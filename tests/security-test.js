@@ -74,6 +74,24 @@ async function login(l, p) {
   const envProbe = await req('/.env');
   ok('Javobda maxfiy qiymat yo’q', !/SEED_DIRECTOR_PASSWORD|TELEGRAM_BOT_TOKEN/.test(envProbe.text));
 
+  /* Qidiruv tizimi tasdiqlash fayli ildizdan ochilishi kerak, lekin
+     shu bahona bilan boshqa fayl chiqib ketmasligi shart.          */
+  section('   Qidiruv tizimi tasdiqlash fayli');
+  const gv = await req('/googlea919a23f8dccf992.html');
+  ok('Google tasdiqlash fayli ochildi (' + gv.status + ')', gv.status === 200, gv.text.slice(0, 80));
+  ok('Ichida tasdiqlash qatori bor',
+    /google-site-verification:\s*googlea919a23f8dccf992\.html/.test(gv.text), gv.text.slice(0, 80));
+  for (const p of ['/googleXX.html', '/google.html', '/googlea919a23f8dccf992.html.bak',
+    '/googlea919a23f8dccf992.js']) {
+    const r = await req(p);
+    ok('Namunaga tushmagan fayl berilmaydi: ' + p + ' (' + r.status + ')', r.status === 404);
+  }
+  /* Boshqa papkadan so'ralsa tasdiqlash matni CHIQMASLIGI kerak
+     (u yerda sahifaning o'zi qaytadi — bu xavfsiz).             */
+  const wrongDir = await req('/js/googlea919a23f8dccf992.html');
+  ok('Boshqa papkadan tasdiqlash matni chiqmaydi',
+    !/google-site-verification/.test(wrongDir.text), wrongDir.text.slice(0, 80));
+
   section('   Kod fayllari keshda eskirib qolmaydi');
   for (const f of ['/index.html', '/js/app.js', '/css/app.css', '/sw.js', '/manifest.webmanifest']) {
     const r = await fetch(BASE + f);

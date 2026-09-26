@@ -114,6 +114,23 @@ async function api(p, opts = {}) {
     ok('Unga Content-Encoding qo’yilmaydi', !eski.enc, eski.enc);
   }
 
+  /* ================= 0b. Google Analytics =================
+     Teg ochiq saytda ishlashi kerak, LEKIN ERP manzillari
+     (o'quvchi raqami bor sahifalar) Google ga yuborilmasligi shart. */
+  section('0b. Google Analytics — ochiq saytda ishlaydi, ERP manzili ketmaydi');
+  {
+    const gaPage = await api('/');
+    ok('Teg <head> ichida', /googletagmanager\.com\/gtag\/js\?id=G-/.test(gaPage.text),
+      gaPage.text.slice(0, 200));
+    const headPart = gaPage.text.split('</head>')[0] || '';
+    ok('Teg aynan <head> qismida', /googletagmanager/.test(headPart));
+    ok('Bitta marta qo’yilgan',
+      (gaPage.text.match(/googletagmanager\.com\/gtag\/js/g) || []).length === 1,
+      String((gaPage.text.match(/googletagmanager\.com\/gtag\/js/g) || []).length));
+    ok('Avtomatik sahifa yozuvi o’chirilgan', /send_page_view:\s*false/.test(gaPage.text));
+
+  }
+
   /* ================= 1. Ochiq ma'lumot ================= */
   section('1. /api/public — saytga kerakli ma’lumot');
   const pub = await api('/api/public');
@@ -125,8 +142,59 @@ async function api(p, opts = {}) {
 
   /* ================= 2. Sahifa ================= */
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  /* Brauzerga HAR SAFAR boshqa IP beramiz: saytdagi ariza va izoh
+     yo'llarida bir IP uchun kunlik chegara bor (toshqindan himoya).
+     Aks holda sinov ikkinchi marta ishga tushganda o'sha chegaraga
+     urilib, yolg'on xato berardi.                                  */
+  const TEST_IP = '198.51.100.' + (2 + (Date.now() % 250));
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    extraHTTPHeaders: { 'X-Forwarded-For': TEST_IP }
+  });
   const page = await ctx.newPage();
+
+  /* ---- Google Analytics: brauzerda tekshirish ---- */
+  section('0c. Google Analytics — brauzerda');
+  {
+    const hits = [];
+    /* Brauzerda: Google ga qanday so'rov ketayotganini kuzatamiz */
+    const gaPageObj = await ctx.newPage();
+    await gaPageObj.route('**://*.googletagmanager.com/**', r => {
+      hits.push(r.request().url());
+      /* Haqiqiy Google ga chiqmaymiz — bo'sh javob beramiz */
+      return r.fulfill({ status: 200, contentType: 'application/javascript', body: '' });
+    });
+    await gaPageObj.route('**://*.google-analytics.com/**', r => {
+      hits.push(r.request().url());
+      return r.fulfill({ status: 204, body: '' });
+    });
+    await gaPageObj.goto(BASE);
+    await gaPageObj.waitForTimeout(1200);
+    const sent = await gaPageObj.evaluate(() =>
+      (window.dataLayer || []).map(a => JSON.stringify(Array.from(a))).join(' | '));
+    ok('Ochiq saytda yozuv yuborildi', /"event","page_view"/.test(sent), sent.slice(0, 200));
+    ok('Yuborilgan manzilda hash yo’q', !/%23|#/.test(sent.replace(/#?\w+"/g, '')),
+      sent.slice(0, 200));
+
+    /* ERP ekraniga o'tamiz — yangi yozuv qo'shilmasligi kerak */
+    const before = await gaPageObj.evaluate(() => (window.dataLayer || []).length);
+    /* Faqat # o'zgarsa sahifa qayta yuklanmaydi — haqiqiy yuklash kerak */
+    await gaPageObj.goto(BASE + '#student?id=st_maxfiy_123');
+    await gaPageObj.reload({ waitUntil: 'domcontentloaded' });
+    await gaPageObj.waitForTimeout(1500);
+    const after = await gaPageObj.evaluate(() =>
+      (window.dataLayer || []).map(a => JSON.stringify(Array.from(a))).join(' | '));
+    ok('ERP manzilida o’quvchi raqami Google ga ketmadi',
+      !/st_maxfiy_123/.test(after), after.slice(0, 250));
+    /* DIQQAT: "send_page_view" ichida ham "page_view" bor — shuning
+       uchun aynan HODISA nomi qidiriladi.                          */
+    ok('ERP ekranida sahifa yozuvi yuborilmadi',
+      (after.match(/"event","page_view"/g) || []).length === 0, after.slice(0, 250));
+    await gaPageObj.close();
+    out.push('    (Google ga haqiqiy so’rov yuborilmadi — sinovda ushlab qolindi: ' +
+      hits.length + ' ta)');
+  }
+
   page.on('pageerror', e => { fail++; out.push('  ✗ JS xatosi: ' + e.message); });
 
   section('2. Sayt ochiladi (kirish talab qilinmaydi)');
@@ -241,7 +309,8 @@ async function api(p, opts = {}) {
     sys ? JSON.stringify(sys.messages.slice(-1)) : '');
 
   section('   Takroriy ariza ikkinchi marta yaratilmaydi');
-  const again = await api('/api/lead', { method: 'POST', body: { name: 'Sayt Mijoz ' + R, phone: PHONE } });
+  const again = await api('/api/lead', { method: 'POST', ip: TEST_IP,
+    body: { name: 'Sayt Mijoz ' + R, phone: PHONE } });
   ok('Takror deb belgilandi', again.json && again.json.duplicate === true, again.text);
   const leads2 = await api('/api/collection?name=leads', { cookie: dir });
   eq('Lead soni oshmadi',
@@ -309,7 +378,8 @@ async function api(p, opts = {}) {
   section('   Yopiq ro’yxat: o’zboshimcha daraja qabul qilinmaydi');
   const evilPhone = '+99890' + String(Date.now() + 7).slice(-7);
   const evil = await api('/api/lead', {
-    method: 'POST',
+    /* Bir IP uchun kunlik ariza chegarasi bor — sinov o'z IP sidan yuboradi */
+    method: 'POST', ip: TEST_IP,
     body: { name: 'Yopiq Sinov ' + R2, phone: evilPhone, startLevel: '<b>Professor</b>' }
   });
   eq('So’rov o’tdi (lekin daraja tozalandi)', evil.status, 200);
