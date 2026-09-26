@@ -72,7 +72,7 @@ a{color:var(--brand);text-decoration:none}
 .login .brandline{display:flex;align-items:center;gap:12px}
 .login h1{font-size:22px}
 .login .sub{color:var(--muted);font-size:13px;margin-top:2px}
-.logo{width:44px;height:44px;border-radius:11px;flex:none;display:block}
+.logo{width:44px;height:44px;border-radius:14px;flex:none;display:block}
 .logo-sm{width:30px;height:30px;border-radius:8px;flex:none}
 
 /* ---------- Kirish sahifasi: saytning ko'rinishida ----------
@@ -380,7 +380,7 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .site-top.stuck{border-bottom-color:color-mix(in srgb,var(--st-line) 80%,transparent);
   box-shadow:0 10px 30px -22px rgba(16,28,51,.55)}
 .site-brand{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
-.site-brand .logo{width:44px;height:44px;border-radius:13px;
+.site-brand .logo{width:44px;height:44px;border-radius:15px;
   box-shadow:0 0 0 1px color-mix(in srgb,var(--st-gold) 42%,transparent), var(--st-shadow)}
 .site-brand b{display:block;font-family:var(--st-serif);font-weight:600;
   font-size:17px;line-height:1.12;letter-spacing:-.015em;color:var(--st-ink)}
@@ -645,6 +645,8 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .tch-fact b{font-size:14px}
 .tch-times h3,.tch-more h3{font-family:var(--st-serif);font-weight:600;font-size:18px;margin-bottom:11px;
   color:var(--st-ink)}
+.tch-times > p{margin:0}
+.tch-note{margin-top:10px !important}
 
 /* ERP: saytdagi ustozlar ro'yxati */
 .tch-admin{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
@@ -1049,10 +1051,19 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
   transition:opacity .6s ease, transform .6s cubic-bezier(.22,.9,.28,1);
   transition-delay:calc(var(--i,0) * 90ms)}
 
-/* --- Kartalar ketma-ket chiqadi --- */
-.js-reveal .feat-grid > *,.js-reveal .course-grid > *,
-.js-reveal .tch-grid > *,.js-reveal .slot-grid > *,
-.js-reveal .lvl-grid > *{opacity:0;transform:translateY(16px)}
+/* --- Kartalar ketma-ket chiqadi ---
+
+   MUHIM: yashirish FAQAT hali ko'rinmagan `.reveal` bo'limi ichida
+   ishlaydi. Ilgari qoida butun sahifaga tegishli edi: bosh sahifa
+   ochilgach html ga .js-reveal qo'yilardi va undan keyin chizilgan
+   HAR QANDAY karta — masalan ustoz sahifasidagi "Dars vaqtlari" va
+   "Boshqa ustozlar" — .reveal ichida bo'lmagani uchun opacity:0 da
+   abadiy qolib ketardi: sarlavha ko'rinardi, ostida esa bo'sh joy. */
+.js-reveal .reveal:not(.seen) .feat-grid > *,
+.js-reveal .reveal:not(.seen) .course-grid > *,
+.js-reveal .reveal:not(.seen) .tch-grid > *,
+.js-reveal .reveal:not(.seen) .slot-grid > *,
+.js-reveal .reveal:not(.seen) .lvl-grid > *{opacity:0;transform:translateY(16px)}
 .js-reveal .reveal.seen .feat-grid > *,.js-reveal .reveal.seen .course-grid > *,
 .js-reveal .reveal.seen .tch-grid > *,.js-reveal .reveal.seen .slot-grid > *,
 .js-reveal .reveal.seen .lvl-grid > *{

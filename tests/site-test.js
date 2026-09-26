@@ -562,6 +562,80 @@ async function api(p, opts = {}) {
   ok('Ustoz profili ochildi', /ustoz\?id=/.test(prof.hash), prof.hash);
   ok('Profilda dars vaqtlari bor', prof.times >= 6, String(prof.times));
   ok('Profilda yozilish tugmasi bor', /yozilish/i.test(prof.text));
+
+  /* --- Bo'limlar HAQIQATAN ko'rinadimi ---
+     Topilgan xato: bosh sahifa ochilgach html ga .js-reveal qo'yilardi
+     va "kartalar ketma-ket chiqadi" qoidasi BUTUN sahifaga tegishli
+     edi. Ustoz sahifasidagi kartalar .reveal bo'limi ichida emas,
+     shuning uchun ular opacity:0 da abadiy qolib ketardi: sarlavha
+     ("Dars vaqtlari", "Boshqa ustozlar") ko'rinardi, ostida esa
+     bo'sh joy. DOM da element bor edi — shuning uchun oddiy
+     "nechta element bor" sinovi buni ushlamasdi. Endi KO'RINISHI
+     o'lchanadi.                                                     */
+  const vis = await page.evaluate(() => {
+    const op = el => el ? Number(getComputedStyle(el).opacity) : -1;
+    const seen = el => {
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && Number(getComputedStyle(el).opacity) > 0.9;
+    };
+    const slot = document.querySelector('.tch-page .slot');
+    const more = document.querySelector('.tch-more .tch-card');
+    return {
+      jsReveal: document.documentElement.classList.contains('js-reveal'),
+      slotOpacity: op(slot), slotSeen: seen(slot),
+      moreCount: document.querySelectorAll('.tch-more .tch-card').length,
+      moreOpacity: op(more), moreSeen: seen(more),
+      timesHead: /Dars vaqtlari/.test(document.body.innerText),
+      moreHead: /Boshqa ustozlar/.test(document.body.innerText)
+    };
+  });
+  ok('Bosh sahifadan kelgani uchun harakat yoqilgan', vis.jsReveal === true, JSON.stringify(vis));
+  ok('"Dars vaqtlari" sarlavhasi bor', vis.timesHead);
+  ok('Dars vaqtlari KO’RINADI (bo’sh emas)', vis.slotSeen === true, JSON.stringify(vis));
+  ok('"Boshqa ustozlar" sarlavhasi bor', vis.moreHead);
+  ok('Boshqa ustozlar kartalari bor', vis.moreCount >= 1, String(vis.moreCount));
+  ok('Boshqa ustozlar KO’RINADI (bo’sh emas)', vis.moreSeen === true, JSON.stringify(vis));
+
+  /* Kartalar bosh sahifadagi bilan BIR XIL tuzilishda bo'lsin —
+     ilgari bu yerda boshqa tuzilma bor edi va CSS unga mos emasdi:
+     rasm kartadan chiqib, yozuv chetdan oshib ketardi.              */
+  const sameShape = await page.evaluate(() => {
+    const c = document.querySelector('.tch-more .tch-card');
+    if (!c) return null;
+    const photo = c.querySelector('.tch-photo');
+    const go = c.querySelector('.tch-go');
+    const b = c.querySelector('b');
+    const cr = c.getBoundingClientRect();
+    const pr = photo ? photo.getBoundingClientRect() : null;
+    return {
+      photo: !!photo, go: !!go, name: b ? b.textContent.trim() : '',
+      /* rasm karta ichida turadimi */
+      inside: pr ? (pr.left >= cr.left - 1 && pr.right <= cr.right + 1 &&
+        pr.top >= cr.top - 1) : false
+    };
+  });
+  ok('Karta bosh sahifadagidek tuzilgan (rasm bloki bor)',
+    !!sameShape && sameShape.photo, JSON.stringify(sameShape));
+  ok('Kartada "Batafsil" havolasi bor', !!sameShape && sameShape.go, JSON.stringify(sameShape));
+  ok('Rasm karta ichida turadi (chetga chiqmaydi)',
+    !!sameShape && sameShape.inside, JSON.stringify(sameShape));
+
+  /* Boshqa ustozga o'tish ishlaydi */
+  const firstOther = await page.evaluate(() => {
+    const c = document.querySelector('.tch-more .tch-card');
+    const n = c.querySelector('b').textContent.trim();
+    c.click();
+    return n;
+  });
+  await page.waitForTimeout(700);
+  const jumped = await page.evaluate(() => ({
+    h1: (document.querySelector('.tch-hero h1') || {}).textContent || '',
+    hash: location.hash
+  }));
+  ok('Boshqa ustozga o’tildi', jumped.h1.trim() === firstOther,
+    firstOther + ' → ' + jumped.h1);
+  ok('Manzil ham o’zgardi', /ustoz\?id=/.test(jumped.hash), jumped.hash);
   await page.screenshot({ path: path.join(SHOTS, 'ustoz-profil.png'), fullPage: true });
   await page.goto(BASE);
   await page.waitForSelector('.site-hero', { timeout: 15000 });
@@ -706,11 +780,28 @@ async function api(p, opts = {}) {
   });
   await page.waitForSelector('.modal .rev-pick', { timeout: 10000 });
   const NAME2 = 'Sinov Oyna ' + R;
-  await page.fill('#rev-name', NAME2);
-  await page.fill('#rev-text', 'Guruhda hamma gapiradi, ustoz xatoni darrov tuzatadi.');
-  await page.evaluate(() => document.querySelectorAll('.rev-pick .rev-pick-b')[3].click());
-  const picked = await page.evaluate(() => document.querySelectorAll('.rev-pick .rev-pick-b.on').length);
+  /* Oynadagi maydonni AYNAN oyna ichidan to'ldiramiz. Sahifada eski
+     yoki ikkinchi #rev-name qolgan bo'lsa, page.fill('#rev-name')
+     birinchisini topib, oyna esa bo'sh qolardi — shunda "Yuborish"
+     hech narsa yubormasdi va sinov sababsiz yiqilardi.              */
+  const oneField = await page.evaluate(() => ({
+    names: document.querySelectorAll('#rev-name').length,
+    texts: document.querySelectorAll('#rev-text').length,
+    modals: document.querySelectorAll('.modal').length
+  }));
+  ok('Oynada bitta forma bor', oneField.names === 1 && oneField.texts === 1,
+    JSON.stringify(oneField));
+  await page.fill('.modal #rev-name', NAME2);
+  await page.fill('.modal #rev-text', 'Guruhda hamma gapiradi, ustoz xatoni darrov tuzatadi.');
+  await page.evaluate(() => document.querySelectorAll('.modal .rev-pick .rev-pick-b')[3].click());
+  const picked = await page.evaluate(() => document.querySelectorAll('.modal .rev-pick .rev-pick-b.on').length);
   eq('4 yulduz tanlandi', picked, 4);
+  /* Yuborishdan OLDIN maydonlar haqiqatan to'lganini tekshiramiz */
+  const filled = await page.evaluate(() => ({
+    name: (document.querySelector('.modal #rev-name') || {}).value,
+    text: ((document.querySelector('.modal #rev-text') || {}).value || '').length
+  }));
+  ok('Maydonlar to’ldi', filled.name === NAME2 && filled.text >= 10, JSON.stringify(filled));
   /* Serverning javobini ham ushlab olamiz: xato bo'lsa sinov nima
      bo'lganini aytadi, "topilmadi" deb jim qolmaydi.                  */
   const revResp = page.waitForResponse(
@@ -726,6 +817,18 @@ async function api(p, opts = {}) {
     let t = '';
     try { t = (await rr.text()).slice(0, 160); } catch (e) { }
     revSays = rr.status() + ' ' + t;
+  } else {
+    /* So'rov ketmagan bo'lsa — oynadagi xato yozuvini o'qiymiz */
+    const why = await page.evaluate(() => {
+      const e = document.querySelector('.modal .err-msg');
+      return {
+        err: e && !e.hidden ? e.textContent : '',
+        name: (document.querySelector('.modal #rev-name') || {}).value,
+        textLen: ((document.querySelector('.modal #rev-text') || {}).value || '').length,
+        modalBor: !!document.querySelector('.modal')
+      };
+    }).catch(() => null);
+    revSays = 'so’rov ketmadi | ' + JSON.stringify(why);
   }
   eq('Oyna izohini server qabul qildi', rr && rr.status(), 200);
   await page.waitForTimeout(1200);
@@ -780,6 +883,13 @@ async function api(p, opts = {}) {
   await page.waitForSelector('#foot-soc .soc-btn', { timeout: 15000 });
   await page.evaluate(() => document.getElementById('foot-soc').scrollIntoView({ block: 'center' }));
   await page.waitForTimeout(900);
+  /* Rasmlar "lazy" — ko'rinishga kelgandan keyin yuklanadi. Sekin
+     mashinada 900 ms yetmay, sinov yolg'on xato berardi; shuning
+     uchun rasmlar yuklanguncha (yoki 8 soniya o'tguncha) kutamiz.   */
+  await page.waitForFunction(() => {
+    const im = Array.from(document.querySelectorAll('#foot-soc img.soc-logo'));
+    return im.length > 0 && im.every(i => i.complete && i.naturalWidth > 0);
+  }, null, { timeout: 8000 }).catch(() => { });
   const soc = await page.evaluate(() => {
     const b = Array.from(document.querySelectorAll('#foot-soc .soc-btn'));
     return b.map(x => {

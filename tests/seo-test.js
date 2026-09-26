@@ -95,14 +95,23 @@ async function api(p, o = {}) {
   ok('Sarlavhada markaz nomi va yo’nalishi bor',
     /albayan/i.test(title) && /arab tili/i.test(title), title);
   eq('Ikkita sarlavha yo’q', (html.match(/<title>/gi) || []).length, 1);
+  /* Odam nimani qidirsa, sarlavhaning BOSHIDA shu tursin: Google
+     sarlavhani kesganda ham asosiy so'z ko'rinib qoladi.            */
+  ok('Sarlavha "arab tili kurslari" bilan boshlanadi',
+    /^arab tili kurslari/i.test(title), title);
+  ok('Sarlavhada shahar ko’rsatilgan', /toshkent/i.test(title), title);
   const desc = (html.match(/<meta name="description" content="([^"]*)"/i) || [])[1] || '';
-  ok('Tavsif bor (' + desc.length + ' belgi)', desc.length >= 70 && desc.length <= 320, desc);
-  /* Tavsif sozlamadan tuziladi: markaz nomi, manzili va telefoni bilan —
-     qidiruv natijasida odam manzilni darrov ko'radi.                    */
-  ok('Tavsifda markaz nomi bor', desc.indexOf(NAME) === 0, desc.slice(0, 80));
-  ok('Tavsifda manzil bor', desc.indexOf(ADDR) > 0, desc);
-  ok('Tavsifda telefon bor', desc.indexOf(PHONE) > 0, desc);
+  /* Tavsif ixcham bo'lsin — Google ~160 belgidan keyin kesib tashlaydi */
+  ok('Tavsif bor va ixcham (' + desc.length + ' belgi)',
+    desc.length >= 90 && desc.length <= 170, desc);
+  eq('Ikkita tavsif yo’q', (html.match(/name="description"/gi) || []).length, 1);
+  ok('Tavsifda qidiruv so’zi bor', /arab tili kurslari/i.test(desc), desc);
+  ok('Tavsifda darajalar bor', /A1/.test(desc) && /C2/.test(desc), desc);
   ok('Canonical havola bor', /<link rel="canonical" href="https?:\/\/[^"]+"/.test(html));
+  eq('Canonical BITTA', (html.match(/rel="canonical"/gi) || []).length, 1);
+  const canon = (html.match(/<link rel="canonical" href="([^"]*)"/i) || [])[1] || '';
+  ok('Canonical da so’rov va # yo’q', canon.indexOf('?') < 0 && canon.indexOf('#') < 0, canon);
+  ok('Canonical bosh sahifaga ishora qiladi', /\/$/.test(canon), canon);
   ok('Robots: indeksga ruxsat', /<meta name="robots" content="[^"]*index/.test(html),
     (html.match(/<meta name="robots"[^>]*>/) || [])[0]);
   ok('Sahifa tili ko’rsatilgan', /<html lang="uz"/.test(html));
@@ -149,6 +158,34 @@ async function api(p, o = {}) {
       (org.alternateName || []).some(n => /bayan/i.test(n)), JSON.stringify(org.alternateName));
     ok('Arabcha nomi ham bor', (org.alternateName || []).some(n => /[؀-ۿ]/.test(n)),
       JSON.stringify(org.alternateName));
+
+    /* --- Google qidiruvdagi SAYT NOMI shu yozuvdan olinadi --- */
+    const site = ld['@graph'].find(x => x['@type'] === 'WebSite');
+    ok('WebSite yozuvi bor', !!site);
+    if (site) {
+      eq('Sayt nomi — sozlamadagi nom', site.name, NAME);
+      ok('Sayt nomida "AlBayan" bor', /albayan/i.test(site.name || ''), site.name);
+      ok('Sayt manzili ko’rsatilgan', /^https?:\/\/[^/]+\/$/.test(site.url || ''), site.url);
+      ok('Zaxira nomlar ham bor', (site.alternateName || []).length >= 3,
+        JSON.stringify(site.alternateName));
+      /* Nom har joyda BIR XIL bo'lsin — Google ziddiyat ko'rmasin */
+      const ogName = (html.match(/<meta property="og:site_name" content="([^"]*)"/i) || [])[1];
+      eq('og:site_name ham o’sha nom', ogName, site.name);
+      ok('Sarlavhada ham o’sha nom', title.indexOf(site.name) >= 0, title);
+    }
+    /* Kurs yozuvi "arab tili" so'roviga bog'lansin */
+    const course = ld['@graph'].find(x => x['@type'] === 'Course');
+    ok('Kurs "arab tili" ni o’rgatadi', /arab tili/i.test((course || {}).teaches || ''),
+      JSON.stringify((course || {}).teaches));
+    ok('Kurs nomida "arab tili kurslari" bor',
+      /arab tili kurslari/i.test((course || {}).name || ''), (course || {}).name);
+
+    /* --- ERP ma'lumoti tuzilgan ma'lumotga CHIQMASLIGI kerak --- */
+    const ldTxt = JSON.stringify(ld);
+    ok('Tuzilgan ma’lumotda o’quvchi yo’q',
+      !/"studentId"|st_[a-z0-9]{4,}|usr_[a-z0-9]{3,}/i.test(ldTxt));
+    ok('Tuzilgan ma’lumotda ERP manzili yo’q',
+      !/#(students?|finance|staff|dashboard|kabinet|groups?)\b/.test(ldTxt));
   }
 
   /* ================= 5. robots.txt va sitemap.xml ================= */
@@ -159,10 +196,73 @@ async function api(p, o = {}) {
   ok('Indeksga ruxsat berilgan', /Allow:\s*\//.test(rb.text), rb.text.slice(0, 120));
   ok('Ichki API yopilgan', /Disallow:\s*\/api\//.test(rb.text), rb.text.slice(0, 120));
   ok('Sitemap ko’rsatilgan', /Sitemap:\s*https?:\/\//.test(rb.text), rb.text.slice(0, 160));
+  /* Google sahifani CHIZIB ko'radi — css/js yopilgan bo'lsa, unga
+     sayt bo'm-bo'sh ko'rinadi. Shuning uchun ular ochiq bo'lishi shart. */
+  ok('css ochiq qoldirilgan', !/Disallow:\s*\/css\//.test(rb.text), rb.text);
+  ok('js ochiq qoldirilgan', !/Disallow:\s*\/js\//.test(rb.text), rb.text);
+  ok('rasm papkasi ochiq', !/Disallow:\s*\/assets\//.test(rb.text), rb.text);
+  ok('Hamma robot uchun yozilgan', /User-agent:\s*\*/.test(rb.text), rb.text.slice(0, 80));
+
   const sm = await api('/sitemap.xml');
   eq('sitemap.xml beriladi', sm.status, 200);
   ok('Turi XML', /xml/.test(sm.type), sm.type);
   ok('Bosh sahifa ro’yxatda', /<loc>https?:\/\/[^<]+<\/loc>/.test(sm.text), sm.text.slice(0, 160));
+  ok('XML e’loni bor', /^<\?xml version="1\.0"/.test(sm.text.trim()), sm.text.slice(0, 60));
+  ok('To’g’ri urlset nomlar fazosi',
+    /xmlns="http:\/\/www\.sitemaps\.org\/schemas\/sitemap\/0\.9"/.test(sm.text), sm.text.slice(0, 200));
+  ok('XML yopilgan (buzilmagan)', /<\/urlset>\s*$/.test(sm.text.trim()), sm.text.slice(-80));
+  /* XML haqiqatan o'qiladimi — brauzerning o'z tahlilchisi bilan */
+  const xmlBrowser = await chromium.launch();
+  const xmlPage = await (await xmlBrowser.newContext()).newPage();
+  const xmlOk = await xmlPage.evaluate(txt => {
+    const d = new DOMParser().parseFromString(txt, 'application/xml');
+    return {
+      err: !!d.querySelector('parsererror'),
+      locs: Array.from(d.getElementsByTagName('loc')).map(n => n.textContent)
+    };
+  }, sm.text).catch(e => ({ err: true, locs: [], why: String(e) }));
+  await xmlBrowser.close();
+  ok('XML tahlilchidan o’tdi (xato yo’q)', !!xmlOk && !xmlOk.err, JSON.stringify(xmlOk));
+  const locs = (xmlOk && xmlOk.locs) || [];
+  ok('Kamida bitta manzil bor', locs.length >= 1, JSON.stringify(locs));
+  /* MUHIM: xaritada ERP yoki # li manzil bo'lmasin */
+  ok('Xaritada # li manzil yo’q', !locs.some(u => u.indexOf('#') >= 0), JSON.stringify(locs));
+  ok('Xaritada ERP manzili yo’q',
+    !locs.some(u => /(students?|finance|staff|dashboard|kabinet|groups?|progress|reports|chat|tasks|bot|settings)/i.test(u)),
+    JSON.stringify(locs));
+  ok('Xaritada /api/ yo’q', !locs.some(u => u.indexOf('/api/') >= 0), JSON.stringify(locs));
+  ok('Xaritadagi manzillar haqiqiy (so’rovsiz)',
+    locs.every(u => /^https?:\/\/[^?#]+$/.test(u)), JSON.stringify(locs));
+  /* Xaritadagi manzil canonical bilan bir xil bo'lsin */
+  ok('Xaritadagi manzil canonical bilan bir xil',
+    locs.some(u => u.replace(/^https?:\/\/[^/]+/, '') === canon.replace(/^https?:\/\/[^/]+/, '')),
+    JSON.stringify(locs) + ' | ' + canon);
+  /* Xaritadagi manzil haqiqatan ochiladimi */
+  for (const u of locs.slice(0, 5)) {
+    const r = await api(u.replace(/^https?:\/\/[^/]+/, '') || '/');
+    ok('Xaritadagi manzil ochiladi: ' + u, r.status === 200, String(r.status));
+  }
+
+  /* --- Logotip Google uchun ochiqmi (qidiruvda favicon shundan chiqadi) --- */
+  section('5b. Logotip va favicon qidiruv uchun ochiq');
+  const iconLinks = [...html.matchAll(/<link rel="(?:apple-touch-)?icon"[^>]*href="([^"]+)"/gi)]
+    .map(m => m[1]);
+  ok('Sahifada logotip havolalari bor (' + iconLinks.length + ' ta)', iconLinks.length >= 3,
+    JSON.stringify(iconLinks));
+  for (const u of iconLinks) {
+    const r = await api(u.replace(/^https?:\/\/[^/]+/, ''));
+    ok('Ochiladi: ' + u, r.status === 200 && /image\//.test(r.type), r.status + ' ' + r.type);
+  }
+  /* Favicon robots.txt bilan yopilgan bo'lmasin */
+  ok('favicon robots.txt da yopilmagan', !/Disallow:\s*\/favicon/.test(rb.text), rb.text);
+  /* Tuzilgan ma'lumotdagi logotip ham haqiqatan ochiladi */
+  if (ld && ld['@graph']) {
+    const o = ld['@graph'].find(x => /LocalBusiness/.test([].concat(x['@type']).join('+'))) || {};
+    const lu = ((o.logo || {}).url) || '';
+    const lr = await api(lu.replace(/^https?:\/\/[^/]+/, ''));
+    ok('Tuzilgan ma’lumotdagi logotip ochiladi', lr.status === 200 && /image\//.test(lr.type),
+      lu + ' → ' + lr.status);
+  }
   /* Bo'lmagan fayl o'rniga sahifa berilmasligi kerak */
   const miss = await api('/yoq-bunday-fayl.txt');
   ok('Bo’lmagan .txt o’rniga sahifa berilmaydi',

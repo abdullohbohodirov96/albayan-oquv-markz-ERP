@@ -31,10 +31,16 @@ const body = src.replace(/^[\s\S]*?(?=<div id="boot")/, function (top) {
 const SITE_URL = (process.env.SITE_URL || 'https://albayan-oquv-markz-erp.onrender.com')
   .replace(/\/+$/, '');
 const SITE_NAME = 'AlBayan Cairo';
-const SITE_DESC = 'AlBayan Cairo — Toshkentdagi arab tili o‘quv markazi. ' +
-  'Darslarni ona tili arab tili bo‘lgan ustozlar olib boradi. Ayollar va ' +
-  'erkaklar uchun alohida guruhlar. A1 dan C2 gacha olti daraja, kichik ' +
-  'guruhlar, ertalabki va kechki smenalar. Bepul daraja aniqlash testi.';
+/* Nom variantlari — server/seo.js dagi ro'yxat bilan BIR XIL bo'lishi
+   kerak, aks holda Google statik HTML va serverdan kelgan HTML da
+   ikki xil signal ko'radi.                                          */
+const ALT_NAMES = ['AlBayan', 'Al Bayan', 'Al-Bayan Cairo', 'Al Bayan Cairo', 'البيان'];
+/* Sarlavha: qidiruv so'zi oldinda, markaz nomi oxirida (~60 belgi). */
+const SITE_TITLE = 'Arab tili kurslari Toshkentda | ' + SITE_NAME;
+/* Tavsif: ixcham (~155 belgi) — Google kesib tashlamaydi. */
+const SITE_DESC = 'Toshkentda arab tili kurslari: A1–C2 darajalar, arab ' +
+  'ustozlar, ayollar va erkaklar uchun alohida guruhlar. Bepul daraja ' +
+  'aniqlash testi.';
 
 /* Google Analytics 4. Bo'sh qoldirilsa (GA_ID='') teg umuman
    qo'yilmaydi — mahalliy ishlaganda yoki sinovda statistika
@@ -173,7 +179,7 @@ const head = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">${GA_TAG}
-<title>${SITE_NAME} — Toshkentda arab tili o‘quv markazi</title>
+<title>${SITE_TITLE}</title>
 <meta name="description" content="${SITE_DESC}">
 <meta name="theme-color" content="#1e335e">
 <link rel="canonical" href="${SITE_URL}/">
@@ -191,7 +197,7 @@ const head = `<!doctype html>
 <!-- Havola ulashilganda chiqadigan kartochka (Telegram, Facebook, WhatsApp) -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${SITE_NAME}">
-<meta property="og:title" content="${SITE_NAME} — Toshkentda arab tili o‘quv markazi">
+<meta property="og:title" content="${SITE_TITLE}">
 <meta property="og:description" content="${SITE_DESC}">
 <meta property="og:url" content="${SITE_URL}/">
 <meta property="og:image" content="${SITE_URL}/assets/icon-512.png">
@@ -201,7 +207,7 @@ const head = `<!doctype html>
 <meta property="og:locale:alternate" content="ru_RU">
 <meta property="og:locale:alternate" content="ar_AR">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="${SITE_NAME} — arab tili o‘quv markazi">
+<meta name="twitter:title" content="${SITE_TITLE}">
 <meta name="twitter:description" content="${SITE_DESC}">
 <meta name="twitter:image" content="${SITE_URL}/assets/icon-512.png">
 <style>
@@ -227,7 +233,7 @@ const LD = {
       '@type': ['EducationalOrganization', 'LocalBusiness'],
       '@id': SITE_URL + '/#markaz',
       name: SITE_NAME,
-      alternateName: ['Al Bayan Cairo', 'AlBayan', 'Al-Bayan', 'Albayan Cairo o‘quv markazi', 'البيان'],
+      alternateName: ALT_NAMES,
       url: SITE_URL + '/',
       logo: { '@type': 'ImageObject', url: SITE_URL + '/assets/icon-512.png', width: 512, height: 512 },
       image: SITE_URL + '/assets/icon-512.png',
@@ -238,20 +244,23 @@ const LD = {
       sameAs: ['https://www.instagram.com/albayan.cairo/']
     },
     {
+      /* Google qidiruvdagi SAYT NOMI aynan shu yozuvdan olinadi */
       '@type': 'WebSite',
       '@id': SITE_URL + '/#sayt',
       url: SITE_URL + '/',
       name: SITE_NAME,
+      alternateName: ALT_NAMES,
       inLanguage: 'uz',
       publisher: { '@id': SITE_URL + '/#markaz' }
     },
     {
       '@type': 'Course',
-      name: 'Arab tili — A1 dan C2 gacha',
+      name: 'Arab tili kurslari — A1 dan C2 gacha',
       description: 'Alifbodan erkin suhbatgacha olti daraja. Darslarni ona tili ' +
         'arab tili bo‘lgan ustozlar olib boradi.',
       inLanguage: 'uz',
       teaches: 'Arab tili',
+      about: { '@type': 'Language', name: 'Arab tili', alternateName: 'اللغة العربية' },
       provider: { '@id': SITE_URL + '/#markaz' },
       hasCourseInstance: {
         '@type': 'CourseInstance',

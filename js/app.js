@@ -2416,25 +2416,7 @@
         return;
       }
       list.forEach(function (t) {
-        var facts = [];
-        if (t.country) facts.push(t.country + 'dan');
-        if (t.years) facts.push(t.years + ' yil tajriba');
-        if (t.levels) facts.push(t.levels);
-        teachBox.appendChild(h('button', {
-          class: 'tch-card', type: 'button',
-          onclick: function () { openTeacher(t, list); }
-        }, [
-          h('span', { class: 'tch-photo' }, [
-            A.teacherAvatar(t, 120),
-            t.tag ? h('span', { class: 'tch-ribbon' }, t.tag) : null
-          ].filter(Boolean)),
-          h('b', {}, t.name),
-          facts.length ? h('ul', { class: 'tch-facts-mini' }, facts.map(function (x) {
-            return h('li', {}, x);
-          })) : null,
-          t.bio ? h('p', { class: 'tch-bio' }, String(t.bio).slice(0, 150)) : null,
-          h('span', { class: 'tch-go' }, [h('span', {}, 'Batafsil'), goIcon()])
-        ].filter(Boolean)));
+        teachBox.appendChild(A.teacherCard(t, function (x) { openTeacher(x, list); }));
       });
     }
 
@@ -2515,6 +2497,32 @@
     img.addEventListener('error', function () { img.remove(); });   // rasm yo'q — harflar qoladi
     box.appendChild(img);
     return box;
+  };
+
+  /** Ustoz kartasi — BITTA joyda tuziladi.
+      Ilgari bosh sahifada va ustoz sahifasidagi "Boshqa ustozlar" da
+      ikki xil tuzilma bor edi; CSS esa faqat bosh sahifanikiga
+      moslangan, shuning uchun ikkinchisi buzilib ko'rinardi
+      (rasm chetga chiqib, yozuv kartadan oshib ketardi).            */
+  A.teacherCard = function (t, onOpen) {
+    var facts = [];
+    if (t.country) facts.push(t.country + 'dan');
+    if (t.years) facts.push(t.years + ' yil tajriba');
+    if (t.levels) facts.push(t.levels);
+    /* Kartada erkak/ayol guruhi YOZILMAYDI — markaz rahbari shunday
+       so'ragan. U faqat ustozning o'z sahifasida ko'rinadi.          */
+    return h('button', { class: 'tch-card', type: 'button', onclick: function () { onOpen(t); } }, [
+      h('span', { class: 'tch-photo' }, [
+        A.teacherAvatar(t, 120),
+        t.tag ? h('span', { class: 'tch-ribbon' }, t.tag) : null
+      ].filter(Boolean)),
+      h('b', {}, t.name),
+      facts.length ? h('ul', { class: 'tch-facts-mini' }, facts.map(function (x) {
+        return h('li', {}, x);
+      })) : null,
+      t.bio ? h('p', { class: 'tch-bio' }, String(t.bio).slice(0, 150)) : null,
+      h('span', { class: 'tch-go' }, [h('span', {}, 'Batafsil'), goIcon()])
+    ].filter(Boolean));
   };
 
   A.audienceLabel = function (a) {
@@ -2610,6 +2618,7 @@
       return;
     }
 
+    var more = (list || []).filter(function (x) { return x && x.id !== t.id; });
     var pubT = (A._pub && A._pub.lessonTimes) || [];
     var slots = pubT.length
       ? A.lessonTimesFrom(pubT, (A._pub && A._pub.lessonMinutes) || 90)
@@ -2646,26 +2655,31 @@
           }, 'Shu ustozga yozilish')
         ])
       ]),
-      slots.length ? h('div', { class: 'tch-times' }, [
+      h('div', { class: 'tch-times' }, [
         h('h3', {}, 'Dars vaqtlari'),
-        h('div', { class: 'slot-grid' }, slots.map(function (sl) {
-          return h('div', { class: 'slot' }, [
-            h('b', {}, sl.from + '–' + sl.to),
-            h('span', { class: 'small muted' }, sl.part)
-          ]);
-        }))
-      ]) : null,
-      (list && list.length > 1) ? h('div', { class: 'tch-more' }, [
+        slots.length
+          ? h('div', { class: 'slot-grid' }, slots.map(function (sl) {
+            return h('div', { class: 'slot' }, [
+              h('b', {}, sl.from + '–' + sl.to),
+              h('span', { class: 'small muted' }, sl.part)
+            ]);
+          }))
+          /* Bo'lim boshi ko'rinib, osti bo'm-bo'sh qolmasin */
+          : h('p', { class: 'muted' }, 'Dars vaqtlari tez orada e’lon qilinadi. ' +
+            'Qulay vaqtni arizada yozib qoldiring — biz aniqlashtiramiz.'),
+        h('p', { class: 'small muted tch-note' },
+          'Vaqtlar guruhga qarab belgilanadi. Aniq jadval yozilgandan keyin ' +
+          'yangilanadi.')
+      ]),
+      more.length ? h('div', { class: 'tch-more' }, [
         h('h3', {}, 'Boshqa ustozlar'),
-        h('div', { class: 'tch-grid' }, list.filter(function (x) { return x.id !== t.id; }).map(function (x) {
-          return h('button', {
-            class: 'tch-card', type: 'button',
-            onclick: function () { location.hash = 'ustoz?id=' + encodeURIComponent(x.id); renderTeacher(x, list); }
-          }, [
-            A.teacherAvatar(x, 84), h('b', {}, x.name),
-            h('span', { class: 'tch-tag' }, x.tag || 'Ustoz')
-          ]);
-        }))
+        h('div', { class: 'tch-grid', style: '--cols:' + Math.min(5, Math.max(1, more.length)) },
+          more.map(function (x) {
+            return A.teacherCard(x, function (y) {
+              location.hash = 'ustoz?id=' + encodeURIComponent(y.id);
+              renderTeacher(y, list);
+            });
+          }))
       ]) : null
     ].filter(Boolean)));
 

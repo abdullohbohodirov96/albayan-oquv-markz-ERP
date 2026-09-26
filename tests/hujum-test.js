@@ -417,6 +417,81 @@ function raw(pathRaw, opts = {}) {
   ok('Sozlama tiklandi', !!finalSettings && finalSettings.centerName !== 'Buzildi',
     finalSettings && finalSettings.centerName);
 
+  /* ================================================================
+     14. SEO yo'llari: Host sarlavhasi bilan hujum
+
+     robots.txt, sitemap.xml va canonical manzili so'rovdagi Host
+     sarlavhasidan tuziladi. Host ni mijoz o'zi yozadi — demak u
+     yerga begona sayt yoki kod tiqishga urinib ko'ramiz. Agar o'tib
+     ketsa, Google ga bizning saytimiz nomidan begona manzil
+     ko'rsatilardi (poisoned canonical / sitemap).                  */
+  section('14. SEO yo’llari: Host sarlavhasi bilan hujum');
+  /* Bu yerda ikkita alohida xato tekshiriladi:
+       a) BUZILGAN Host serverni yiqitmasin (ilgari yiqitardi:
+          `new URL` xato tashlardi va butun jarayon o'lardi —
+          bitta so'rov bilan sayt o'chirilardi);
+       b) TO'G'RI yozilgan, lekin BEGONA Host javobga tushmasin
+          (ilgari tushardi: Google ga begona sayt "asosiy manzil"
+          bo'lib ko'rsatilardi).                                   */
+  const hostAttacks = [
+    'zararli.example.com',
+    'example.com"><script>alert(1)</script>',
+    'example.com/\r\nSet-Cookie: a=b',
+    'example.com<img src=x onerror=alert(1)>',
+    '../../etc/passwd',
+    'javascript:alert(1)',
+    'a'.repeat(400) + '.com',
+    ''
+  ];
+  for (const bad of hostAttacks) {
+    let r = null;
+    /* Node mijozi ba'zi buzilgan sarlavhani o'zi yubormaydi — bu
+       xato emas; muhimi, SERVER tirik qolishi.                    */
+    try { r = await raw('/robots.txt', { headers: { Host: bad } }); }
+    catch (e) { r = { status: -1, text: '' }; }
+    if (r.status > 0) {
+      ok('robots.txt javob berdi ("' + bad.slice(0, 24) + '")',
+        r.status === 200 || r.status === 400, String(r.status));
+      ok('  → begona sayt javobga tushmadi',
+        !/zararli\.example\.com|etc\/passwd|example\.com/.test(r.text), r.text.slice(0, 200));
+      ok('  → kod yoki sarlavha tiqilmadi',
+        !/<script|onerror=|Set-Cookie/i.test(r.text), r.text.slice(0, 200));
+    }
+    /* Eng muhimi: har bir urinishdan KEYIN server tirikmi */
+    const alive = await raw('/api/health').catch(() => ({ status: 0 }));
+    ok('  → server tirik qoldi', alive.status === 200, String(alive.status));
+  }
+  const smBad = await raw('/sitemap.xml', { headers: { Host: 'zararli.example.com' } })
+    .catch(() => ({ status: 0, text: '' }));
+  ok('sitemap.xml da begona sayt yo’q',
+    smBad.status !== 200 || !/zararli\.example\.com/.test(smBad.text),
+    smBad.status + ' ' + smBad.text.slice(0, 200));
+  const pageBad = await raw('/', { headers: { Host: 'zararli.example.com' } })
+    .catch(() => ({ status: 0, text: '' }));
+  ok('canonical ham zaharlanmadi',
+    pageBad.status !== 200 || !/canonical[^>]*zararli\.example\.com/.test(pageBad.text),
+    String(pageBad.status));
+  ok('og:url ham zaharlanmadi',
+    pageBad.status !== 200 || !/og:url[^>]*zararli\.example\.com/.test(pageBad.text),
+    String(pageBad.status));
+  /* Bu yo'llar FAQAT o'qish uchun — yozib bo'lmaydi */
+  for (const p of ['/robots.txt', '/sitemap.xml']) {
+    const w = await raw(p, { method: 'POST', body: 'x' }).catch(() => ({ status: 0 }));
+    ok('POST ' + p + ' qabul qilinmaydi', w.status !== 200, String(w.status));
+  }
+  /* Xaritada ERP ma'lumoti bo'lmasligi kerak */
+  const smOk = await req('/sitemap.xml');
+  ok('Xaritada o’quvchi raqami yo’q', !/st_[a-z0-9]{4,}|usr_[a-z0-9]{3,}/i.test(smOk.text),
+    smOk.text.slice(0, 200));
+  ok('Xaritada ERP ekrani yo’q',
+    !/(students|finance|staff|dashboard|kabinet)/i.test(smOk.text), smOk.text.slice(0, 200));
+  /* Tasdiqlash fayli namunasi kengaymadi — boshqa fayl ochilmasin */
+  for (const p of ['/google.html', '/googleZZZZ.html', '/google../server/index.js',
+    '/yandex_.html', '/googlea919a23f8dccf992.html.bak']) {
+    const r = await raw(p).catch(() => ({ status: 0 }));
+    ok('Ochilmaydi: ' + p, r.status !== 200, String(r.status));
+  }
+
   /* ---------- tozalash ---------- */
   for (const p of ['memberships/' + ID('m'), 'students/' + ID('s'), 'groups/' + ID('g'),
     'courses/' + ID('c'), 'staff/' + ID('t'), 'users/' + ID('u')]) {

@@ -2719,9 +2719,41 @@ function serveStatic(req, res, pathname) {
   });
 }
 
-/* ---------------- Server ---------------- */
+/** Host sarlavhasini xavfsiz holga keltirish.
+    Faqat harf, raqam, nuqta, chiziqcha va port qoladi; boshqasi
+    bo'lsa 'localhost' qaytadi — so'rov ishlayveradi, lekin begona
+    matn hech qayerga tushmaydi.                                   */
+function safeHost(raw) {
+  const v = String(raw || '').trim().toLowerCase();
+  if (!v || v.length > 253) return 'localhost';
+  return /^[a-z0-9.-]+(?::\d{1,5})?$/.test(v) ? v : 'localhost';
+}
+
+/* ---------------- Server ----------------
+
+   XAVFSIZLIK — Host sarlavhasi.
+
+   Host ni MIJOZ yozadi, shuning uchun unga ishonib bo'lmaydi. Ikki
+   xato shu yerdan chiqqan edi:
+
+     1) Buzilgan Host (masalan tirnoq yoki bo'sh joy bilan) `new URL`
+        ni yiqitardi. Bu qator try dan TASHQARIDA turgani uchun butun
+        server o'lardi — bitta so'rov bilan sayt o'chirilardi.
+     2) To'g'ri yozilgan, lekin BEGONA Host (zararli.example.com)
+        robots.txt, sitemap.xml va canonical ichiga tushardi. Ya'ni
+        bizning serverimiz Google ga begona saytni "asosiy manzil"
+        deb ko'rsatib berardi.
+
+   Yechim: Host avval tozalanadi. Yaroqsiz bo'lsa — 400, server esa
+   ishlashda davom etadi.                                            */
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+  let url;
+  try {
+    url = new URL(req.url, 'http://' + safeHost(req.headers.host));
+  } catch (e) {
+    try { res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('Noto’g’ri so’rov'); } catch (x) { }
+    return;
+  }
   try {
     if (url.pathname.indexOf('/api/') === 0) return await handleApi(req, res, url);
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
@@ -2742,14 +2774,12 @@ const server = http.createServer(async (req, res) => {
       }, Buffer.from(page, 'utf8'));
     }
     if (req.method === 'GET' && url.pathname === '/robots.txt') {
-      const origin = seo.origin(req.headers.host || 'localhost');
-      return send(res, 200, 'User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: ' + origin + '/sitemap.xml\n',
-        { 'Content-Type': 'text/plain; charset=utf-8' });
+      return send(res, 200, seo.robots(req.headers.host || 'localhost'),
+        { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }, req);
     }
     if (req.method === 'GET' && url.pathname === '/sitemap.xml') {
-      const origin = seo.origin(req.headers.host || 'localhost');
-      return send(res, 200, '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>' + origin + '/</loc></url></urlset>',
-        { 'Content-Type': 'application/xml; charset=utf-8' });
+      return send(res, 200, seo.sitemap(req.headers.host || 'localhost'),
+        { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }, req);
     }
     return serveStatic(req, res, url.pathname);
   } catch (e) {

@@ -19,19 +19,63 @@ const DEFAULT_ADDRESS = 'Toshkent, Taxtapul Darvoza ko‘chasi, 336, 2-qavat';
 const DEFAULT_PHONE = '+998 (55) 588-20-28';
 const DEFAULT_INSTAGRAM = 'https://www.instagram.com/albayan.cairo/';
 
+/* Saytning Google dagi nomi. Sozlamadagi nom bo'sh bo'lsa shu ishlatiladi;
+   barcha joyda (title, og:site_name, WebSite schema) BITTA nom turadi.   */
+const SITE_NAME = 'AlBayan Cairo';
+
+/* "AlBayan", "Al Bayan", "البيان" deb qidirilganda ham shu sayt
+   tanilsin. Bular haqiqiy yozilish variantlari — uydirma nom emas.     */
+const ALT_NAMES = ['AlBayan', 'Al Bayan', 'Al-Bayan Cairo', 'Al Bayan Cairo', 'البيان'];
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[ch]);
 }
 
-/** Saytning asosiy manzili. Noto'g'ri host kelsa — standart manzil. */
+const DEFAULT_ORIGIN = 'https://albayan-oquv-markz-erp.onrender.com';
+
+/** Bitta muhit o'zgaruvchisidan to'g'ri manzil o'qish */
+function fromEnv(name) {
+  let raw = String(process.env[name] || '').trim();
+  if (!raw) return '';
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;   // faqat host yozilgan bo'lsa
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return '';
+    if (!u.hostname || u.hostname.indexOf('.') < 0) return '';
+    return u.origin;                       // yo'l, so'rov va # tashlanadi
+  } catch (e) { return ''; }
+}
+
+/** Mahalliy ishlash (dasturchi mashinasi va sinovlar) */
+function isLocal(value) {
+  return /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:\d{1,5})?$/.test(value);
+}
+
+/* ------------------------------------------------------------------
+   Saytning asosiy manzili.
+
+   XAVFSIZLIK: Host sarlavhasini MIJOZ yozadi. Unga ishonsak, begona
+   odam "Host: zararli.example.com" deb so'rov yuborib, bizning
+   serverimizdan robots.txt, sitemap.xml va canonical ichiga o'z
+   saytini yozdirib olardi — Google esa buni bizning "asosiy
+   manzilimiz" deb o'qirdi.
+
+   Shuning uchun tartib qat'iy:
+     1) SITE_URL — o'zingiz yozgan domen (eng ishonchli);
+     2) RENDER_EXTERNAL_URL — Render o'zi beradigan manzil;
+     3) localhost — faqat mahalliy ishlash va sinovlar uchun;
+     4) qolgan hamma holatda — standart manzil.
+   Ya'ni Host faqat mahalliy ishlashda ta'sir qiladi.               */
 function origin(host) {
+  const site = fromEnv('SITE_URL');
+  if (site) return site;
+  const render = fromEnv('RENDER_EXTERNAL_URL') || fromEnv('RENDER_EXTERNAL_HOSTNAME');
+  if (render) return render;
   const value = String(host || '').toLowerCase();
-  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/.test(value) || value.length > 253) {
-    return 'https://albayan-oquv-markz-erp.onrender.com';
-  }
-  return (value.startsWith('localhost:') || value.startsWith('127.0.0.1:') ? 'http://' : 'https://') + value;
+  if (isLocal(value)) return 'http://' + value;
+  return DEFAULT_ORIGIN;
 }
 
 function instagram(value) {
@@ -71,15 +115,23 @@ function hours(a, b) {
 
 function render(html, settings, host) {
   const s = settings || {};
-  const name = String(s.centerName || 'Al Bayan Cairo').slice(0, 90);
+  const name = String(s.centerName || SITE_NAME).slice(0, 90);
   const phone = String(s.phone || DEFAULT_PHONE).slice(0, 40);
   const address = String(s.address || DEFAULT_ADDRESS).slice(0, 200);
   const social = instagram(s.instagram);
   const url = origin(host) + '/';
-  const title = name + ' — Toshkentda arab tili kurslari';
-  const description = name + ' — Toshkentda arab tili kurslari. Darslarni ona tili ' +
-    'arab tili bo‘lgan ustozlar olib boradi. Ayollar va erkaklar uchun alohida ' +
-    'guruhlar. Manzil: ' + address + '. Telefon: ' + phone + '.';
+
+  /* Sarlavha: odam nimani qidirsa, shu oldinda tursin — "arab tili
+     kurslari Toshkentda". Markaz nomi oxirida. 60 belgidan oshmaydi,
+     shuning uchun Google uni kesib tashlamaydi.                      */
+  const title = 'Arab tili kurslari Toshkentda | ' + name;
+
+  /* Tavsif: ixcham (~155 belgi), faqat haqiqiy ma'lumot. Manzil va
+     telefon bu yerda takrorlanmaydi — ular tuzilgan ma'lumotda va
+     sahifaning o'zida turadi, tavsif esa qisqa qolsin.               */
+  const description = 'Toshkentda arab tili kurslari: A1–C2 darajalar, arab ' +
+    'ustozlar, ayollar va erkaklar uchun alohida guruhlar. Bepul daraja ' +
+    'aniqlash testi.';
 
   /* Havolalar: Instagram va Telegram kanallari (bo'sh bo'lsa tushmaydi) */
   const links = [social, telegram(s.tgChannel), telegram(s.tgQabul),
@@ -92,7 +144,7 @@ function render(html, settings, host) {
     '@id': url + '#markaz',
     name,
     /* "bayan", "al bayan" deb qidirilganda ham topilsin */
-    alternateName: ['Al Bayan Cairo', 'AlBayan Cairo', 'AlBayan', 'Al-Bayan', 'البيان'],
+    alternateName: ALT_NAMES.filter(x => x !== name),
     url,
     description,
     telephone: phone,
@@ -113,13 +165,22 @@ function render(html, settings, host) {
     '@context': 'https://schema.org',
     '@graph': [
       org,
-      { '@type': 'WebSite', '@id': url + '#sayt', url, name, inLanguage: 'uz', publisher: { '@id': url + '#markaz' } },
+      /* Google qidiruvdagi SAYT NOMI shu yozuvdan olinadi. Google ning
+         hujjatiga ko'ra `name` va `url` majburiy, `alternateName` esa
+         zaxira variant. Nom bu yerda ham, og:site_name da ham,
+         sarlavhada ham bir xil — Google ziddiyat ko'rmasligi kerak.  */
+      {
+        '@type': 'WebSite', '@id': url + '#sayt', url, name,
+        alternateName: ALT_NAMES.filter(x => x !== name),
+        inLanguage: 'uz', publisher: { '@id': url + '#markaz' }
+      },
       {
         '@type': 'Course',
-        name: 'Arab tili — A1 dan C2 gacha',
+        name: 'Arab tili kurslari — A1 dan C2 gacha',
         description: 'Alifbodan erkin suhbatgacha olti daraja. Ayollar va erkaklar ' +
           'uchun alohida guruhlar.',
         inLanguage: 'uz', teaches: 'Arab tili',
+        about: { '@type': 'Language', name: 'Arab tili', alternateName: 'اللغة العربية' },
         provider: { '@id': url + '#markaz' }
       }
     ]
@@ -174,4 +235,67 @@ function render(html, settings, host) {
     .replace('<div id="auth" hidden>', intro + '<div id="auth" hidden>');
 }
 
-module.exports = { DEFAULT_ADDRESS, DEFAULT_PHONE, origin, telegram, instagram, hours, render };
+/* ------------------------------------------------------------------
+   robots.txt
+
+   Nima ochiq: ochiq saytning o'zi va uni chizish uchun kerak bo'lgan
+   fayllar (css, js, rasm). Google sahifani CHIZIB ko'radi — css/js ni
+   yopib qo'ysak, sayt unga bo'sh ko'rinadi, shuning uchun ular ochiq.
+
+   Nima yopiq: /api/ — ERP ning butun ma'lumot yo'li shu yerda
+   (o'quvchilar, to'lovlar, xodimlar, zaxira, bot). Ular baribir
+   ruxsat so'raydi, lekin indeksga urinib ham ko'rilmasin.
+
+   ERP ning ekranlari alohida manzil EMAS — ular bitta sahifa ichida
+   # belgisidan keyin ochiladi (#students, #finance ...). Brauzer #
+   dan keyingi qismni serverga umuman yubormaydi, shuning uchun ularni
+   robots.txt bilan "yopib" bo'lmaydi va yopish SHART emas: Google
+   uchun ular alohida sahifa bo'lib ko'rinmaydi.                     */
+function robots(host) {
+  const base = origin(host);
+  return [
+    '# AlBayan Cairo — ochiq sayt',
+    'User-agent: *',
+    'Allow: /',
+    '',
+    '# ERP ma’lumot yo’li — indekslanmaydi',
+    'Disallow: /api/',
+    '',
+    '# Sahifani chizish uchun kerak — ochiq qoladi',
+    'Allow: /css/',
+    'Allow: /js/',
+    'Allow: /assets/',
+    '',
+    'Sitemap: ' + base + '/sitemap.xml',
+    ''
+  ].join('\n');
+}
+
+/* ------------------------------------------------------------------
+   sitemap.xml
+
+   Bu sayt BITTA sahifadan iborat: kurslar, ustozlar, darajalar va
+   ariza formasi — hammasi shu bitta manzilda, # dan keyin ochiladi.
+   Shuning uchun xaritada HAM bitta manzil turadi.
+
+   MUHIM: bu yerga # li manzillar (#students, #ustoz?id=...) yozilmaydi.
+   Ular alohida sahifa emas; yozilsa Google ularni xato deb belgilaydi
+   va ustiga ustak ERP manzillari ro'yxatga tushib qolardi.           */
+function sitemap(host) {
+  const base = origin(host);
+  const today = new Date().toISOString().slice(0, 10);
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    '  <url>\n' +
+    '    <loc>' + escapeHtml(base) + '/</loc>\n' +
+    '    <lastmod>' + today + '</lastmod>\n' +
+    '    <changefreq>weekly</changefreq>\n' +
+    '    <priority>1.0</priority>\n' +
+    '  </url>\n' +
+    '</urlset>\n';
+}
+
+module.exports = {
+  DEFAULT_ADDRESS, DEFAULT_PHONE, SITE_NAME, ALT_NAMES,
+  origin, telegram, instagram, hours, render, robots, sitemap
+};
