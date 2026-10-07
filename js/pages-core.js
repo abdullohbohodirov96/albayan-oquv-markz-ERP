@@ -826,7 +826,47 @@
     var showMoney = App.can('finance.debts') || App.can('payment.create');
     var balances = showMoney ? Q.balanceMap() : {};
     var empty0 = { charged: 0, received: 0, allocated: 0, debt: 0, advance: 0, overdue: 0 };
-    var cols = [
+
+    /* --- Belgilab, bir yo'la o'chirish ---
+       Xato import qilingan o'nlab o'quvchini bittalab o'chirish
+       uzoq. Katakcha faqat O'CHIRISH huquqi bo'lganda chiqadi —
+       boshqalarga ro'yxat avvalgidek ko'rinadi.                 */
+    var picked = {};
+    var bulkBar = h('div', { class: 'bulk-bar', hidden: true });
+    function refreshBulk() {
+      var n = Object.keys(picked).length;
+      bulkBar.hidden = !n;
+      UI.clear(bulkBar);
+      if (!n) return;
+      bulkBar.appendChild(h('b', {}, n + ' ta tanlandi'));
+      bulkBar.appendChild(h('button', {
+        class: 'btn sm', type: 'button',
+        onclick: function () { picked = {}; App.render(); }
+      }, 'Bekor qilish'));
+      bulkBar.appendChild(h('button', {
+        class: 'btn sm danger', type: 'button',
+        onclick: function () {
+          A.purgeStudents(Object.keys(picked), App, function () { picked = {}; App.render(); });
+        }
+      }, 'Butunlay o’chirish'));
+    }
+
+    var cols = [];
+    if (App.can('student.delete')) {
+      cols.push({
+        label: '', render: function (s) {
+          var cb = h('input', { type: 'checkbox', 'aria-label': 'Tanlash' });
+          cb.checked = !!picked[s.id];
+          cb.addEventListener('click', function (e) { e.stopPropagation(); });
+          cb.addEventListener('change', function () {
+            if (cb.checked) picked[s.id] = true; else delete picked[s.id];
+            refreshBulk();
+          });
+          return cb;
+        }
+      });
+    }
+    cols.push.apply(cols, [
       {
         label: 'O’quvchi', render: function (s) {
           return h('div', { class: 'rowflex', style: 'gap:9px;flex-wrap:nowrap' }, [
@@ -858,7 +898,7 @@
         }
       },
       { label: 'Holat', render: function (s) { return statusPill(s.status); } }
-    ];
+    ]);
     if (showMoney) {
       cols.push({
         label: 'Hisob', right: true, render: function (s) {
@@ -874,10 +914,12 @@
           h('span', { class: 'muted' }, '');
       }
     });
+    view.appendChild(bulkBar);
     view.appendChild(UI.card(null, UI.table(cols, list, {
       onRow: function (s) { App.go('student', { id: s.id }); },
       page: 100
     }), null, null, true));
+    refreshBulk();
   };
 
   /* ================= O'QUVCHI KARTASI ================= */
@@ -1155,8 +1197,13 @@
               UI.toast('Arxivlandi.', 'ok'); App.render();
             }
           }
-        }, s.status === 'arxiv' ? 'Arxivdan qaytarish' : 'Arxivlash') : null
-      ]);
+        }, s.status === 'arxiv' ? 'Arxivdan qaytarish' : 'Arxivlash') : null,
+        /* Butunlay o'chirish — arxivlashdan BOSHQA narsa: ma'lumot
+           qaytmaydi. Shuning uchun alohida huquq va alohida oyna. */
+        App.can('student.delete') ? h('button', {
+          class: 'btn danger', onclick: function () { A.purgeStudents([s.id], App); }
+        }, 'Butunlay o’chirish') : null
+      ].filter(Boolean));
       /* Bog'lanish tugmalari — kartaning eng tepasida, qidirmasdan bosiladi */
       var quick = UI.contactBtns(s.parentPhone || s.phone);
       var quickRow = quick
@@ -1329,6 +1376,99 @@
   };
 
   /* ---------- O'quvchi shakli ---------- */
+  /* ---------------- O'quvchini BUTUNLAY o'chirish ----------------
+
+     Arxivlash ma'lumotni saqlaydi, bu esa o'chiradi. Shuning uchun
+     oyna ikki qadamli:
+       1) server "nima o'chadi" deb sanab beradi (hech narsa
+          o'chirilmaydi) — rahbar ro'yxatni ko'radi;
+       2) rahbar «O'CHIRAMAN» deb yozgandan keyingina o'chadi.
+     Tasdiq so'zini YOZDIRAMIZ, chunki "Ha" tugmasi o'ylamasdan
+     bosiladi — bu amal esa qaytarib bo'lmaydi.                   */
+  A.purgeStudents = function (ids, App, onDone) {
+    App.guard('student.delete');
+    var list = (ids || []).filter(Boolean);
+    if (!list.length) { UI.toast('O’quvchi tanlanmagan.', 'warn'); return; }
+
+    var box = h('div', {}, [h('p', { class: 'muted' }, 'Hisoblanmoqda…')]);
+    var wordF = null, errBox = null, ready = false;
+
+    UI.modal({
+      title: list.length === 1 ? 'O’quvchini butunlay o’chirish'
+        : list.length + ' ta o’quvchini butunlay o’chirish',
+      body: box,
+      actions: [
+        { label: 'Bekor qilish' },
+        {
+          label: 'O’chirish', cls: 'danger', onClick: function (close, btn) {
+            if (!ready) return;
+            if (String(wordF.input.value || '').trim().toUpperCase() !== 'O’CHIRAMAN' &&
+              String(wordF.input.value || '').trim().toUpperCase() !== "O'CHIRAMAN") {
+              errBox.hidden = false;
+              errBox.textContent = 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing.';
+              return;
+            }
+            UI.busy(btn, async function () {
+              try {
+                var r = await D.api('POST', 'api/students/purge', { ids: list });
+                await D.loadBootstrap();
+                close();
+                UI.toast(r.docs + ' ta yozuv o’chirildi.', 'ok');
+                if (onDone) onDone(); else App.go('students');
+              } catch (e) {
+                errBox.hidden = false;
+                errBox.textContent = e.message || 'O’chirilmadi.';
+              }
+            });
+          }
+        }
+      ]
+    });
+
+    /* Oldindan ko'rish — server sanaydi, hech narsa o'chirmaydi */
+    (async function () {
+      try {
+        var p = await D.api('POST', 'api/students/purge', { ids: list, dryRun: true });
+        UI.clear(box);
+        var rows = Object.keys(p.counts || {}).map(function (k) {
+          return h('li', {}, LABELS[k] ? LABELS[k] + ': ' + p.counts[k] : k + ': ' + p.counts[k]);
+        });
+        box.appendChild(h('p', { style: 'margin:0 0 8px' },
+          h('b', {}, (p.names || []).join(', ') || list.length + ' ta o’quvchi')));
+        box.appendChild(h('p', { class: 'small muted', style: 'margin:0 0 10px' },
+          'Quyidagilar butunlay o’chadi va QAYTARIB BO’LMAYDI:'));
+        box.appendChild(h('ul', { class: 'small', style: 'margin:0 0 12px' },
+          rows.length ? rows : [h('li', {}, 'faqat o’quvchi kartasi')]));
+        if ((p.counts || {}).payments) {
+          box.appendChild(h('p', { class: 'err-msg', style: 'margin:0 0 12px' },
+            'Diqqat: ' + p.counts.payments + ' ta TO’LOV ham o’chadi. ' +
+            'O’tgan oylardagi tushum hisoboti shuncha kamayadi.'));
+        }
+        wordF = UI.field({
+          label: 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing',
+          placeholder: 'O’CHIRAMAN'
+        });
+        errBox = h('div', { class: 'err-msg', hidden: true });
+        box.appendChild(wordF.wrap);
+        box.appendChild(errBox);
+        ready = true;
+        wordF.input.focus();
+      } catch (e) {
+        UI.clear(box);
+        box.appendChild(h('p', { class: 'err-msg' }, e.message || 'Hisoblab bo’lmadi.'));
+      }
+    })();
+  };
+
+  var LABELS = {
+    students: 'o’quvchi kartasi', memberships: 'guruhdagi a’zoligi',
+    invoices: 'oylik hisobi', payments: 'to’lovi', lessons: 'davomat belgisi',
+    kabsess: 'kabinet sessiyasi', parents: 'ota-ona bog’lanishi',
+    homework: 'vazifasi', quizres: 'test natijasi', asks: 'savoli',
+    makeups: 'qo’shimcha darsi', pauses: 'to’xtatish yozuvi',
+    placements: 'daraja testi', feedback: 'fikri'
+  };
+
   A.studentForm = function (student, App) {
     App.guard('student.edit');
     var isNew = !student || !student.id;

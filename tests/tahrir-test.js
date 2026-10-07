@@ -581,6 +581,69 @@ function hasNumber(text, n) {
     out.push('  · vazifa yozilmadi (' + taskRes.status + ') — bo’lim o’tkazib yuborildi');
   }
 
+  /* ================================================================
+     16. O'quvchini BUTUNLAY o'chirish — ekrandan boshlab bazagacha
+
+     Arxivlash ma'lumotni saqlaydi, bu esa o'chiradi. Shuning uchun
+     oyna "nima o'chadi" deb sanab beradi va tasdiq so'zini
+     YOZDIRADI. Shu yo'lning HAMMASI tekshiriladi: tugma bormi,
+     ro'yxat chiqdimi, so'zsiz o'chmaydimi, yozilgach o'chdimi.    */
+  section('16. O’quvchini butunlay o’chirish (ekrandan)');
+  const DEL = ID('sdel');
+  await put('students/' + DEL, {
+    id: DEL, firstName: 'O’chadigan', lastName: 'Sinov ' + R,
+    phone: '+99890777' + Math.floor(1000 + Math.random() * 8999), status: 'faol'
+  });
+  await reloadAndText(page, 'student?id=' + DEL);
+  const hasBtn = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#view button'))
+      .some(b => /Butunlay o’chirish/.test(b.textContent)));
+  ok('"Butunlay o’chirish" tugmasi bor', hasBtn);
+  ok('"Arxivlash" ham joyida qoldi', await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#view button'))
+      .some(b => /Arxivlash/.test(b.textContent))));
+
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('#view button'))
+      .find(x => /Butunlay o’chirish/.test(x.textContent));
+    b.click();
+  });
+  await page.waitForSelector('.modal', { timeout: 10000 });
+  await page.waitForTimeout(1200);
+  const modalTxt = await page.evaluate(() =>
+    document.querySelector('.modal').innerText.replace(/\s+/g, ' '));
+  ok('Oynada o’quvchi ismi bor', /O’chadigan/.test(modalTxt), modalTxt.slice(0, 200));
+  ok('Nima o’chishi sanab berildi', /o’quvchi kartasi/i.test(modalTxt), modalTxt.slice(0, 250));
+  ok('Qaytarib bo’lmasligi aytilgan', /QAYTARIB BO’LMAYDI/i.test(modalTxt), modalTxt.slice(0, 250));
+
+  /* Tasdiq so'zisiz bosilsa — o'chmaydi */
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('.modal button'))
+      .find(x => x.textContent.trim() === 'O’chirish');
+    if (b) b.click();
+  });
+  await page.waitForTimeout(900);
+  ok('Tasdiq so’zisiz o’chmadi', !!(await get('students/' + DEL)));
+  const errTxt = await page.evaluate(() => {
+    const e = document.querySelector('.modal .err-msg');
+    return e && !e.hidden ? e.textContent : '';
+  });
+  ok('Nima yozish kerakligi aytildi', /O’CHIRAMAN/.test(errTxt), errTxt);
+
+  /* Endi so'zni yozamiz */
+  await page.evaluate(() => {
+    const i = document.querySelector('.modal input[type="text"], .modal input:not([type])');
+    if (i) { i.value = 'O’CHIRAMAN'; i.dispatchEvent(new Event('input', { bubbles: true })); }
+  });
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('.modal button'))
+      .find(x => x.textContent.trim() === 'O’chirish');
+    if (b) b.click();
+  });
+  await page.waitForTimeout(2500);
+  ok('So’z yozilgach o’quvchi o’chdi', !(await get('students/' + DEL)),
+    JSON.stringify(await get('students/' + DEL)));
+
   /* --- tozalash --- */
   for (const p of ['payments/' + ID('p1'), 'payments/' + ID('p2'),
     'invoices/inv_' + ID('m') + '_' + THIS, 'users/' + ID('u'),

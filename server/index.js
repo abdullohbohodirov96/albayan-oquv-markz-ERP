@@ -807,6 +807,106 @@ async function generateInvoicesServer(ym, user) {
 }
 
 
+/* ---------------- O'quvchini butunlay o'chirish ----------------
+
+   Ishlash tartibi ataylab shunday:
+     1) avval NIMA o'chishi sanaladi (dryRun shu yerda to'xtaydi);
+     2) keyin TARIXGA yoziladi — nima o'chgani keyin ham ko'rinsin;
+     3) oxirida o'chiriladi.
+   Tarix o'chirishdan OLDIN yoziladi: o'chirish yarmida uzilib
+   qolsa ham, nima bo'lganidan iz qoladi.
+
+   Qidiruv "qaysi to'plamda studentId bor" degan ro'yxatga
+   tayanmaydi — HAMMA yozuv ko'riladi. Ertaga yangi to'plam
+   qo'shilsa, bu yer o'zgarmasdan ishlashda davom etadi.         */
+async function purgeStudents(ids, user, dryRun) {
+  const want = {};
+  ids.forEach(x => { want[x] = true; });
+
+  const all = await store.all();
+  const names = [];
+  const memIds = {};
+  const toDelete = [];
+  const toUpdate = [];
+  const counts = {};
+  const bump = k => { counts[k] = (counts[k] || 0) + 1; };
+
+  /* Avval a'zolik raqamlarini yig'amiz: davomat belgisi AYNAN
+     a'zolik kaliti bilan yoziladi, o'quvchi raqami bilan emas. */
+  all.forEach(r => {
+    const col = String(r.path).split('/')[0];
+    const d = r.data;
+    if (!d) return;
+    if (col === 'memberships' && want[String(d.studentId || '')]) memIds[String(d.id)] = true;
+    if (col === 'students' && want[String(d.id || '')]) {
+      names.push(((d.lastName || '') + ' ' + (d.firstName || '')).trim() || d.id);
+    }
+  });
+
+  all.forEach(r => {
+    const path = String(r.path);
+    const col = path.split('/')[0];
+    const d = r.data;
+    if (!d) return;
+
+    /* 1. O'quvchining o'zi */
+    if (col === 'students' && want[String(d.id || '')]) { toDelete.push(path); bump('students'); return; }
+
+    /* 2. Ichida shu o'quvchi raqami turgan har qanday yozuv */
+    if (want[String(d.studentId || '')]) { toDelete.push(path); bump(col); return; }
+
+    /* 3. Davomat: hujjat o'chmaydi (boshqa o'quvchilar bor),
+          faqat shu o'quvchining belgilari olib tashlanadi.    */
+    if (col === 'lessons' && d.items) {
+      let changed = false;
+      const copy = JSON.parse(JSON.stringify(d));
+      Object.keys(copy.items || {}).forEach(date => {
+        const att = copy.items[date] && copy.items[date].attendance;
+        if (!att) return;
+        Object.keys(att).forEach(key => {
+          if (memIds[key] || want[key]) { delete att[key]; changed = true; }
+        });
+      });
+      Object.keys(copy.marks || {}).forEach(date => {
+        const m = copy.marks[date];
+        if (!m) return;
+        Object.keys(m).forEach(key => {
+          if (memIds[key] || want[key]) { delete m[key]; changed = true; }
+        });
+      });
+      if (changed) { toUpdate.push({ path, data: copy }); bump('lessons'); }
+      return;
+    }
+
+    /* 4. Ro'yxat ichida turgan bog'lanishlar (ota-ona, kabinet
+          sessiyasi): o'quvchi ro'yxatdan olinadi. Ro'yxat
+          butunlay bo'shab qolsa, yozuvning o'zi ham o'chadi.   */
+    if (Array.isArray(d.studentIds) && d.studentIds.some(x => want[String(x)])) {
+      const left = d.studentIds.filter(x => !want[String(x)]);
+      if (!left.length && col === 'kabsess') { toDelete.push(path); bump(col); }
+      else { toUpdate.push({ path, data: Object.assign({}, d, { studentIds: left }) }); bump(col); }
+      return;
+    }
+  });
+
+  const summary = {
+    students: ids.length, names: names.slice(0, 50),
+    docs: toDelete.length, changed: toUpdate.length, counts
+  };
+  if (dryRun) return Object.assign({ ok: true, dryRun: true }, summary);
+
+  /* Tarix — o'chirishdan OLDIN */
+  await writeAudit(user, 'O’quvchi butunlay o’chirildi',
+    names.join(', ').slice(0, 120),
+    toDelete.length + ' ta yozuv o’chdi: ' +
+    Object.keys(counts).map(k => k + ' ' + counts[k]).join(', '));
+
+  for (const u of toUpdate) await store.set(u.path, u.data);
+  for (const p of toDelete) await store.del(p);
+
+  return Object.assign({ ok: true }, summary);
+}
+
 /* ---------------- Oylik hisoblarni avtomatik yaratish ---------------- */
 /**
  * Sozlamalarda yoqilgan bo'lsa, har oy boshida hisoblar o'zi yaratiladi.
@@ -2306,6 +2406,38 @@ async function handleApi(req, res, url) {
     return send(res, 200, { ok: true, code });
   }
 
+  /* ---------- O'quvchini BUTUNLAY o'chirish ----------
+
+     Arxivlash ma'lumotni saqlaydi; bu yo'l esa o'chiradi. Markaz
+     rahbari shunday so'radi: xato kiritilgan yoki sinov uchun
+     qo'shilgan o'quvchidan hech narsa qolmasin.
+
+     Nimalar o'chadi: o'quvchi kartasi, guruhdagi a'zoliklari,
+     oylik hisoblari, TO'LOVLARI, davomat belgilari, kabinet
+     sessiyalari, ota-ona bog'lanishi, vazifa va test natijalari —
+     qisqasi, ichida shu o'quvchi raqami turgan hamma yozuv.
+
+     DIQQAT: to'lovlar ham o'chadi, ya'ni o'tgan oylardagi TUSHUM
+     hisoboti kamayadi. Markaz rahbari aynan shuni tanladi; shuning
+     uchun o'chirishdan oldin nima o'chayotgani sanab ko'rsatiladi
+     va tarixga (audit) yozib qo'yiladi.                            */
+  if (route === 'students/purge' && req.method === 'POST') {
+    /* Bu amal qaytarib bo'lmaydi — shuning uchun oddiy "tahrirlash"
+       emas, O'CHIRISH huquqi talab qilinadi.                      */
+    if (!A.can(user, 'student.delete')) {
+      return send(res, 403, { error: 'Sizda o’quvchini butunlay o’chirish huquqi yo’q.' });
+    }
+    const body = await readBody(req);
+    const ids = (Array.isArray(body.ids) ? body.ids : [body.studentId])
+      .map(x => String(x || '')).filter(x => /^[A-Za-z0-9_\-.]+$/.test(x));
+    if (!ids.length) return send(res, 400, { error: 'O’quvchi tanlanmagan.' });
+    if (ids.length > 200) return send(res, 400, { error: 'Bir yo’la 200 tadan ko’p emas.' });
+    /* Oldindan ko'rish: hech narsa o'chirilmaydi, faqat sanaladi */
+    const dryRun = body.dryRun === true;
+    const r = await withLock('purge', () => purgeStudents(ids, user, dryRun));
+    return send(res, 200, r);
+  }
+
   /* ---------- Telegram hisobini bog'lash ----------
      4 xonali kod MAXFIY EMAS, shuning uchun u bilan bog'lanmaydi.
      Administrator bir martalik havola yaratadi (24 soat, bir marta).   */
@@ -2559,6 +2691,52 @@ async function handleApi(req, res, url) {
       if (!dump) return send(res, 400, { error: 'Zaxira berilmadi.' });
       return send(res, 200, await backup.preview(store, dump));
     }
+    /* ---------- Bazani tozalash: "noldan boshlash" ----------
+
+       Sinovdan keyin haqiqiy ishni boshlashda kerak bo'ladi:
+       demo va sinov yozuvlari ketsin, markaz toza boshlasin.
+
+       Himoya qat'iy, chunki bu amal qaytarib bo'lmaydi:
+         1) FAQAT direktor (sozlama huquqi yetarli emas);
+         2) avval ZAXIRA nusxa olinadi — olinmasa, tozalanmaydi;
+         3) «O'CHIRAMAN» deb yozilishi shart.
+
+       NIMA QOLADI: kirish hisoblari (users), xodimlar (staff) va
+       markaz sozlamasi. Aks holda tozalagandan keyin tizimga
+       kirib ham bo'lmasdi.                                      */
+    if (route === 'backup/reset' && req.method === 'POST') {
+      if (!user || user.role !== 'direktor') {
+        return send(res, 403, { error: 'Bazani faqat direktor tozalay oladi.' });
+      }
+      const body = await readBody(req);
+      if (String(body.confirm || '') !== 'O’CHIRAMAN' && String(body.confirm || '') !== "O'CHIRAMAN") {
+        return send(res, 400, { error: 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing.' });
+      }
+      /* Saqlanadigan to'plamlar — ularsiz tizimga kirib bo'lmaydi */
+      const KEEP = ['users', 'staff', 'meta'];
+      let saved = null;
+      try {
+        saved = await withLock('backup', () => backup.makeBackup(store, 'tozalashdan oldin'));
+      } catch (e) {
+        /* Zaxira olinmasa TOZALAMAYMIZ — orqaga yo'l qolsin */
+        return send(res, 500, { error: 'Zaxira nusxa olinmadi, shuning uchun tozalanmadi: ' + e.message });
+      }
+      const r = await withLock('purge', async () => {
+        const all = await store.all();
+        let removed = 0, kept = 0;
+        for (const row of all) {
+          const col = String(row.path).split('/')[0];
+          if (KEEP.indexOf(col) >= 0) { kept++; continue; }
+          await store.del(row.path);
+          removed++;
+        }
+        return { removed, kept };
+      });
+      await writeAudit(user, 'Baza tozalandi (noldan boshlash)', saved.name,
+        r.removed + ' yozuv o’chdi, ' + r.kept + ' ta qoldi (kirish va sozlama)');
+      return send(res, 200, { ok: true, removed: r.removed, kept: r.kept, backup: saved.name });
+    }
+
     if (route === 'backup/restore' && req.method === 'POST') {
       const body = await readBody(req);
       if (String(body.confirm || '') !== 'TIKLASH') {

@@ -2050,6 +2050,24 @@
           'oxirgi 30 tasi saqlanadi. Xato bo’lsa direktorga suhbat orqali xabar boradi.')
       ]));
 
+      /* Noldan boshlash — faqat direktorga va faqat server rejimida.
+         Tugma ataylab alohida, qizil kartada turadi: zaxira
+         tugmasining yonida bo'lsa, adashib bosilishi mumkin edi. */
+      if (D.mode === 'server' && App.user && App.user.role === 'direktor') {
+        box.appendChild(UI.card('Noldan boshlash', [
+          h('p', { style: 'margin:0 0 10px' },
+            'Sinov va demo yozuvlarini tozalab, markazni toza boshlash uchun. ' +
+            'O’quvchilar, guruhlar, to’lovlar, davomat — hammasi o’chadi.'),
+          h('p', { class: 'small muted', style: 'margin:0 0 12px' },
+            'Kirish hisoblari, xodimlar va markaz sozlamasi QOLADI — aks holda ' +
+            'tizimga qayta kira olmasdingiz. Tozalashdan oldin zaxira nusxa ' +
+            'o’zi olinadi; zaxira olinmasa, hech narsa o’chmaydi.'),
+          h('button', {
+            class: 'btn danger', onclick: function () { resetDialog(App, refresh); }
+          }, 'Hammasini o’chirish')
+        ]));
+      }
+
       if (D.mode === 'server') {
         D.api('GET', 'api/backup/db').then(function (r) {
           var el = box.querySelector('#db-state');
@@ -2095,6 +2113,61 @@
 
     refresh();
     return box;
+  }
+
+  /* Bazani tozalash oynasi. Tasdiq so'zi YOZILADI — "Ha" tugmasi
+     o'ylamasdan bosiladi, bu amal esa qaytarib bo'lmaydi.        */
+  function resetDialog(App, done) {
+    App.guard('settings.edit');
+    var warn = h('ul', { class: 'small', style: 'margin:0 0 12px' }, [
+      h('li', {}, 'O’quvchilar: ' + D.all('students').length + ' ta'),
+      h('li', {}, 'Guruhlar: ' + D.all('groups').length + ' ta'),
+      h('li', {}, 'Oylik hisoblar: ' + D.all('invoices').length + ' ta'),
+      h('li', {}, 'To’lovlar: ' + D.all('payments').length + ' ta'),
+      h('li', {}, 'Murojaatlar: ' + D.all('leads').length + ' ta')
+    ]);
+    var f = UI.field({
+      label: 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing',
+      placeholder: 'O’CHIRAMAN'
+    });
+    var err = h('div', { class: 'err-msg', hidden: true });
+    UI.modal({
+      title: 'Hammasini o’chirish',
+      body: [
+        h('p', { style: 'margin:0 0 8px' },
+          h('b', {}, 'Bu amalni qaytarib bo’lmaydi.')),
+        h('p', { class: 'small muted', style: 'margin:0 0 8px' }, 'Quyidagilar o’chadi:'),
+        warn,
+        h('p', { class: 'small muted', style: 'margin:0 0 12px' },
+          'Kirish hisoblari, xodimlar va markaz sozlamasi qoladi. ' +
+          'Tozalashdan oldin zaxira nusxa o’zi olinadi.'),
+        f.wrap, err
+      ],
+      actions: [
+        { label: 'Bekor qilish' },
+        {
+          label: 'Hammasini o’chirish', cls: 'danger', onClick: function (close, btn) {
+            var w = String(f.input.value || '').trim().toUpperCase();
+            if (w !== 'O’CHIRAMAN' && w !== "O'CHIRAMAN") {
+              err.hidden = false; err.textContent = 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing.';
+              return;
+            }
+            UI.busy(btn, async function () {
+              try {
+                var r = await D.api('POST', 'api/backup/reset', { confirm: 'O’CHIRAMAN' });
+                await D.loadBootstrap();
+                close();
+                UI.toast(r.removed + ' ta yozuv o’chdi. Zaxira: ' + r.backup, 'ok');
+                if (done) done();
+                App.render();
+              } catch (e) {
+                err.hidden = false; err.textContent = e.message || 'Tozalanmadi.';
+              }
+            });
+          }
+        }
+      ]
+    });
   }
 
   function restoreDialog(App, done) {

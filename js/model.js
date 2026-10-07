@@ -70,7 +70,11 @@
         { id: 'nav.students', label: 'Bo’limni ko’rish' },
         { id: 'student.view', label: 'Kartani ko’rish' },
         { id: 'student.edit', label: 'Qo’shish va tahrirlash' },
-        { id: 'student.import', label: 'Excel’dan import' }
+        { id: 'student.import', label: 'Excel’dan import' },
+        /* Butunlay o'chirish — qaytarib bo'lmaydi. Shuning uchun
+           tahrirlashdan ALOHIDA huquq: standartda faqat direktorda
+           bor, administratorga rahbar o'zi beradi.                */
+        { id: 'student.delete', label: 'Butunlay o’chirish (qaytarib bo’lmaydi)' }
       ]
     },
     {

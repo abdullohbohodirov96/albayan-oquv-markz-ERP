@@ -255,6 +255,18 @@ function section(t) { results.push('\n' + t); }
   ok('Administrator xarajatlarni ko’rmaydi', !A.can(admin, 'finance.expenses'));
   ok('Administrator to’lov qabul qiladi', A.can(admin, 'payment.create'));
   ok('Administrator to’lovni bekor qila olmaydi', !A.can(admin, 'payment.void'));
+  /* O'quvchini BUTUNLAY o'chirish — tahrirlashdan alohida huquq.
+     Standartda faqat direktorda bor: bu amal qaytarib bo'lmaydi
+     va to'lov yozuvlarini ham o'chiradi.                        */
+  ok('Direktor butunlay o’chira oladi', A.can(direktor, 'student.delete'));
+  ok('Administratorda o’chirish huquqi standartda yo’q', !A.can(admin, 'student.delete'));
+  ok('Administrator tahrirlay oladi (o’chirish boshqa narsa)', A.can(admin, 'student.edit'));
+  ok('Buxgalter o’chira olmaydi', !A.can({ role: 'buxgalter' }, 'student.delete'));
+  ok('O’qituvchi o’chira olmaydi', !A.can({ role: 'oqituvchi' }, 'student.delete'));
+  /* Huquq ro'yxatida ko'rinadimi — rahbar uni qo'lda bera olsin */
+  ok('Huquq ro’yxatida bor', (A.PERM_GROUPS || []).some(function (g) {
+    return (g.perms || []).some(function (p) { return p.id === 'student.delete'; });
+  }), JSON.stringify((A.PERM_GROUPS || []).map(function (g) { return g.key; })));
   ok('O’qituvchi moliyaga kira olmaydi', !A.can(ustoz, 'nav.finance'));
   ok('O’qituvchi davomat oladi', A.can(ustoz, 'attendance.mark'));
   ok('O’qituvchi foydalanuvchi qo’sha olmaydi', !A.can(ustoz, 'users.manage'));
