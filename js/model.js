@@ -259,6 +259,30 @@
     return null;
   }
 
+  /* ---------------- Bir dars narxi ----------------
+     Oyda nechta dars bo'lishi oydan oyga o'zgaradi (ba'zi oyda 12,
+     ba'zisida 13). Agar bir dars narxini HAR OY shu oydagi dars
+     soniga bo'lsak, bir dars narxi ham oyma-oy o'zgarib ketardi va
+     o'quvchiga tushuntirish qiyin bo'lardi.
+
+     Shuning uchun bo'luvchi QAT'IY: guruhdagi "oyiga necha dars"
+     (lessonsPerMonth, standart 12). Ya'ni 880 000 / 12 = 73 333 so'm
+     — oyda 12 dars bo'ladimi, 13 mi, bir dars narxi o'zgarmaydi.   */
+  var LESSONS_DEFAULT = 12;
+
+  function lessonsPerMonth(group) {
+    var n = Math.round(Number(group && group.lessonsPerMonth));
+    if (!isFinite(n) || n < 1) n = LESSONS_DEFAULT;
+    return Math.min(60, n);
+  }
+
+  /** Bitta darsning narxi (so'm, butun songa yaxlitlanadi) */
+  function lessonPrice(group, ym) {
+    var fee = feeForMonth(group, ym);
+    if (!fee) return 0;
+    return Math.round(fee / lessonsPerMonth(group));
+  }
+
   /** Chegirma summasi. Manfiyga tushirmaydi. */
   function discountFor(base, discount, ym) {
     if (!discount || !discount.value) return 0;
@@ -298,6 +322,77 @@
   function dueDateFor(ym, dueDay) {
     var d = Math.min(Math.max(Number(dueDay) || 5, 1), 28);
     return ym + '-' + A.pad(d);
+  }
+
+  /* ---------------- Har o'quvchining O'Z to'lov kuni ----------------
+     Ilgari to'lov kuni butun markaz uchun BITTA edi (sozlamadagi kun).
+     Shunda 25-sentabrda qo'shilgan o'quvchi 5-sentabrda to'lashi
+     kerak bo'lib chiqardi — ya'ni kelgan kuniyoq "muddati o'tgan"
+     qarzdor bo'lardi.
+
+     Endi kun o'quvchining O'ZIDAN olinadi:
+       1) a'zolikda qo'lda yozilgan kun (dueDay) bo'lsa — o'sha;
+       2) bo'lmasa — guruhga QO'SHILGAN kuni (17-sida qo'shilgan
+          bo'lsa, har oy 17-si);
+       3) ikkalasi ham bo'lmasa — sozlamadagi umumiy kun.
+     Kun 28 dan oshmaydi: fevralda ham mavjud sana bo'lsin.          */
+  function dueDayOf(membership, settings) {
+    var m = membership || {};
+    var manual = Math.round(Number(m.dueDay));
+    if (isFinite(manual) && manual >= 1) return Math.min(28, manual);
+    if (m.joinedAt && /^\d{4}-\d{2}-\d{2}$/.test(String(m.joinedAt))) {
+      return Math.min(28, Math.max(1, Number(String(m.joinedAt).slice(8, 10))));
+    }
+    var s = Math.round(Number(settings && settings.dueDay));
+    return isFinite(s) && s >= 1 ? Math.min(28, s) : 5;
+  }
+
+  /** A'zolik uchun shu oydagi to'lov muddati sanasi */
+  function dueDateOf(membership, ym, settings) {
+    var due = dueDateFor(ym, dueDayOf(membership, settings));
+    /* Qo'shilgan kunidan oldin bo'lib qolmasin (birinchi oy) */
+    if (membership && membership.joinedAt && membership.joinedAt > due) {
+      due = membership.joinedAt;
+    }
+    return due;
+  }
+
+  /* ---------------- Sababli qoldirilgan dars ----------------
+     Qoida (markaz rahbari tanlagan): o'quvchi SABABLI qoldirgan
+     dars uchun pul olinmaydi. Sababsiz qolgani uchun olinadi —
+     joy band turadi.
+
+     Hisob oy BOSHIDA yaratiladi, davomat esa oy davomida
+     belgilanadi. Shuning uchun chegirma O'TGAN oy bo'yicha
+     hisoblanib, KEYINGI oy hisobidan ayriladi: summa oy yopilgandan
+     keyin aniq bo'ladi va keyin o'zgarmaydi.
+
+     `marks` — { '<sana>': { '<a'zolik id>': 'sababli' } } ko'rinishi.  */
+  function excusedCount(lessonDoc, membershipId) {
+    if (!lessonDoc || !membershipId) return 0;
+    var items = lessonDoc.items || {};
+    var n = 0;
+    Object.keys(items).forEach(function (date) {
+      var day = items[date] || {};
+      if (day.status === 'bekor') return;            // dars bo'lmagan — alohida
+      var att = day.attendance || {};
+      var v = att[membershipId];
+      var status = String((v && v.status) || v || '');
+      if (status === 'sababli') n++;
+    });
+    return n;
+  }
+
+  /** Sababli darslar uchun chegirma summasi (so'm) */
+  function excusedCredit(group, ym, count) {
+    var c = Math.max(0, Math.round(Number(count) || 0));
+    if (!c) return 0;
+    var per = lessonPrice(group, ym);
+    if (!per) return 0;
+    /* Chegirma oylik narxdan oshmasin — aks holda hisob manfiy
+       bo'lib, o'quvchida "avans" paydo bo'lardi.                  */
+    var cap = feeForMonth(group, ym);
+    return Math.min(cap, per * c);
   }
 
   /* =============== TO'LOV TAQSIMOTI =============== */
@@ -630,6 +725,9 @@
     feeForMonth: feeForMonth, feeUpcoming: feeUpcoming,
     discountFor: discountFor, invoiceAmountFor: invoiceAmountFor,
     membershipActiveIn: membershipActiveIn, invoiceId: invoiceId, dueDateFor: dueDateFor,
+    lessonsPerMonth: lessonsPerMonth, lessonPrice: lessonPrice,
+    dueDayOf: dueDayOf, dueDateOf: dueDateOf,
+    excusedCount: excusedCount, excusedCredit: excusedCredit,
     allocate: allocate, activePayments: activePayments, paidByInvoice: paidByInvoice,
     invoiceRemaining: invoiceRemaining, balanceOf: balanceOf, overdueOf: overdueOf,
     timeToMin: timeToMin, overlaps: overlaps, scheduleConflicts: scheduleConflicts,

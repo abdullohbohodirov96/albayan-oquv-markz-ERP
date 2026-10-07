@@ -122,7 +122,7 @@ const R = 'a' + Date.now().toString(36); const ID = n => R + '_' + n;
   const sid = ID('s');
   await put('students/' + sid, { id: sid, firstName: 'Soxta', lastName: 'Sinov', status: 'active' }, dir);
   const s0 = (await get('students/' + sid, dir)).json.data;
-  ok('yangi o’quvchiga kod berildi', /^\d{4}$/.test(String(s0.code || '')), String(s0.code));
+  ok('yangi o’quvchiga kod berildi', /^\d{5}$/.test(String(s0.code || '')), String(s0.code));
 
   /* Bo'sh (band bo'lmagan) kodni qo'lda yozish — ruxsat */
   const mine = '7' + String(Date.now()).slice(-3);

@@ -74,7 +74,41 @@ function section(t) { results.push('\n' + t); }
   const inv2 = A.Fin.monthItems('invoices', YM).find(i => i.studentId === 's2');
   eq('Chegirmasiz hisob = 500 000', inv1.final, 500000);
   eq('10% chegirma bilan = 450 000', inv2.final, 450000);
-  eq('To’lov muddati sozlamadan olindi', inv1.dueDate, '2026-09-05');
+  /* To'lov kuni endi har o'quvchida O'ZINIKI — guruhga qo'shilgan
+     kunidan olinadi. Bu ikkalasi ham 1-sentabrda qo'shilgan,
+     shuning uchun muddat 1-si (ilgari sozlamadagi umumiy 5-si
+     edi va 25-sida qo'shilgan o'quvchi kelgan kuniyoq qarzdor
+     bo'lib chiqardi).                                           */
+  eq('To’lov muddati qo’shilgan kunidan', inv1.dueDate, '2026-09-01');
+  /* Turli kunda qo'shilganlar — turli muddat */
+  eq('17-sida qo’shilgan — 17-si',
+    A.dueDateOf({ joinedAt: '2026-09-17' }, '2026-10', { dueDay: 5 }), '2026-10-17');
+  eq('25-sida qo’shilgan — 25-si',
+    A.dueDateOf({ joinedAt: '2026-09-25' }, '2026-10', { dueDay: 5 }), '2026-10-25');
+  eq('Qo’shilgan kuni yo’q — sozlamadagi kun',
+    A.dueDateOf({}, '2026-10', { dueDay: 5 }), '2026-10-05');
+  eq('Qo’lda yozilgan kun ustun turadi',
+    A.dueDateOf({ joinedAt: '2026-09-17', dueDay: 10 }, '2026-10', { dueDay: 5 }), '2026-10-10');
+
+  /* --- Bir dars narxi va sababli dars chegirmasi --- */
+  const gFee = { fee: 880000, feeHistory: [{ fee: 880000, from: YM }], lessonsPerMonth: 12 };
+  eq('880 000 oyiga 12 dars — bir dars 73 333', A.lessonPrice(gFee, YM), 73333);
+  eq('Dars soni yozilmasa standart 12', A.lessonsPerMonth({ fee: 880000 }), 12);
+  eq('Manfiy son berilsa ham 12', A.lessonsPerMonth({ lessonsPerMonth: -3 }), 12);
+  eq('2 ta sababli dars = 146 666', A.excusedCredit(gFee, YM, 2), 146666);
+  eq('Chegirma oylik narxdan oshmaydi', A.excusedCredit(gFee, YM, 100), 880000);
+  const lesDoc = {
+    items: {
+      '2026-08-03': { attendance: { m1: 'sababli', m2: 'keldi' } },
+      '2026-08-05': { attendance: { m1: 'kelmadi', m2: 'sababli' } },
+      '2026-08-10': { attendance: { m1: { status: 'sababli' }, m2: 'keldi' } },
+      '2026-08-12': { status: 'bekor', attendance: { m1: 'sababli' } }
+    }
+  };
+  eq('Sababli darslar sanaldi (bekor qilingani sanalmaydi)', A.excusedCount(lesDoc, 'm1'), 2);
+  eq('"kelmadi" sababli deb sanalmaydi', A.excusedCount(lesDoc, 'm2'), 1);
+  eq('Davomati yo’q o’quvchida 0', A.excusedCount(lesDoc, 'm9'), 0);
+  eq('Hujjat bo’lmasa 0', A.excusedCount(null, 'm1'), 0);
 
   /* ---------------- 2. Chegirma chegaralari ---------------- */
   section('2. Chegirma');
@@ -331,6 +365,62 @@ function section(t) { results.push('\n' + t); }
   eq('Ota-ona telefoni ajratildi', res.map.parentPhone, 4);
   eq('Guruh ustuni tanildi', res.map.group, 1);
   eq('Ma’lumot qatorlari', res.rows.length, 2);
+
+  /* Eksport faylining O'Z sarlavhasi ham tanilsin.
+     "Excel" tugmasi "Guruhlar" (ko'plik) deb yozadi — ilgari bu
+     so'z ro'yxatda yo'q edi va eksport qilingan faylni qaytarib
+     import qilganda guruh ustuni umuman tanilmasdi.              */
+  res = IH.analyse(IH.parseCsvText(
+    'Kod,Familiya,Ism,Telefon,Ota-ona,Ota-ona telefoni,Guruhlar,Holat,Qarz,Avans\n' +
+    '40771,Valiyev,Ali,901234567,Vali,+998901112233,A001 · Arab A1,faol,0,0\n'));
+  eq('Eksportdagi "Guruhlar" ustuni tanildi', res.map.group, 6);
+  eq('Eksportdagi "Kod" ustuni tanildi', res.map.code, 0);
+  eq('Eksportdagi familiya tanildi', res.map.lastName, 1);
+
+  /* --- Import: bazada yo'q guruh YARATILADI ---
+     Ilgari bunday qator "guruhi topilmadi" deb o'tkazib yuborilardi:
+     eksport qilingan o'quvchini qaytarib import qilganda guruhsiz
+     qolib ketardi.                                                  */
+  const groupsBefore = D.all('groups').length;
+  const impApp = { user: actor, can: () => true, guard: () => { } };
+  const impRes = await IH.doImport('students', [
+    { lastName: 'Importov', firstName: 'Ikrom', phone: '901239988', group: 'Yangi Arab A2' },
+    { lastName: 'Importova', firstName: 'Iroda', phone: '901239977', group: 'Yangi Arab A2' }
+  ], false, impApp);
+  eq('Ikkala o’quvchi qo’shildi', impRes.added, 2);
+  eq('Guruh BITTA marta yaratildi', D.all('groups').length, groupsBefore + 1);
+  eq('Yaratilgan guruh natijada ko’rsatildi', (impRes.groups || []).length, 1);
+  const newG = D.all('groups').find(x => x.name === 'Yangi Arab A2');
+  ok('Guruh nomi fayldagidek', !!newG, JSON.stringify(D.all('groups').map(x => x.name)));
+  eq('Guruh "rejalashtirilgan" holatda', newG && newG.status, 'rejalashtirilgan');
+  ok('Guruhga kod berildi', /^[A-Z]\d{3}$/.test((newG || {}).code || ''), (newG || {}).code);
+  eq('Narxi 0 — markaz o’zi yozadi', newG && newG.fee, 0);
+  eq('Ikkala o’quvchi ham guruhga yozildi', impRes.enrolled, 2);
+  const newMems = D.all('memberships').filter(m => m.groupId === (newG || {}).id);
+  eq('A’zoliklar bazada', newMems.length, 2);
+  /* Rejalashtirilgan guruhga hisob YOZILMAYDI — tasodifan pul
+     yozilib qolmasin (narx hali 0).                              */
+  const invBefore = A.Fin.monthItems('invoices', YM).length;
+  await A.Ops.generateInvoices(YM, actor);
+  eq('Yangi guruhga hisob yozilmadi', A.Fin.monthItems('invoices', YM).length, invBefore);
+
+  /* Bir nechta guruh vergul bilan yozilgan bo'lsa — hammasiga */
+  const impRes2 = await IH.doImport('students', [
+    { lastName: 'Ikkiguruh', firstName: 'Olim', phone: '901239966', group: 'Yangi Arab A2, Yangi Arab B1' }
+  ], false, impApp);
+  eq('Ikkita guruhga yozildi', impRes2.enrolled, 2);
+  eq('Faqat bitta YANGI guruh tuzildi', (impRes2.groups || []).length, 1);
+
+  /* Mavjud guruh QAYTA yaratilmaydi — nomi bo'yicha topiladi */
+  const impRes3 = await IH.doImport('students', [
+    { lastName: 'Borguruh', firstName: 'Soli', phone: '901239955', group: 'A1' }
+  ], false, impApp);
+  eq('Mavjud guruh qayta yaratilmadi', (impRes3.groups || []).length, 0);
+  eq('O’quvchi mavjud guruhga yozildi', impRes3.enrolled, 1);
+  ok('Aynan eski guruhga yozildi',
+    D.all('memberships').some(m => m.groupId === 'g1' &&
+      (D.one('students', m.studentId) || {}).lastName === 'Borguruh'),
+    JSON.stringify(D.all('memberships').slice(-2)));
 
   // Ruscha sarlavhalar
   res = IH.analyse(IH.parseCsvText('Фамилия,Имя,Телефон\nИванов,Иван,901112233\n'));

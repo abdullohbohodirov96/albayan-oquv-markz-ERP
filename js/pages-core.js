@@ -1350,14 +1350,17 @@
       {
         /* Shaxsiy kod — markaz o'zi beradi. Bo'sh qoldirilsa server tanlaydi.
            Berilgan kod o'zgarmaydi: bot ham, kabinet ham shu kod bilan ishlaydi. */
-        name: 'code', label: 'Shaxsiy kod (4 ta raqam)', value: draft.code,
+        name: 'code', label: 'Shaxsiy kod (5 ta raqam)', value: draft.code,
         placeholder: isNew ? 'bo’sh qoldirsangiz o’zi beriladi' : '',
-        inputmode: 'numeric', maxlength: 4,
+        inputmode: 'numeric', maxlength: 5,
         help: 'Bot va kabinetga shu kod bilan kiriladi. O’zgartirsangiz eski kod ishlamay qoladi.',
         validate: function (v) {
           var c = String(v || '').replace(/\D/g, '');
           if (!c) return null;                       // bo'sh — server beradi
-          if (c.length !== 4) return 'Kod 4 ta raqamdan iborat bo’lsin.';
+          /* Yangi kodlar 5 xonali. Eski o'quvchilarda 4 xonalisi
+             qolgan bo'lishi mumkin — u ham qabul qilinadi, aks holda
+             ularning kartasini saqlab ham bo'lmay qolardi.          */
+          if (c.length !== 5 && c.length !== 4) return 'Kod 5 ta raqamdan iborat bo’lsin.';
           var dup = D.all('students').filter(function (x) {
             return x.id !== (student && student.id) && String(x.code || '') === c;
           });

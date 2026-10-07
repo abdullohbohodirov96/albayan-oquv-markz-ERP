@@ -434,14 +434,15 @@
       try { history.replaceState(null, '', location.pathname + '#kabinet'); } catch (e) { }
     }
 
-    /* 4 xonali shaxsiy kod bilan kirish.
+    /* 5 xonali shaxsiy kod bilan kirish (eski 4 xonali kodlar ham
+       ishlaydi — ular uchun “Kirish” tugmasi bosiladi).
        Kod yozilgandan keyin 30 kunlik sessiya beriladi — shu qurilmada
        qayta yozish shart emas. Umumiy kompyuterda “Chiqish” tugmasi bor. */
     function showForm() {
       UI.clear(result);
       var input = h('input', {
         id: 'kab-code', class: 'kab-code', type: 'text', inputmode: 'numeric',
-        autocomplete: 'off', maxlength: '4', placeholder: '····',
+        autocomplete: 'off', maxlength: '5', placeholder: '·····',
         'aria-label': 'Shaxsiy kod'
       });
       var btn = h('button', { class: 'btn primary', type: 'submit' }, 'Kirish');
@@ -449,20 +450,23 @@
         class: 'kab-form',
         onsubmit: function (e) { e.preventDefault(); go(); }
       }, [
-        h('label', { class: 'small', for: 'kab-code' }, 'Shaxsiy kodingiz (4 ta raqam)'),
+        h('label', { class: 'small', for: 'kab-code' }, 'Shaxsiy kodingiz (5 ta raqam)'),
         h('div', { class: 'kab-row' }, [input, btn])
       ]);
 
       input.addEventListener('input', function () {
-        input.value = input.value.replace(/\D/g, '').slice(0, 4);
+        input.value = input.value.replace(/\D/g, '').slice(0, 5);
         err.hidden = true;
-        if (input.value.length === 4) go();
+        /* 5 ta raqam yozilsa o'zi yuboriladi. Eski 4 xonali kod uchun
+           “Kirish” tugmasi bosiladi — aks holda 5 xonali kodning
+           to'rtinchi raqamidayoq yuborilib ketardi.                  */
+        if (input.value.length === 5) go();
       });
 
       async function go() {
         var code = String(input.value || '').replace(/\D/g, '');
-        if (code.length !== 4) {
-          err.hidden = false; err.textContent = 'Kod 4 ta raqamdan iborat.';
+        if (code.length !== 5 && code.length !== 4) {
+          err.hidden = false; err.textContent = 'Kod 5 ta raqamdan iborat.';
           return;
         }
         btn.disabled = true; btn.textContent = 'Tekshirilmoqda…'; err.hidden = true;

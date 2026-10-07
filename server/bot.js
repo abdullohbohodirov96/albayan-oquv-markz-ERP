@@ -490,7 +490,9 @@ async function handleLinkFlow(chatId, text, from, st) {
     }
     // 4 xonali shaxsiy kod BOG'LAMAYDI: u maxfiy emas.
     const digits = kabinet.normCode(text);
-    if (kabinet.validCode(digits) && /^\s*\d{4}\s*$/.test(text)) {
+    /* Yangi kodlar 5 xonali; eski o'quvchilarda 4 xonalisi qolgan
+       bo'lishi mumkin — ikkalasi ham qabul qilinadi.               */
+    if (kabinet.validCode(digits) && /^\s*\d{4,5}\s*$/.test(text)) {
       codeFail(chatId);
       await sendMessage(chatId,
         'Shaxsiy kod bilan bog’lash o’chirilgan — u maxfiy emas.\n\n' +
@@ -505,7 +507,7 @@ async function handleLinkFlow(chatId, text, from, st) {
       await sendMessage(chatId, 'Ism va familiyangizni to’liq yozing.');
       return;
     }
-    await sendMessage(chatId, 'Shaxsiy kodingizni yozing — 4 ta raqam, masalan: <code>4077</code>');
+    await sendMessage(chatId, 'Shaxsiy kodingizni yozing — 5 ta raqam, masalan: <code>40771</code>');
     return;
   }
 
@@ -691,7 +693,7 @@ async function onMessage(msg) {
     st = { chatId: String(chatId), step: 'code', codeTries: 0 };
     await setState(chatId, st);
     await sendMessage(chatId,
-      conf.welcome + '\n\n<b>Shaxsiy kodingizni</b> yozing — 4 ta raqam, masalan: <code>4077</code>\n' +
+      conf.welcome + '\n\n<b>Shaxsiy kodingizni</b> yozing — 5 ta raqam, masalan: <code>40771</code>\n' +
       'Kodni markaz administratoridan olasiz.\n\n' +
       'Kodingiz bo’lmasa, <b>ismim</b> deb yozing.');
     return;

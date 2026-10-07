@@ -127,23 +127,39 @@
 
   /* =============== OYLIK HISOBLAR =============== */
   function invoiceDraft(membership, group, ym, settings, actor, opts) {
-    var dueDay = (settings && settings.dueDay) || 5;
     var amt = A.invoiceAmountFor(group, membership, ym);
-    var finalAmt = opts && opts.amount != null ? Math.max(0, Math.round(opts.amount)) : amt.final;
-    // Muddat qo'lda tanlangan bo'lsa — o'sha qoladi
-    var due = (opts && opts.dueDate) || A.dueDateFor(ym, dueDay);
-    // Aks holda: oy o'rtasida qo'shilgan o'quvchi o'tmishdagi sanadan qarzdor bo'lib qolmasin
-    if (!(opts && opts.dueDate) && membership.joinedAt && membership.joinedAt > due) {
-      due = A.addDays(membership.joinedAt, 7);
-    }
+
+    /* O'tgan oyda SABABLI qoldirilgan darslar uchun chegirma.
+       `opts.missed` — o'tgan oy davomatidan sanalgan son (chaqiruvchi
+       beradi, chunki davomat hujjati guruh+oy bo'yicha alohida
+       yuklanadi). Berilmasa chegirma ham yo'q.                      */
+    var missed = Math.max(0, Math.round(Number(opts && opts.missed) || 0));
+    var credit = missed ? Math.min(amt.final, A.excusedCredit(group, ym, missed)) : 0;
+
+    var finalAmt = opts && opts.amount != null
+      ? Math.max(0, Math.round(opts.amount))
+      : Math.max(0, amt.final - credit);
+
+    /* To'lov muddati: qo'lda tanlangan bo'lsa — o'sha; aks holda
+       o'quvchining O'Z kuni (guruhga qo'shilgan kunidan).          */
+    var due = (opts && opts.dueDate) || A.dueDateOf(membership, ym, settings);
+
+    var autoNote = credit
+      ? A.monthLabel(A.addMonths(ym, -1)) + ': ' + missed + ' ta sababli dars — ' +
+        A.som(credit) + ' so’m chegirildi'
+      : '';
     return {
       id: A.invoiceId(membership.id, ym),
       membershipId: membership.id, studentId: membership.studentId,
       groupId: membership.groupId, month: ym,
       base: amt.base, discount: Math.max(0, amt.base - finalAmt), final: finalAmt,
+      missedCredit: credit, missedLessons: missed,
+      missedMonth: credit ? A.addMonths(ym, -1) : '',
       dueDate: due, createdAt: A.nowStamp(),
       createdBy: actor ? actor.name : 'tizim',
-      note: (opts && opts.note) || (membership.firstMonth && membership.firstMonth.month === ym && membership.firstMonth.note) || ''
+      note: (opts && opts.note) ||
+        (membership.firstMonth && membership.firstMonth.month === ym && membership.firstMonth.note) ||
+        autoNote || ''
     };
   }
 
@@ -158,6 +174,15 @@
     var students = A.byId(D.all('students'));
     var created = 0, skipped = 0;
     var mems = D.all('memberships');
+    /* O'tgan oy davomati — sababli dars chegirmasi uchun. Hujjat
+       guruh+oy bo'yicha yuklanadi, shuning uchun bir marta olamiz. */
+    var prevYm = A.addMonths(ym, -1);
+    var prevDocs = {};
+    var gids = Object.keys(groups);
+    for (var gi = 0; gi < gids.length; gi++) {
+      try { prevDocs[gids[gi]] = await D.loadLessons(gids[gi], prevYm); }
+      catch (e) { prevDocs[gids[gi]] = null; }
+    }
     for (var i = 0; i < mems.length; i++) {
       var m = mems[i];
       if (m.status !== 'faol') continue;
@@ -169,7 +194,8 @@
       if (g.startDate && g.startDate > A.monthEnd(ym)) continue;
       var id = A.invoiceId(m.id, ym);
       if (D.one('invoices', id)) { skipped++; continue; }
-      await D.save('invoices', invoiceDraft(m, g, ym, D.settings, actor, null));
+      var missed = A.excusedCount(prevDocs[m.groupId], m.id);
+      await D.save('invoices', invoiceDraft(m, g, ym, D.settings, actor, { missed: missed }));
       created++;
     }
     if (created) await audit(actor, 'Oylik hisoblar yaratildi', A.monthLabel(ym), created + ' ta yangi hisob');

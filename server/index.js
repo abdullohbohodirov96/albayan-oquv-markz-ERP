@@ -761,6 +761,17 @@ async function generateInvoicesServer(ym, user) {
   let created = 0, skipped = 0;
   const errors = [];
 
+  /* O'tgan oydagi davomat — sababli qoldirilgan dars uchun chegirma.
+     Hujjatlar guruh+oy bo'yicha, shuning uchun bir marta o'qiymiz. */
+  const prevYm = A.addMonths(ym, -1);
+  const prevLessons = {};
+  for (const gid of Object.keys(groups)) {
+    try {
+      const doc = await store.get('lessons/' + gid + '__' + prevYm);
+      if (doc) prevLessons[gid] = doc;
+    } catch (e) { /* hujjat yo'q — chegirma ham yo'q */ }
+  }
+
   for (const m of mems) {
     try {
       if (m.status !== 'faol' || !A.membershipActiveIn(m, ym)) continue;
@@ -770,12 +781,21 @@ async function generateInvoicesServer(ym, user) {
       const id = A.invoiceId(m.id, ym);
       if (await store.get('invoices/' + id)) { skipped++; continue; }
       const amt = A.invoiceAmountFor(g, m, ym);
-      let due = A.dueDateFor(ym, settings.dueDay || 5);
-      if (m.joinedAt && m.joinedAt > due) due = A.addDays(m.joinedAt, 7);
+
+      /* O'tgan oyda sababli qoldirilgan darslar uchun chegirma */
+      const missed = A.excusedCount(prevLessons[m.groupId], m.id);
+      const credit = Math.min(amt.final, A.excusedCredit(g, ym, missed));
+      const note = credit
+        ? A.monthLabel(prevYm) + ': ' + missed + ' ta sababli dars — ' +
+          A.som(credit) + ' so’m chegirildi'
+        : '';
+
       await store.set('invoices/' + id, {
         id, membershipId: m.id, studentId: m.studentId, groupId: m.groupId, month: ym,
-        base: amt.base, discount: amt.discount, final: amt.final,
-        dueDate: due, createdAt: stamp(), createdBy: user ? user.name : 'tizim', note: ''
+        base: amt.base, discount: amt.discount + credit, final: amt.final - credit,
+        missedCredit: credit, missedLessons: missed, missedMonth: credit ? prevYm : '',
+        dueDate: A.dueDateOf(m, ym, settings),
+        createdAt: stamp(), createdBy: user ? user.name : 'tizim', note
       });
       created++;
     } catch (e) {
@@ -1314,7 +1334,9 @@ async function handleApi(req, res, url) {
     const code = kabinet.normCode(body.code);
     if (!kabinet.validCode(code)) {
       kabinetFail(ip);
-      return send(res, 400, { error: 'Kod ' + kabinet.CODE_LEN + ' ta raqamdan iborat.' });
+      /* Yangi kodlar 5 xonali; eski o'quvchilarda 4 xonalisi qolgan
+         bo'lishi mumkin — ikkalasi ham qabul qilinadi.              */
+      return send(res, 400, { error: 'Kod ' + kabinet.CODE_LEN + ' ta raqamdan iborat (eski kodlar 4 xonali).' });
     }
     const student = await kabinet.byCode(store, code);
 

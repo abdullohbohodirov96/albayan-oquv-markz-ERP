@@ -222,7 +222,7 @@ function raw(pathRaw, opts = {}) {
   /* Boshqa o'quvchining kabinet ma'lumotini kod bilan olish */
   const stDoc = await getDoc('students/' + ID('s'), dir);
   const code = stDoc && stDoc.code;
-  ok('O’quvchiga kod berilgan', /^\d{4}$/.test(String(code || '')), String(code));
+  ok('O’quvchiga kod berilgan', /^\d{5}$/.test(String(code || '')), String(code));
   if (code) {
     const kab = await req('/api/kabinet', { method: 'POST', body: { code: String(code) }, ip: '203.0.113.7' });
     ok('To’g’ri kod bilan kabinet ochildi (' + kab.status + ')', kab.status === 200, kab.text.slice(0, 120));

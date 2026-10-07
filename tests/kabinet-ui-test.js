@@ -62,7 +62,7 @@ const ID = n => R + '_' + n;
   const got = await fetch('http://localhost:' + PORT + '/api/doc?path=' + encodeURIComponent('students/' + ID('s')),
     { headers: { Cookie: dir } }).then(r => r.json());
   const code = String(((got || {}).data || {}).code || '');
-  ok('O’quvchiga kod berildi: ' + code, /^\d{4}$/.test(code), code);
+  ok('O’quvchiga kod berildi: ' + code, /^\d{5}$/.test(code), code);
 
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 390, height: 860 }, isMobile: true, hasTouch: true });
@@ -78,12 +78,12 @@ const ID = n => R + '_' + n;
     const i = document.getElementById('kab-code');
     return { max: i.getAttribute('maxlength'), mode: i.getAttribute('inputmode'), text: document.body.innerText };
   });
-  eq('Kod maydoni 4 belgilik', first.max, '4');
+  eq('Kod maydoni 5 belgilik', first.max, '5');
   eq('Telefonda raqam klaviaturasi ochiladi', first.mode, 'numeric');
   ok('Parol maydoni yo’q', !(await page.evaluate(() => !!document.getElementById('login-pass'))));
 
   section('   Noto’g’ri kod bilan ma’lumot chiqmaydi');
-  await page.fill('#kab-code', '0000');
+  await page.fill('#kab-code', '00000');
   await page.waitForTimeout(1600);
   const badCode = await page.evaluate(() => document.body.innerText);
   ok('Ism chiqmadi', !/Bahodirov/.test(badCode), badCode.slice(0, 200));
@@ -93,7 +93,7 @@ const ID = n => R + '_' + n;
   const myCode = await fetch('http://localhost:' + PORT + '/api/doc?path=' +
     encodeURIComponent('students/' + ID('s')), { headers: { Cookie: dir } })
     .then(r => r.json()).then(j => String(j.data.code));
-  ok('O’quvchida kod bor: ' + myCode, /^\d{4}$/.test(myCode));
+  ok('O’quvchida kod bor: ' + myCode, /^\d{5}$/.test(myCode));
   await page.fill('#kab-code', myCode);
   await page.waitForSelector('.kab-card', { timeout: 15000 });
   const byCodeTxt = await page.evaluate(() => document.querySelector('.kab-card').innerText);

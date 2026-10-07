@@ -71,7 +71,7 @@ function stamp() { return new Date(Date.now() + 5 * 3600 * 1000).toISOString().s
   eq('Ikkala o’quvchiga kod berildi', added, 2);
   const s1 = await store.get('students/s1');
   const s2 = await store.get('students/s2');
-  ok('Kod 4 xonali: ' + s1.code, /^\d{4}$/.test(String(s1.code)));
+  ok('Kod 5 xonali: ' + s1.code, /^\d{5}$/.test(String(s1.code)));
   ok('Kodlar takrorlanmadi', s1.code !== s2.code, s1.code + ' / ' + s2.code);
 
   /* ---------- 1. Ulanish ---------- */
@@ -80,7 +80,7 @@ function stamp() { return new Date(Date.now() + 5 * 3600 * 1000).toISOString().s
   await t.onMessage({ chat: { id: 555, type: 'private' }, text: '/start', from: { username: 'abdulloh' } });
   ok('Nima qilish kerakligi aytildi', /kod|havola/i.test(last()), last().slice(0, 140));
 
-  section('   4 xonali kod bog’lamaydi (u maxfiy emas)');
+  section('   Shaxsiy kod bog’lamaydi (u maxfiy emas)');
   await t.onMessage({ chat: { id: 555, type: 'private' }, text: String(s1.code), from: {} });
   ok('Kod rad etildi', /o’chirilgan|havola/i.test(last()), last().slice(0, 140));
   ok('Hech kimning ismi oshkor bo’lmadi', !/Bahodirov|Karimova/.test(last()));

@@ -1296,6 +1296,16 @@
     'kun ish rejimi': ['дней в неделю', 'days a week', 'أيام عمل'],
 
     /* --- Shaxsiy va guruh kodlari --- */
+    'Oyiga necha dars': ['Сколько уроков в месяц', 'Lessons per month', 'عدد الدروس في الشهر'],
+    'Bir dars narxi': ['Цена одного урока', 'Price of one lesson', 'سعر الدرس الواحد'],
+    'Bir dars narxi shu songa bo’lib hisoblanadi. Sababli qoldirilgan dars uchun keyingi oy hisobidan shuncha pul chegiriladi.': ['Цена одного урока рассчитывается делением на это число. За пропуск по уважительной причине эта сумма вычитается из счёта следующего месяца.', 'The price of one lesson is this amount divided by this number. For an excused absence, that amount is deducted from next month\u2019s invoice.', 'يُحسب سعر الدرس الواحد بالقسمة على هذا العدد. وعن الغياب بعذر يُخصم هذا المبلغ من فاتورة الشهر التالي.'],
+    'Yangi guruh tuzildi': ['Создана новая группа', 'New group created', 'أُنشئت مجموعة جديدة'],
+    'Import paytida yaratildi — ustoz, kun va narxni to’ldiring.': ['Создано при импорте — заполните преподавателя, дни и цену.', 'Created during import — fill in the teacher, days and price.', 'أُنشئت أثناء الاستيراد — أكمل المعلّم والأيام والسعر.'],
+    'Shaxsiy kod (5 ta raqam)': ['Личный код (5 цифр)', 'Personal code (5 digits)', 'الرمز الشخصي (٥ أرقام)'],
+    'Shaxsiy kod (5 raqam)': ['Личный код (5 цифр)', 'Personal code (5 digits)', 'الرمز الشخصي (٥ أرقام)'],
+    'Shaxsiy kodingiz (5 ta raqam)': ['Ваш личный код (5 цифр)', 'Your personal code (5 digits)', 'رمزك الشخصي (٥ أرقام)'],
+    'Kod 5 ta raqamdan iborat.': ['Код состоит из 5 цифр.', 'The code has 5 digits.', 'الرمز يتكون من ٥ أرقام.'],
+    'Kod 5 ta raqamdan iborat bo’lsin.': ['Код должен состоять из 5 цифр.', 'The code must be 5 digits.', 'يجب أن يتكون الرمز من ٥ أرقام.'],
     'Shaxsiy kod (4 ta raqam)': ['Личный код (4 цифры)', 'Personal code (4 digits)', 'الرمز الشخصي (٤ أرقام)'],
     'Bot va kabinetga shu kod bilan kiriladi. O’zgartirsangiz eski kod ishlamay qoladi.': ['С этим кодом входят в бота и в кабинет. Если изменить, старый код перестанет работать.', 'This code is used to sign in to the bot and the cabinet. If you change it, the old code stops working.', 'يُستخدم هذا الرمز للدخول إلى البوت والصفحة. إذا غيّرته، يتوقف الرمز القديم.'],
     'bo’sh qoldirsangiz o’zi beriladi': ['оставьте пустым — код выдаст система', 'leave empty — a code will be issued', 'اتركه فارغاً — سيُمنح رمز تلقائياً'],

@@ -117,7 +117,7 @@ const ID = n => R + '_' + n;
     }, dir);
   }
   const s1 = (await get('students/' + ID('s1'), dir)).json.data;
-  ok('O’quvchida kabinet kodi bor', /^\d{4}$/.test(String(s1.code)), String(s1.code));
+  ok('O’quvchida kabinet kodi bor', /^\d{5}$/.test(String(s1.code)), String(s1.code));
 
   /* o'qituvchi hisobi */
   await put('users/' + ID('u1'), {
@@ -488,7 +488,7 @@ const ID = n => R + '_' + n;
   });
   eq('Ota-ona saqlandi', par.status, 200);
   const pcode = par.json.parent.code;
-  ok('Ota-onaga kod berildi', /^\d{4}$/.test(String(pcode)), String(pcode));
+  ok('Ota-onaga kod berildi', /^\d{5}$/.test(String(pcode)), String(pcode));
   ok('Kod o’quvchinikidan boshqa', String(pcode) !== String(s1.code));
 
   const pk = await req('/api/kabinet', { method: 'POST', body: { code: pcode } });

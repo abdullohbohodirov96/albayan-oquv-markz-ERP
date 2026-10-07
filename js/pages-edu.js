@@ -191,6 +191,12 @@
         ? A.monthLabel(feeNext.from) + ' dan: ' + A.som(feeNext.fee) + ' so’m'
         : 'so’m'
     }));
+    /* Bir dars narxi — sababli qoldirilgan dars uchun aynan shu
+       summa keyingi oy hisobidan chegiriladi.                    */
+    tiles.appendChild(UI.tile({
+      label: 'Bir dars narxi', value: A.som(A.lessonPrice(g, ym)),
+      hint: 'oyiga ' + A.lessonsPerMonth(g) + ' dars'
+    }));
     if (App.can('finance.debts')) {
       var paidMap = A.paidByInvoice(A.Fin.allPayments());
       var gDebt = 0, gCharged = 0;
@@ -390,6 +396,14 @@
         value: isNew ? g.fee : A.feeForMonth(g, A.addMonths(A.thisMonth(), 1))
       },
       {
+        /* Bir dars narxi shu songa bo'lib topiladi. Sababli
+           qoldirilgan dars uchun aynan shuncha pul chegiriladi. */
+        name: 'lessonsPerMonth', label: 'Oyiga necha dars', type: 'number',
+        value: A.lessonsPerMonth(g), min: 1, max: 60,
+        help: 'Bir dars narxi shu songa bo’lib hisoblanadi. Sababli qoldirilgan ' +
+          'dars uchun keyingi oy hisobidan shuncha pul chegiriladi.'
+      },
+      {
         name: 'status', label: 'Holat', type: 'select', value: g.status,
         options: [{ value: 'rejalashtirilgan', label: 'Rejalashtirilgan' }, { value: 'faol', label: 'Faol' }, { value: 'yakunlangan', label: 'Yakunlangan' }]
       }
@@ -528,7 +542,13 @@
               return;
             }
             UI.busy(btn, async function () {
-              var rec = Object.assign({}, isNew ? {} : g, v, { days: days, limit: v.limit || 0, fee: v.fee });
+              var rec = Object.assign({}, isNew ? {} : g, v, {
+                days: days, limit: v.limit || 0, fee: v.fee,
+                /* Oyiga dars soni — 1 dan kichik yoki bo'sh bo'lsa
+                   standart 12 olinadi (bir dars narxi nolga
+                   bo'linib ketmasin).                            */
+                lessonsPerMonth: A.lessonsPerMonth({ lessonsPerMonth: v.lessonsPerMonth })
+              });
               // o'qituvchi almashsa — tarixga yozamiz (eski davr ish haqi o'zgarmaydi)
               if (!isNew && g.teacherId !== v.teacherId) {
                 rec.teacherHistory = A.setTeacher(g, v.teacherId, A.today());

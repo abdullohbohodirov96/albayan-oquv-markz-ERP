@@ -15,7 +15,11 @@ const crypto = require('crypto');
 const kabinet = require('./kabinet');
 
 const COL = 'parents/';
-const CODE_LEN = 4;
+/* Ota-ona kodi ham o'quvchi kodi bilan BIR XIL uzunlikda — 5 xonali.
+   Ikkalasi bitta ro'yxatdan tanlanadi, shuning uchun to'qnashmaydi.
+   Eski 4 xonali kodlar kirishda ishlashda davom etadi.             */
+const CODE_LEN = 5;
+const LEGACY_LEN = 4;
 
 function rid(p) { return p + crypto.randomBytes(6).toString('hex'); }
 function nowStamp(opts) {
@@ -32,7 +36,9 @@ async function listCol(store, col) {
 }
 
 function normCode(t) { return String(t == null ? '' : t).replace(/\D/g, '').slice(0, CODE_LEN); }
-function validCode(c) { return new RegExp('^\\d{' + CODE_LEN + '}$').test(String(c || '')); }
+function validCode(c) {
+  return new RegExp('^\\d{' + LEGACY_LEN + '}$|^\\d{' + CODE_LEN + '}$').test(String(c || ''));
+}
 
 /** Band bo'lmagan kod: o'quvchi kodlari bilan ham to'qnashmasin */
 async function freeCode(store, exceptId) {
@@ -42,7 +48,8 @@ async function freeCode(store, exceptId) {
     if (p.id !== exceptId && p.code) taken[String(p.code)] = 1;
   });
   for (let i = 0; i < 400; i++) {
-    const c = String(crypto.randomInt(0, 10000)).padStart(CODE_LEN, '0');
+    const MIN = Math.pow(10, CODE_LEN - 1), MAX = Math.pow(10, CODE_LEN);
+    const c = String(crypto.randomInt(MIN, MAX));
     if (!taken[c]) return c;
   }
   return '';

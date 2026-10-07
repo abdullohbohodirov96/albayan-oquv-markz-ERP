@@ -1,16 +1,21 @@
 /* O'quvchi kabineti: shaxsiy kod bo'yicha ma'lumot.
    Bir joyda hisoblanadi — Telegram bot ham, saytdagi sahifa ham shuni ishlatadi.
 
-   Kod: 4 xonali raqam (masalan 4077). Har bir o'quvchida bitta, takrorlanmaydi.
+   Kod: 5 xonali raqam (masalan 40771). Har bir o'quvchida bitta, takrorlanmaydi.
    Kod maxfiy emas, lekin taxmin qilib topish mumkin — shuning uchun so'rovlar
    cheklanadi (index.js dagi kabinetGate) va javobda telefon, ota-ona ma'lumoti,
    manzil kabi shaxsiy tafsilotlar YUBORILMAYDI.                               */
 'use strict';
 const { A } = require('./shared');
 
-const CODE_LEN = 4;
-const MIN = Math.pow(10, CODE_LEN - 1);          // 1000
-const MAX = Math.pow(10, CODE_LEN) - 1;          // 9999
+/* Kod uzunligi: YANGI kodlar 5 xonali bo'ladi (10000…99999 — 90 000 ta
+   variant). Ilgari 4 xonali edi; eski o'quvchilarning qo'lidagi kod
+   ishlashda davom etsin deb, KIRISHDA 4 xonali ham qabul qilinadi.
+   Faqat yangi kod berilganda 5 xonalik beriladi.                    */
+const CODE_LEN = 5;
+const LEGACY_LEN = 4;
+const MIN = Math.pow(10, CODE_LEN - 1);          // 10000
+const MAX = Math.pow(10, CODE_LEN) - 1;          // 99999
 
 /** Telegram HTML uchun xavfsiz matn — ism yoki izohda < > & bo'lsa buzilmasin */
 function esc(t) {
@@ -21,19 +26,29 @@ function esc(t) {
 function normCode(t) {
   return String(t == null ? '' : t).replace(/\D/g, '');
 }
+/** Kirish uchun yaroqli kod: yangi 5 xonali yoki eski 4 xonali */
 function validCode(c) {
+  return new RegExp('^\\d{' + LEGACY_LEN + '}$|^\\d{' + CODE_LEN + '}$').test(String(c || ''));
+}
+/** Yangi beriladigan kod shu uzunlikda bo'lishi kerak */
+function isNewLength(c) {
   return new RegExp('^\\d{' + CODE_LEN + '}$').test(String(c || ''));
 }
 
-/** Band bo'lmagan yangi kod tanlash */
+/** Band bo'lmagan yangi kod tanlash.
+    Kodlar ketma-ket bo'lmasligi uchun tasodifiy joydan boshlanadi —
+    aks holda hamma yangi o'quvchi 10000, 10001, 10002 … olardi va
+    birovning kodini taxmin qilish osonlashardi.                     */
 function pickCode(taken) {
+  const span = MAX - MIN + 1;
+  const start = MIN + Math.floor(Math.random() * span);
   const free = [];
-  for (let n = MIN; n <= MAX; n++) {
-    const c = String(n);
+  for (let i = 0; i < span; i++) {
+    const c = String(MIN + ((start - MIN + i) % span));
     if (!taken[c]) free.push(c);
     if (free.length > 500) break;                 // hammasini yig'ish shart emas
   }
-  if (!free.length) return null;                  // bo'sh kod qolmagan (9000 ta o'quvchi)
+  if (!free.length) return null;                  // bo'sh kod qolmagan (90 000 ta o'quvchi)
   return free[Math.floor(Math.random() * free.length)];
 }
 

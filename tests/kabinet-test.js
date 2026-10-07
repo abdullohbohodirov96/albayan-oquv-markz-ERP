@@ -90,8 +90,8 @@ const GCODE = 'K' + R.slice(-5).toUpperCase();
   section('1. Har bir o’quvchiga shaxsiy kod beriladi');
   const st1 = (await get('students/' + ID('s1'), dir)).json.data;
   const st2 = (await get('students/' + ID('s2'), dir)).json.data;
-  ok('Birinchisida kod bor: ' + st1.code, /^\d{4}$/.test(String(st1.code)), JSON.stringify(st1.code));
-  ok('Ikkinchisida kod bor: ' + st2.code, /^\d{4}$/.test(String(st2.code)), JSON.stringify(st2.code));
+  ok('Birinchisida kod bor: ' + st1.code, /^\d{5}$/.test(String(st1.code)), JSON.stringify(st1.code));
+  ok('Ikkinchisida kod bor: ' + st2.code, /^\d{5}$/.test(String(st2.code)), JSON.stringify(st2.code));
   ok('Kodlar har xil', st1.code !== st2.code, st1.code + ' / ' + st2.code);
 
   section('   Kod o’z-o’zidan o’zgarmaydi, lekin markaz uni bera oladi');
@@ -148,7 +148,7 @@ const GCODE = 'K' + R.slice(-5).toUpperCase();
   eq('Sessiya bilan qayta ochildi (kod so’ralmaydi)', mine.status, 200);
   eq('Sessiyadagi ism o’sha', (mine.json.student || {}).name, 'Bahodirov Abdulloh');
 
-  const wrong = await kabByCode('0000' === String(st1.code) ? '0001' : '0000', '203.0.113.42');
+  const wrong = await kabByCode('00000' === String(st1.code) ? '00001' : '00000', '203.0.113.42');
   ok('Noto’g’ri kod rad etildi', wrong.status === 404, String(wrong.status));
   ok('Noto’g’ri kodda ism chiqmadi', !/Bahodirov|Karimova/.test(wrong.text), wrong.text.slice(0, 120));
   const short = await kabByCode('12', '203.0.113.43');

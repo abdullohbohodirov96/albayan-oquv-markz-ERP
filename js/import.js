@@ -12,7 +12,7 @@
     parentPhone: ['ota ona telefoni', 'ota onasi telefoni', 'otaona telefon', 'vasiy telefoni', 'ota ona tel', 'родитель телефон', 'телефон родителя', 'parent phone', 'هاتف ولي الأمر'],
     parentName: ['ota ona', 'ota onasi', 'vasiy', 'ota ona ismi', 'родитель', 'фио родителя', 'parent', 'guardian', 'ولي الأمر'],
     birthDate: ['tugilgan sana', 'tugilgan', 'tugilgan kuni', 'дата рождения', 'др', 'birth', 'birthday', 'date of birth', 'تاريخ الميلاد'],
-    group: ['guruh', 'guruhi', 'guruh kodi', 'guruh nomi', 'группа', 'группы', 'group', 'group code', 'المجموعة'],
+    group: ['guruh', 'guruhi', 'guruhlar', 'guruh kodi', 'guruh nomi', 'группа', 'группы', 'group', 'groups', 'group code', 'المجموعة'],
     course: ['kurs', 'kursi', 'yonalish', 'курс', 'направление', 'course', 'الدورة'],
     source: ['manba', 'qayerdan', 'источник', 'откуда', 'source', 'المصدر'],
     note: ['izoh', 'izohi', 'qoshimcha', 'комментарий', 'примечание', 'note', 'comment', 'ملاحظة'],
@@ -164,7 +164,7 @@
       { id: 'parentName', label: 'Ota-ona ismi' },
       { id: 'parentPhone', label: 'Ota-ona telefoni' },
       { id: 'birthDate', label: 'Tug’ilgan sana' },
-      { id: 'code', label: 'Shaxsiy kod (4 raqam)' },
+      { id: 'code', label: 'Shaxsiy kod (5 raqam)' },
       { id: 'group', label: 'Guruh (kod yoki nom)' },
       { id: 'note', label: 'Izoh' }
     ],
@@ -370,6 +370,40 @@
     var courseIndex = {};
     D.all('courses').forEach(function (cs) { courseIndex[norm(cs.name)] = cs.id; });
 
+    /* Fayldagi guruh bazada yo'q bo'lsa — YARATAMIZ.
+       Ilgari bunday qator "guruhi topilmadi" deb o'tkazib yuborilardi:
+       eksport qilingan o'quvchini qaytarib import qilganda guruhsiz
+       qolib ketardi va uni qo'lda qayta yozish kerak edi.
+
+       Yangi guruh "rejalashtirilgan" holatda tuziladi. Bu ataylab:
+         — jadvalga va davomatga kirib ketmaydi;
+         — avtomatik oylik hisob yaratmaydi (server rejalashtirilgan
+           guruhni o'tkazib yuboradi) — ya'ni hech kimga tasodifan
+           pul yozilmaydi;
+       markaz uni ochib ustoz, kun va narxni yozgach "faol" qiladi. */
+    var createdGroups = [];
+    async function groupIdFor(nameOrCode) {
+      var key = norm(nameOrCode);
+      if (!key) return null;
+      if (groupIndex[key]) return groupIndex[key];
+      if (!App.can('group.edit')) return null;          // huquq yo'q — yaratmaymiz
+      var title = String(nameOrCode).trim().slice(0, 80);
+      var g = {
+        id: A.uid('grp'),
+        code: A.nextGroupCode(title, D.all('groups').concat(createdGroups)),
+        name: title, courseId: '', teacherId: '', roomId: '',
+        days: [], startTime: '09:00', endTime: '10:30',
+        startDate: A.today(), fee: 0, feeHistory: [], limit: 12,
+        status: 'rejalashtirilgan', imported: true,
+        note: 'Import paytida yaratildi — ustoz, kun va narxni to’ldiring.'
+      };
+      await D.save('groups', g);
+      createdGroups.push(g);
+      groupIndex[key] = g.id;
+      groupIndex[norm(g.code)] = g.id;
+      return g.id;
+    }
+
     for (var i = 0; i < recs.length; i++) {
       var r = recs[i];
       var digits = A.phoneDigits(r.phone || r.parentPhone);
@@ -387,7 +421,7 @@
           };
           /* Fayldagi tayyor shaxsiy kod — band bo'lmasa o'shasi olinadi.
              Band bo'lsa yoki yo'q bo'lsa, kodni server o'zi beradi.        */
-          if (/^\d{4}$/.test(String(r.code || ''))) {
+          if (/^\d{4,5}$/.test(String(r.code || ''))) {
             if (takenCodes[r.code]) {
               problems.push((r.lastName || '') + ' ' + (r.firstName || '') +
                 ' — "' + r.code + '" kodi band, yangi kod berildi');
@@ -401,15 +435,31 @@
           added++;
           if (digits) existingPhones[digits] = st.id;
 
-          var gid = r.group ? groupIndex[norm(r.group)] : null;
-          if (gid) {
+          /* Eksportda bir nechta guruh vergul bilan yoziladi
+             ("A001 · Arab A1, A002 · Arab B1") — hammasiga yozamiz. */
+          var names = String(r.group || '').split(/[,;]+/)
+            .map(function (x) { return x.trim(); }).filter(Boolean);
+          for (var gi = 0; gi < names.length; gi++) {
+            /* "A001 · Arab tili A1" ko'rinishidagi yozuvdan avval
+               kodni, topilmasa to'liq nomni sinaymiz.                */
+            var raw = names[gi];
+            var parts = raw.split('·').map(function (x) { return x.trim(); }).filter(Boolean);
+            var gid = null;
+            for (var pi = 0; pi < parts.length && !gid; pi++) {
+              if (groupIndex[norm(parts[pi])]) gid = groupIndex[norm(parts[pi])];
+            }
+            if (!gid) gid = groupIndex[norm(raw)];
+            if (!gid) gid = await groupIdFor(parts.length > 1 ? parts[parts.length - 1] : raw);
+            if (!gid) {
+              problems.push((r.lastName || '') + ' ' + (r.firstName || '') +
+                ' — "' + raw + '" guruhi topilmadi va yaratilmadi (huquq yo’q)');
+              continue;
+            }
             await D.save('memberships', {
               id: A.uid('mem'), studentId: st.id, groupId: gid,
               joinedAt: A.today(), leftAt: null, status: 'faol', discount: null, imported: true
             });
             enrolled++;
-          } else if (r.group) {
-            problems.push(r.lastName + ' ' + r.firstName + ' — "' + r.group + '" guruhi topilmadi');
           }
         } else {
           await D.save('leads', {
@@ -428,7 +478,11 @@
     }
     await A.Ops.audit(App.user, kind === 'students' ? 'O’quvchilar import qilindi' : 'Murojaatlar import qilindi',
       added + ' ta', skipped ? skipped + ' ta o’tkazib yuborildi' : '');
-    return { added: added, skipped: skipped, enrolled: enrolled, problems: problems };
+    return {
+      added: added, skipped: skipped, enrolled: enrolled,
+      groups: createdGroups.map(function (g) { return g.code + ' · ' + g.name; }),
+      problems: problems
+    };
   }
 
   function showResult(res, App) {
@@ -439,7 +493,9 @@
           h('dt', {}, 'Qo’shildi'), h('dd', {}, res.added + ' ta'),
           h('dt', {}, 'O’tkazib yuborildi (takroriy)'), h('dd', {}, res.skipped + ' ta'),
           res.enrolled ? h('dt', {}, 'Guruhga yozildi') : null,
-          res.enrolled ? h('dd', {}, res.enrolled + ' ta') : null
+          res.enrolled ? h('dd', {}, res.enrolled + ' ta') : null,
+          (res.groups && res.groups.length) ? h('dt', {}, 'Yangi guruh tuzildi') : null,
+          (res.groups && res.groups.length) ? h('dd', {}, res.groups.join(', ')) : null
         ]),
         res.problems.length ? h('div', { class: 'banner warn', style: 'margin:0' }, h('div', {}, [
           h('b', {}, 'Diqqat: '),
@@ -452,5 +508,11 @@
     });
   }
 
-  A.importHelpers = { analyse: analyse, guessField: guessField, parseCsvText: parseCsvText, cellDate: cellDate, norm: norm };
+  A.importHelpers = {
+    analyse: analyse, guessField: guessField, parseCsvText: parseCsvText,
+    cellDate: cellDate, norm: norm,
+    /* Sinov uchun ochiq: import mantig'i (guruh yaratish ham shu
+       yerda) brauzersiz tekshirilsin.                            */
+    doImport: doImport
+  };
 })(typeof window !== 'undefined' ? window : globalThis);

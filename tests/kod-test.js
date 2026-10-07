@@ -194,7 +194,7 @@ const get = async (p) => {
   });
   const gs4 = await get('students/ks2');
   ok('Kodsiz o’quvchiga server kod berdi',
-    gs4.data && /^\d{4}$/.test(String(gs4.data.code || '')),
+    gs4.data && /^\d{5}$/.test(String(gs4.data.code || '')),
     'olindi: ' + (gs4.data && gs4.data.code));
   ok('Yangi kod boshqasiniki emas', gs4.data && gs4.data.code !== '7777');
 

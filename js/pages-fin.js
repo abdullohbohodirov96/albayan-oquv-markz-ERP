@@ -806,7 +806,18 @@
       { label: 'O’quvchi', render: function (i) { return h('b', {}, Q.studentName(i.studentId)); } },
       { label: 'Guruh', render: function (i) { return Q.groupName(i.groupId); } },
       { label: 'Asos', right: true, render: function (i) { return h('span', { class: 'mono' }, A.som(i.base)); } },
-      { label: 'Chegirma', right: true, render: function (i) { return h('span', { class: 'mono' }, i.discount ? '−' + A.som(i.discount) : '—'); } },
+      {
+        label: 'Chegirma', right: true, render: function (i) {
+          if (!i.discount) return h('span', { class: 'mono' }, '—');
+          /* Sababli qoldirilgan dars uchun chegirma alohida
+             ko'rsatiladi — rahbar nima uchun kamayganini ko'rsin. */
+          return h('div', {}, [
+            h('span', { class: 'mono' }, '−' + A.som(i.discount)),
+            i.missedCredit ? h('span', { class: 'small muted', style: 'display:block' },
+              i.missedLessons + ' ta sababli dars') : null
+          ].filter(Boolean));
+        }
+      },
       { label: 'Hisob', right: true, render: function (i) { return h('span', { class: 'mono strong' }, A.som(i.final)); } },
       { label: 'To’langan', right: true, render: function (i) { return h('span', { class: 'mono' }, A.som(Math.min(i.final, paidMap[i.id] || 0))); } },
       {
