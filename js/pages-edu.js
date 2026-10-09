@@ -782,6 +782,16 @@
             if (!f.validate()) return;
             var v = f.values();
             var g = D.one('groups', v.groupId);
+            if (!A.isDate(v.joinedAt)) {
+              warn.appendChild(h('div', { class: 'banner warn', style: 'margin:0' },
+                h('div', {}, 'Guruhga kirgan sanani to’g’ri kiriting.')));
+              return;
+            }
+            if (v.leftAt && !A.isDate(v.leftAt)) {
+              warn.appendChild(h('div', { class: 'banner warn', style: 'margin:0' },
+                h('div', {}, 'Guruhdan chiqgan sanani to’g’ri kiriting.')));
+              return;
+            }
             var count = Q.membersOf(v.groupId).filter(function (m) { return m.id !== mem.id; }).length;
             if (g && g.limit && count >= g.limit) {
               warn.appendChild(h('div', { class: 'banner warn', style: 'margin:0' },
@@ -821,7 +831,7 @@
                   var inv = await A.Ops.createSingleInvoice(rec, ym, opts, App.user);
                   if (inv) {
                     UI.toast('Hisob tuzildi: ' + A.som(inv.final) + ' so’m, muddat ' +
-                      A.dateLabel(inv.dueDate), 'ok');
+                      A.dateLabel(A.invoiceDue(inv)), 'ok');
                   }
                 }
               }

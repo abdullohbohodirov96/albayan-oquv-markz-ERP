@@ -85,8 +85,8 @@
         rows.appendChild(h('div', { class: 'att-row' }, [
           h('div', { class: 'nm' }, [
             h('div', {}, A.monthLabel(inv.month) + ' · ' + Q.groupName(inv.groupId)),
-            h('div', { class: 'small muted' }, 'Qoldiq: ' + A.som(inv.remaining) + ' so’m · muddat ' + A.dateLabel(inv.dueDate) +
-              (inv.dueDate < A.today() ? ' (o’tgan)' : ''))
+            h('div', { class: 'small muted' }, 'Qoldiq: ' + A.som(inv.remaining) + ' so’m · muddat ' + A.dateLabel(A.invoiceDue(inv)) +
+              (A.invoiceDue(inv) < A.today() ? ' (o’tgan)' : ''))
           ]),
           f.wrap
         ]));
@@ -441,7 +441,7 @@
       rows.appendChild(h('div', { class: 'att-row' }, [
         h('div', { class: 'nm' }, [
           h('div', {}, A.monthLabel(inv.month) + ' · ' + Q.groupName(inv.groupId)),
-          h('div', { class: 'small muted' }, 'Qoldiq: ' + A.som(inv.remaining) + ' so’m · muddat ' + A.dateLabel(inv.dueDate))
+          h('div', { class: 'small muted' }, 'Qoldiq: ' + A.som(inv.remaining) + ' so’m · muddat ' + A.dateLabel(A.invoiceDue(inv)))
         ]),
         f.wrap
       ]));
@@ -832,7 +832,7 @@
         label: 'Holat', render: function (i) {
           var rem = A.invoiceRemaining(i, paidMap);
           if (rem <= 0) return UI.pill('To’langan', 'ok');
-          if (i.dueDate < A.today()) return UI.pill('Muddati o’tgan', 'bad');
+          if (A.invoiceDue(i) < A.today()) return UI.pill('Muddati o’tgan', 'bad');
           return UI.pill('Kutilmoqda', 'warn');
         }
       },
@@ -864,7 +864,7 @@
           UI.exportCsv('hisoblar-' + ym + '.csv', [['O’quvchi', 'Guruh', 'Asos', 'Chegirma', 'Hisob', 'To’langan', 'Muddat']].concat(
             invs.map(function (i) {
               return [Q.studentName(i.studentId), Q.groupName(i.groupId), i.base, i.discount, i.final,
-              Math.min(i.final, paidMap[i.id] || 0), i.dueDate];
+              Math.min(i.final, paidMap[i.id] || 0), A.invoiceDue(i)];
             })));
         }
       }, 'Excel')

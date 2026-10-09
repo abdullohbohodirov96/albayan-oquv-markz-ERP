@@ -90,6 +90,48 @@ function section(t) { results.push('\n' + t); }
   eq('Qo’lda yozilgan kun ustun turadi',
     A.dueDateOf({ joinedAt: '2026-09-17', dueDay: 10 }, '2026-10', { dueDay: 5 }), '2026-10-10');
 
+  /* --- Buzuq sana muddatga aylanib ketmasin (PUL YO'QOLISHI) ---
+     Ilgari dueDateOf joinedAt'ni tekshirmasdan qaytarardi. Shunda
+     "2026-13-45" yoki "<script>" yozilsa, hisobning muddati shu
+     bo'lib qolardi; muddat SATR sifatida solishtirilgani uchun
+     bunday hisob hech qachon "muddati o'tgan" bo'lmaydi — ya'ni
+     880 000 so'm qarz 0 bo'lib ko'rinardi.                        */
+  eq('Haqiqiy sana — ha', A.isDate('2026-09-17'), true);
+  eq('13-oy — yo’q', A.isDate('2026-13-05'), false);
+  eq('45-kun — yo’q', A.isDate('2026-09-45'), false);
+  eq('Fevral 30 — yo’q', A.isDate('2026-02-30'), false);
+  eq('Kabisa 2024-02-29 — ha', A.isDate('2024-02-29'), true);
+  eq('2026-02-29 — yo’q', A.isDate('2026-02-29'), false);
+  eq('Matn — yo’q', A.isDate('<script>'), false);
+  eq('Bo’sh — yo’q', A.isDate(''), false);
+  eq('Oy: 2026-09 — ha', A.isMonth('2026-09'), true);
+  eq('Oy: 2026-13 — yo’q', A.isMonth('2026-13'), false);
+  eq('Buzuq oy sana bo’lmaydi', A.isDate('2026-09'), false);
+
+  eq('Buzuq matnli joinedAt muddat bo’lmaydi',
+    A.dueDateOf({ joinedAt: '<script>' }, '2026-10', { dueDay: 5 }), '2026-10-05');
+  eq('Yo’q sana (2026-13-45) muddat bo’lmaydi',
+    A.dueDateOf({ joinedAt: '2026-13-45' }, '2026-10', { dueDay: 5 }), '2026-10-05');
+  eq('Fevral 30 muddat bo’lmaydi',
+    A.dueDateOf({ joinedAt: '2026-02-30' }, '2026-10', { dueDay: 5 }), '2026-10-05');
+  eq('Buzuq oy berilsa ham sana chiqadi',
+    A.isDate(A.dueDateOf({}, 'xx', { dueDay: 5 })), true);
+  eq('Buzuq joinedAt to’lov kunini buzmaydi',
+    A.dueDayOf({ joinedAt: '2026-13-45' }, { dueDay: 5 }), 5);
+  /* Natija: bunday hisob muddati o'tgan deb SANALADI — pul yo'qolmaydi */
+  (function () {
+    const bad = {
+      id: 'inv_bad', membershipId: 'mX', studentId: 'sX', groupId: 'gX',
+      month: '2026-09', base: 880000, discount: 0, final: 880000,
+      dueDate: A.dueDateOf({ joinedAt: '2026-13-45' }, '2026-09', { dueDay: 5 })
+    };
+    const over = A.overdueOf('sX', [bad], [], '2026-09-30');
+    ok('Buzuq sanali hisob qarzi yo’qolmaydi (880 000)', over === 880000,
+      'olindi ' + over);
+    eq('Buzuq sana ekranda “—” bo’lib ko’rinadi', A.dateLabel('2026-13-45'), '—');
+    eq('Matn ekranga chiqmaydi', A.dateLabel('<script>'), '—');
+  })();
+
   /* --- Filiallar --- */
   const brS = { branches: 'Taxtapul filiali\nTinchlik filiali' };
   eq('Ikkita filial o’qildi', A.branchList(brS).length, 2);

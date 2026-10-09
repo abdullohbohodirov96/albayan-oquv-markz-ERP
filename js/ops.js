@@ -177,8 +177,12 @@
       : Math.max(0, amt.final - credit);
 
     /* To'lov muddati: qo'lda tanlangan bo'lsa — o'sha; aks holda
-       o'quvchining O'Z kuni (guruhga qo'shilgan kunidan).          */
-    var due = (opts && opts.dueDate) || A.dueDateOf(membership, ym, settings);
+       o'quvchining O'Z kuni (guruhga qo'shilgan kunidan).
+       Qo'lda berilgan sana HAQIQIY kalendar sanasi bo'lmasa, uni
+       ishlatmaymiz: aks holda muddati o'tgan qarz hisoblanmay
+       qolardi (muddat satr sifatida solishtiriladi).                */
+    var manualDue = opts && opts.dueDate;
+    var due = A.isDate(manualDue) ? manualDue : A.dueDateOf(membership, ym, settings);
 
     var autoNote = credit
       ? A.monthLabel(A.addMonths(ym, -1)) + ': ' + missed + ' ta sababli dars — ' +

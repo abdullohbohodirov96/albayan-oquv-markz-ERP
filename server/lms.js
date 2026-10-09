@@ -34,7 +34,14 @@ function nowStamp(opts) {
     : new Date().toISOString().slice(0, 16).replace('T', ' ');
 }
 function txt(v, max) { return String(v == null ? '' : v).replace(/\u0000/g, '').slice(0, max || 500); }
-function dateOk(d) { return DATE.test(String(d || '')); }
+function dateOk(d) {
+  /* Haqiqiy kalendar sanasi bo'lishi shart: "2026-02-31" o'tmaydi */
+  const s = String(d || '');
+  if (!DATE.test(s)) return false;
+  const y = Number(s.slice(0, 4)), m = Number(s.slice(5, 7)), day = Number(s.slice(8, 10));
+  if (y < 1900 || y > 2200 || m < 1 || m > 12 || day < 1) return false;
+  return day <= new Date(y, m, 0).getDate();
+}
 
 async function listCol(store, col) {
   return (await store.list(col))

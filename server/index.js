@@ -592,7 +592,7 @@ async function createPaymentServer(body, user) {
   if (existing) return existing;                        // takroriy so'rov — bitta yozuv
 
   const date = String(body.date || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Sana noto’g’ri.');
+  if (!A.isDate(date)) throw new Error('Sana noto’g’ri.');
   const amount = money(body.amount);
   if (amount == null) throw new Error('Summa noto’g’ri.');
   const student = await store.get('students/' + String(body.studentId || ''));
@@ -1232,6 +1232,11 @@ async function guardWrite(user, p, method, next) {
   /* --- O'quvchi: shaxsiy kodni server beradi va u o'zgarmaydi --- */
   if (col === 'students' && method === 'PUT') {
     const data = Object.assign({}, next);
+    /* To'lov sanasi — shu sanadan a'zolikning to'lov kuni olinadi,
+       shuning uchun haqiqiy kalendar sanasi bo'lishi shart. */
+    if (data.payDate != null && data.payDate !== '' && !A.isDate(data.payDate)) {
+      return { code: 400, error: 'To’lov sanasi noto’g’ri (YYYY-MM-DD).' };
+    }
     // Telegram bog'lanishini mijoz o'zgartira olmaydi — faqat /api/student/link* yo'llari
     if (old && old.telegram) data.telegram = old.telegram; else delete data.telegram;
     /* Shaxsiy kod — markaz o'zi beradi va u O'ZGARMAYDI.
@@ -1290,6 +1295,55 @@ async function guardWrite(user, p, method, next) {
       const busy = await groupByCode(want, seg[1]);
       if (busy) return { code: 400, error: 'Bu kod boshqa guruhda: ' + (busy.name || busy.code) };
       data.code = want;
+    }
+    return { data };
+  }
+
+  /* --- A'zolik: sanalar HAQIQIY kalendar sanasi bo'lishi shart.
+     Sabab: joinedAt to'g'ridan-to'g'ri hisob-kitobga ("to'lov muddati")
+     tushadi. "2026-13-45" yoki "<script>" kirib qolsa, muddat satr
+     sifatida solishtirilgani uchun qarz hech qachon "muddati o'tgan"
+     bo'lmay qolardi — ya'ni pul yo'qolardi.                            */
+  if (col === 'memberships' && method === 'PUT') {
+    const data = Object.assign({}, next, { id: seg[1] });
+    if (data.joinedAt != null && data.joinedAt !== '' && !A.isDate(data.joinedAt)) {
+      return { code: 400, error: 'Guruhga kirgan sana noto’g’ri (YYYY-MM-DD).' };
+    }
+    if (data.leftAt != null && data.leftAt !== '' && !A.isDate(data.leftAt)) {
+      return { code: 400, error: 'Guruhdan chiqgan sana noto’g’ri (YYYY-MM-DD).' };
+    }
+    if (data.joinedAt && data.leftAt && data.leftAt < data.joinedAt) {
+      return { code: 400, error: 'Chiqgan sana kirgan sanadan oldin bo’lmaydi.' };
+    }
+    if (data.dueDay != null && data.dueDay !== '') {
+      const dd = Number(data.dueDay);
+      if (!Number.isFinite(dd) || dd < 1 || dd > 28 || Math.round(dd) !== dd) {
+        return { code: 400, error: 'To’lov kuni 1…28 orasida bo’lishi kerak.' };
+      }
+      data.dueDay = dd;
+    } else {
+      delete data.dueDay;
+    }
+    return { data };
+  }
+
+  /* --- Hisob (invoice): oy va muddat sanasi tekshiriladi --- */
+  if (col === 'invoices' && method === 'PUT') {
+    const data = Object.assign({}, next, { id: seg[1] });
+    if (!A.isMonth(data.month)) {
+      return { code: 400, error: 'Hisob oyi noto’g’ri (YYYY-MM).' };
+    }
+    if (data.dueDate != null && data.dueDate !== '' && !A.isDate(data.dueDate)) {
+      return { code: 400, error: 'To’lov muddati noto’g’ri (YYYY-MM-DD).' };
+    }
+    const nums = ['base', 'discount', 'final'];
+    for (const k of nums) {
+      if (data[k] == null || data[k] === '') continue;
+      const v = Number(data[k]);
+      if (!Number.isFinite(v) || v < 0 || v > 1e12) {
+        return { code: 400, error: 'Hisob summasi noto’g’ri.' };
+      }
+      data[k] = Math.round(v);
     }
     return { data };
   }

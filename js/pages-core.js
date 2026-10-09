@@ -86,7 +86,7 @@
       invoices.forEach(function (i) {
         var r = row(i.studentId);
         r.charged += Math.round(i.final);
-        if (i.dueDate && i.dueDate < today) r.overdue += A.invoiceRemaining(i, paid);
+        var due_ = A.invoiceDue(i); if (due_ && due_ < today) r.overdue += A.invoiceRemaining(i, paid);
       });
       A.activePayments(payments).forEach(function (p) {
         var r = row(p.studentId);
@@ -159,7 +159,7 @@
       A.Fin.allInvoices().forEach(function (i) {
         var r = rec(i.studentId);
         r.charged += Math.round(i.final);
-        if (i.dueDate && i.dueDate < today) r.overdue += A.invoiceRemaining(i, paid);
+        var due_ = A.invoiceDue(i); if (due_ && due_ < today) r.overdue += A.invoiceRemaining(i, paid);
       });
       A.activePayments(A.Fin.allPayments()).forEach(function (p) {
         var r = rec(p.studentId);
@@ -185,7 +185,7 @@
         if (rem <= 0) return;
         var s = byStudent[inv.studentId] || (byStudent[inv.studentId] = { studentId: inv.studentId, debt: 0, overdue: 0, months: [] });
         s.debt += rem;
-        if (inv.dueDate && inv.dueDate < A.today()) s.overdue += rem;
+        var due_ = A.invoiceDue(inv); if (due_ && due_ < A.today()) s.overdue += rem;
         s.months.push(inv.month);
       });
       return Object.keys(byStudent).map(function (k) { return byStudent[k]; })
@@ -1194,7 +1194,7 @@
       function payLine(st) {
         var mems = Q.membershipsOf(st.id).filter(function (m) { return m.status === 'faol'; });
         var day = null;
-        if (st.payDate && /^\d{4}-\d{2}-\d{2}$/.test(st.payDate)) {
+        if (A.isDate(st.payDate)) {
           day = Math.min(28, Math.max(1, Number(st.payDate.slice(8, 10))));
         } else if (mems.length) {
           day = A.dueDayOf(mems[0], D.settings);
@@ -1341,10 +1341,10 @@
           {
             label: 'Qolgan', right: true, render: function (i) {
               var r = A.invoiceRemaining(i, paidMap);
-              return r > 0 ? UI.pill(A.som(r), i.dueDate < A.today() ? 'bad' : 'warn') : UI.pill('To’langan', 'ok');
+              return r > 0 ? UI.pill(A.som(r), A.invoiceDue(i) < A.today() ? 'bad' : 'warn') : UI.pill('To’langan', 'ok');
             }
           },
-          { label: 'Muddat', render: function (i) { return A.dateLabel(i.dueDate); } }
+          { label: 'Muddat', render: function (i) { return A.dateLabel(A.invoiceDue(i)); } }
         ], invs) : h('p', { class: 'muted' }, 'Hisob yaratilmagan.'), null, null, true));
     }
 
@@ -1640,7 +1640,7 @@
                  a'zolik bo'yicha tuziladi, shuning uchun to'lov
                  kuni o'sha yerda turishi kerak. Shunda keyingi
                  hisob aynan shu kunda chiqadi.                   */
-              if (v.payDate && /^\d{4}-\d{2}-\d{2}$/.test(v.payDate)) {
+              if (A.isDate(v.payDate)) {
                 var pDay = Math.min(28, Math.max(1, Number(v.payDate.slice(8, 10))));
                 var mems = Q.membershipsOf(rec.id)
                   .filter(function (m) { return m.status === 'faol'; });

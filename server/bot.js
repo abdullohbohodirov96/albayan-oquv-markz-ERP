@@ -396,7 +396,11 @@ async function remindDebtors(todayIso) {
   let queued = 0, skipped = 0;
 
   for (const s of students) {
-    const open = invoices.filter(i => i.studentId === s.id && A.invoiceRemaining(i, paid) > 0 && i.dueDate);
+    /* Muddat A.invoiceDue bilan olinadi — bazadagi buzuq sana
+       (eski yozuvlar) eslatmani yo'qotib qo'ymasin.              */
+    const open = invoices
+      .filter(i => i.studentId === s.id && A.invoiceRemaining(i, paid) > 0 && A.invoiceDue(i))
+      .map(i => Object.assign({}, i, { dueDate: A.invoiceDue(i) }));
     if (!open.length) continue;
     // eng eski muddati o'tgan hisob
     const late = open.filter(i => daysBetween(i.dueDate, today) >= conf.remindDays)

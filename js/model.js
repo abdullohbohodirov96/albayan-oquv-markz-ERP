@@ -398,7 +398,7 @@
     var m = membership || {};
     var manual = Math.round(Number(m.dueDay));
     if (isFinite(manual) && manual >= 1) return Math.min(28, manual);
-    if (m.joinedAt && /^\d{4}-\d{2}-\d{2}$/.test(String(m.joinedAt))) {
+    if (A.isDate(m.joinedAt)) {
       return Math.min(28, Math.max(1, Number(String(m.joinedAt).slice(8, 10))));
     }
     var s = Math.round(Number(settings && settings.dueDay));
@@ -407,9 +407,13 @@
 
   /** A'zolik uchun shu oydagi to'lov muddati sanasi */
   function dueDateOf(membership, ym, settings) {
+    if (!A.isMonth(ym)) ym = A.thisMonth();
     var due = dueDateFor(ym, dueDayOf(membership, settings));
-    /* Qo'shilgan kunidan oldin bo'lib qolmasin (birinchi oy) */
-    if (membership && membership.joinedAt && membership.joinedAt > due) {
+    /* Qo'shilgan kunidan oldin bo'lib qolmasin (birinchi oy).
+       joinedAt buzuq bo'lsa (masalan "2026-13-45" yoki "<script>") —
+       hech qachon muddat sifatida ishlatilmaydi, aks holda qarz
+       "muddati o'tgan" deb hisoblanmay qolardi. */
+    if (membership && A.isDate(membership.joinedAt) && membership.joinedAt > due) {
       due = membership.joinedAt;
     }
     return due;
@@ -514,10 +518,22 @@
     return { charged: charged, received: received, allocated: allocated, debt: debt, advance: advance };
   }
   /** Muddati o'tgan qarz (bugungi sanaga nisbatan) */
+  /** Hisobning muddati. Bazada buzuq sana yotgan bo'lsa (eski
+      yozuvlar), muddat yo'qolib ketmasin — oy oxiri olinadi.      */
+  function invoiceDue(inv) {
+    if (!inv) return '';
+    if (A.isDate(inv.dueDate)) return inv.dueDate;
+    if (A.isMonth(inv.month)) return A.monthEnd(inv.month);
+    return '';
+  }
   function overdueOf(studentId, invoices, payments, todayIso) {
     var paidMap = paidByInvoice(payments);
     return (invoices || [])
-      .filter(function (i) { return i.studentId === studentId && i.dueDate && i.dueDate < todayIso; })
+      .filter(function (i) {
+        if (i.studentId !== studentId) return false;
+        var due = invoiceDue(i);
+        return !!due && due < todayIso;
+      })
       .reduce(function (s, i) { return s + invoiceRemaining(i, paidMap); }, 0);
   }
 
@@ -789,7 +805,7 @@
     dueDayOf: dueDayOf, dueDateOf: dueDateOf,
     excusedCount: excusedCount, excusedCredit: excusedCredit,
     allocate: allocate, activePayments: activePayments, paidByInvoice: paidByInvoice,
-    invoiceRemaining: invoiceRemaining, balanceOf: balanceOf, overdueOf: overdueOf,
+    invoiceRemaining: invoiceRemaining, balanceOf: balanceOf, overdueOf: overdueOf, invoiceDue: invoiceDue,
     timeToMin: timeToMin, overlaps: overlaps, scheduleConflicts: scheduleConflicts,
     lessonConflicts: lessonConflicts, monthLessons: monthLessons,
     ATT: ATT, attendanceStats: attendanceStats, payrollFor: payrollFor,

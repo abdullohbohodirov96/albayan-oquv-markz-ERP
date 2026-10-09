@@ -133,7 +133,6 @@ function daysText(days) {
 async function summary(store, student) {
   const today = A.today();
   const settings = (await store.get('meta/settings')) || {};
-  const dueDay = Number(settings.dueDay || 5);
 
   const [memberships, groups, staff, rooms, invoices, payments] = await Promise.all([
     listCol(store, 'memberships'), listCol(store, 'groups'), listCol(store, 'staff'),
@@ -167,29 +166,44 @@ async function summary(store, student) {
     .filter(i => i.studentId === student.id && A.invoiceRemaining(i, paidMap) > 0)
     .sort((a, b) => String(a.month).localeCompare(String(b.month)));
 
-  const pad = n => (n < 10 ? '0' + n : '' + n);
-  function dueOf(ym) {
-    const p = String(ym).split('-');
-    const last = new Date(Number(p[0]), Number(p[1]), 0).getDate();
-    return ym + '-' + pad(Math.min(dueDay, last));
+  /* To'lov muddati — o'quvchining O'Z kuni (guruhga qo'shilgan
+     kunidan yoki a'zolikdagi dueDay'dan). Ilgari bu yerda markaz
+     uchun umumiy kun ishlatilgani uchun kabinetdagi sana hisobdagi
+     sanaga TO'G'RI KELMASDI.                                        */
+  const memById = {};
+  mine.forEach(m => { memById[m.id] = m; });
+  function dueOfInv(inv) {
+    const d = A.invoiceDue(inv);
+    if (d) return d;
+    return A.dueDateOf(memById[inv.membershipId] || {}, inv.month, settings);
+  }
+  function dueOfMonth(ym) {
+    /* Keyingi oy uchun: faol a'zolikdagi eng yaqin muddat */
+    const list = mine
+      .filter(m => m.status === 'faol')
+      .map(m => A.dueDateOf(m, ym, settings))
+      .filter(Boolean)
+      .sort();
+    return list[0] || A.dueDateOf({}, ym, settings);
   }
   let next = null;
   if (open.length) {
     const inv = open[0];
+    const due = dueOfInv(inv);
     next = {
       month: inv.month,
       monthLabel: A.monthLabel(inv.month),
       amount: A.invoiceRemaining(inv, paidMap),
-      dueDate: dueOf(inv.month),
+      dueDate: due,
       group: (groupById[inv.groupId] || {}).name || '',
-      overdue: dueOf(inv.month) < today
+      overdue: due < today
     };
   } else {
     // qarz yo'q — keyingi hisob qachon chiqadi
     const nextYm = A.addMonths(today.slice(0, 7), 1);
     next = {
       month: nextYm, monthLabel: A.monthLabel(nextYm),
-      amount: 0, dueDate: dueOf(nextYm), group: '', overdue: false, upcoming: true
+      amount: 0, dueDate: dueOfMonth(nextYm), group: '', overdue: false, upcoming: true
     };
   }
 

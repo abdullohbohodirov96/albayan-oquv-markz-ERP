@@ -143,7 +143,10 @@
   function cellDate(v) {
     var s = String(v == null ? '' : v).trim();
     if (!s) return '';
-    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      var iso = s.slice(0, 10);
+      return A.isDate(iso) ? iso : '';
+    }
     var m = s.match(/^(\d{1,2})[./](\d{1,2})[./](\d{2,4})$/);
     if (m) {
       var y = m[3].length === 2 ? '20' + m[3] : m[3];

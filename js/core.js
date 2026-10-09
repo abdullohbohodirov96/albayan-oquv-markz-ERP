@@ -90,8 +90,25 @@
     var p = ym.split('-');
     return MONTHS[Number(p[1]) - 1] + ' ' + p[0];
   }
+  /* Haqiqiy kalendar sanasimi? ("2026-13-45" yoki "<script>" — yo'q) */
+  function isDate(v) {
+    var s = String(v == null ? '' : v);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+    var y = Number(s.slice(0, 4)), m = Number(s.slice(5, 7)), d = Number(s.slice(8, 10));
+    if (y < 1900 || y > 2200) return false;
+    if (m < 1 || m > 12) return false;
+    if (d < 1) return false;
+    return d <= new Date(y, m, 0).getDate();
+  }
+  function isMonth(v) {
+    var s = String(v == null ? '' : v);
+    if (!/^\d{4}-\d{2}$/.test(s)) return false;
+    var y = Number(s.slice(0, 4)), m = Number(s.slice(5, 7));
+    return y >= 1900 && y <= 2200 && m >= 1 && m <= 12;
+  }
   function dateLabel(iso) {
     if (!iso) return '—';
+    if (!isDate(iso)) return '—';
     var p = String(iso).split('-');
     if (p.length < 3) return iso;
     var list = global.A && global.A.MONTHS_IN ? global.A.MONTHS_IN : MONTHS;
@@ -548,6 +565,7 @@
     ymOf: ymOf, thisMonth: thisMonth, addDays: addDays, addMonths: addMonths,
     daysInMonth: daysInMonth, weekdayOf: weekdayOf, parseDate: parseDate,
     monthStart: monthStart, monthEnd: monthEnd, monthLabel: monthLabel, dateLabel: dateLabel,
+    isDate: isDate, isMonth: isMonth,
     WEEKDAYS: WEEKDAYS, WEEKDAYS_SHORT: WEEKDAYS_SHORT, MONTHS: MONTHS,
     som: som, somFull: somFull, parseSom: parseSom,
     uid: uid, textHash: textHash, normPhone: normPhone, phoneDigits: phoneDigits, esc: esc, clone: clone,

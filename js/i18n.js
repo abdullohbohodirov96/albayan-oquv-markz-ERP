@@ -750,6 +750,8 @@
     'Summani kiriting.': ['Введите сумму.', 'Enter the amount.', 'أدخل المبلغ.'],
     'O’quvchini tanlang.': ['Выберите ученика.', 'Select a student.', 'اختر طالباً.'],
     'Sanani kiriting.': ['Укажите дату.', 'Enter the date.', 'أدخل التاريخ.'],
+    'Guruhga kirgan sanani to’g’ri kiriting.': ['Укажите правильную дату зачисления в группу.', 'Enter a valid group join date.', 'أدخل تاريخ انضمام صحيحًا للمجموعة.'],
+    'Guruhdan chiqgan sanani to’g’ri kiriting.': ['Укажите правильную дату выхода из группы.', 'Enter a valid group leave date.', 'أدخل تاريخ خروج صحيحًا من المجموعة.'],
     'Sababi': ['Причина', 'Reason', 'السبب'],
     'Sababni yozing.': ['Укажите причину.', 'Enter a reason.', 'اكتب السبب.'],
     'Summa noto’g’ri.': ['Сумма неверна.', 'Amount is invalid.', 'المبلغ غير صحيح.'],

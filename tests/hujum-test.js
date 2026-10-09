@@ -13,6 +13,14 @@
    Ishga tushirish:  node tests/hujum-test.js [port] [direktor paroli]   */
 'use strict';
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+/* Model funksiyalari (filial kaliti kabi) shu yerda ham kerak */
+const loadJs = f => (0, eval)(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'));
+global.window = undefined;
+loadJs('core.js'); loadJs('model.js');
+const A = globalThis.A;
 
 const PORT = process.argv[2] || 3300;
 const PASS = process.argv[3] || 'Albyana2026!';
@@ -491,6 +499,136 @@ function raw(pathRaw, opts = {}) {
     const r = await raw(p).catch(() => ({ status: 0 }));
     ok('Ochilmaydi: ' + p, r.status !== 200, String(r.status));
   }
+
+  /* ================================================================
+     15. YANGI YO'LLAR: butunlay o'chirish, bazani tozalash,
+         filial sozlamasi va to'lov sanalari
+     ================================================================ */
+  section('15. Yangi yo’llar: o’chirish, tozalash, filial, to’lov sanasi');
+
+  /* --- 15a. O'quvchini butunlay o'chirish --- */
+  const purge = (body, cookie) =>
+    req('/api/students/purge', { method: 'POST', cookie, body });
+
+  const pNoAuth = await purge({ ids: [ID('s')] });
+  ok('Sessiyasiz o’chirib bo’lmaydi', pNoAuth.status === 401 || pNoAuth.status === 403,
+    pNoAuth.status + ' ' + pNoAuth.text.slice(0, 120));
+  const pTch = await purge({ ids: [ID('s')] }, tch);
+  eq('O’qituvchi o’chira olmaydi', pTch.status, 403);
+  /* RAD ETILGANDAN KEYIN o'quvchi joyida turishi kerak */
+  ok('  → rad etilgandan keyin o’quvchi joyida',
+    !!(await getDoc('students/' + ID('s'), dir)));
+  ok('  → a’zoligi ham joyida',
+    !!(await getDoc('memberships/' + ID('m'), dir)));
+
+  const pEmpty = await purge({ ids: [] }, dir);
+  eq('Bo’sh ro’yxat rad etiladi', pEmpty.status, 400);
+  const pPath = await purge({ ids: ['../../meta/settings'] }, dir);
+  ok('Yo’l bo’ylab chiqib ketish rad etiladi',
+    pPath.status === 400 || (pPath.json && !pPath.json.deleted),
+    pPath.status + ' ' + pPath.text.slice(0, 140));
+  ok('  → sozlama joyida', !!(await getDoc('meta/settings', dir)));
+  const pBig = await purge({ ids: Array.from({ length: 201 }, (_, i) => 's' + i) }, dir);
+  eq('201 ta o’quvchi bir yo’la rad etiladi', pBig.status, 400);
+  const pProto = await purge({ ids: ['__proto__'] }, dir);
+  ok('"__proto__" id prototipni buzmaydi',
+    ({}).polluted === undefined && pProto.status < 500, pProto.status + '');
+
+  /* Oldindan ko'rish HECH NIMANI o'chirmaydi */
+  const dry = await purge({ ids: [ID('s')], dryRun: true }, dir);
+  eq('Oldindan ko’rish ishlaydi', dry.status, 200);
+  ok('  → o’quvchi hali joyida (oldindan ko’rish)',
+    !!(await getDoc('students/' + ID('s'), dir)), JSON.stringify(dry.json).slice(0, 160));
+  ok('  → a’zoligi hali joyida',
+    !!(await getDoc('memberships/' + ID('m'), dir)));
+
+  /* --- 15b. Bazani tozalash: tasdiqlashsiz ishlamaydi --- */
+  const rsNoAuth = await req('/api/backup/reset', { method: 'POST', body: { confirm: 'O’CHIRAMAN' } });
+  ok('Sessiyasiz baza tozalanmaydi', rsNoAuth.status === 401 || rsNoAuth.status === 403,
+    rsNoAuth.status + '');
+  const rsTch = await req('/api/backup/reset', { method: 'POST', cookie: tch, body: { confirm: 'O’CHIRAMAN' } });
+  eq('O’qituvchi baza tozalay olmaydi', rsTch.status, 403);
+  for (const bad of ['', 'ochiraman', 'O’CHIRAM', 'DELETE', 'HA']) {
+    const r = await req('/api/backup/reset', { method: 'POST', cookie: dir, body: { confirm: bad } });
+    eq('Tasdiqlash so’zi "' + bad + '" qabul qilinmaydi', r.status, 400);
+  }
+  /* Eng muhimi: shu urinishlardan keyin ham baza TURIBDI */
+  ok('Urinishlardan keyin o’quvchi joyida', !!(await getDoc('students/' + ID('s'), dir)));
+  ok('Urinishlardan keyin guruh joyida', !!(await getDoc('groups/' + ID('g'), dir)));
+
+  /* --- 15c. To'lov sanasi zaharlanmaydi (PUL YO'QOLISHI) ---
+     joinedAt to'g'ridan-to'g'ri hisobning muddatiga tushadi.
+     Buzuq sana yozilsa, muddat satr sifatida solishtirilgani uchun
+     qarz hech qachon "muddati o'tgan" bo'lmay qolardi.            */
+  const memPath = 'memberships/' + ID('m');
+  const memOk = await getDoc(memPath, dir);
+  for (const bad of ['2026-13-45', '2026-02-30', '<script>alert(1)</script>',
+    '9999-99-99', '2026-9-1', 'now()', '2026-09-01T00:00:00']) {
+    const r = await putDoc(memPath, Object.assign({}, memOk, { joinedAt: bad }), dir);
+    eq('Buzuq kirgan sana rad etiladi: ' + bad.slice(0, 20), r.status, 400);
+  }
+  const memAfter = await getDoc(memPath, dir);
+  eq('Rad etilgandan keyin sana o’zgarmadi', memAfter.joinedAt, '2026-09-01');
+
+  for (const bad of [0, 29, 99, -5, 1.5, 'abc', '7; DROP TABLE']) {
+    const r = await putDoc(memPath, Object.assign({}, memOk, { dueDay: bad }), dir);
+    eq('Buzuq to’lov kuni rad etiladi: ' + bad, r.status, 400);
+  }
+  const memDue = await putDoc(memPath, Object.assign({}, memOk, { dueDay: 12 }), dir);
+  eq('To’g’ri to’lov kuni (12) qabul qilinadi', memDue.status, 200);
+  eq('  → saqlandi', (await getDoc(memPath, dir)).dueDay, 12);
+  const memBack = await putDoc(memPath, Object.assign({}, memOk, { leftAt: '2026-08-01' }), dir);
+  eq('Chiqgan sana kirgandan oldin bo’lmaydi', memBack.status, 400);
+
+  /* O'quvchining to'lov sanasi ham tekshiriladi */
+  const stOk = await getDoc('students/' + ID('s'), dir);
+  for (const bad of ['2026-13-45', '2026-02-31', '<img onerror=1>']) {
+    const r = await putDoc('students/' + ID('s'), Object.assign({}, stOk, { payDate: bad }), dir);
+    eq('Buzuq to’lov sanasi rad etiladi: ' + bad.slice(0, 16), r.status, 400);
+  }
+  eq('Rad etilgandan keyin o’quvchi nomi o’zgarmadi',
+    (await getDoc('students/' + ID('s'), dir)).firstName, 'Hujum');
+
+  /* --- 15d. Hisob (invoice) summasi va oyi --- */
+  const invId = 'invoices/' + ID('i');
+  const invBase = {
+    id: ID('i'), membershipId: ID('m'), studentId: ID('s'), groupId: ID('g'),
+    month: '2026-09', base: 100000, discount: 0, final: 100000, dueDate: '2026-09-01'
+  };
+  for (const bad of ['2026-13', 'xxxx-xx', '', '2026-09-01']) {
+    const r = await putDoc(invId, Object.assign({}, invBase, { month: bad }), dir);
+    eq('Buzuq hisob oyi rad etiladi: "' + bad + '"', r.status, 400);
+  }
+  const invBadDue = await putDoc(invId, Object.assign({}, invBase, { dueDate: '2026-13-45' }), dir);
+  eq('Buzuq muddat rad etiladi', invBadDue.status, 400);
+  const invNeg = await putDoc(invId, Object.assign({}, invBase, { final: -500000 }), dir);
+  eq('Manfiy summa rad etiladi', invNeg.status, 400);
+  ok('Rad etilgan hisob bazaga tushmadi', !(await getDoc(invId, dir)));
+  const invGood = await putDoc(invId, invBase, dir);
+  eq('To’g’ri hisob qabul qilinadi', invGood.status, 200);
+  const invSaved = await getDoc(invId, dir);
+  ok('  → muddat haqiqiy sana', !!invSaved && /^\d{4}-\d{2}-\d{2}$/.test(invSaved.dueDate),
+    JSON.stringify(invSaved));
+  await req('/api/doc?path=' + encodeURIComponent(invId), { method: 'DELETE', cookie: dir });
+
+  /* --- 15e. Filial sozlamasi: kod saytga chiqmasin --- */
+  const set0 = (await getDoc('meta/settings', dir)) || {};
+  const evil = 'Taxtapul filiali\n<script>alert(1)</script>\n' + 'A'.repeat(300);
+  const setRes = await putDoc('meta/settings', Object.assign({}, set0, { branches: evil }), dir);
+  if (setRes.status === 200) {
+    const home = await raw('/');
+    ok('Filial nomidagi kod sahifaga chiqmadi',
+      !/<script>alert\(1\)<\/script>/.test(home.text), 'sahifada topildi');
+    const after = await getDoc('meta/settings', dir);
+    const list = A.branchList({ branches: after && after.branches });
+    ok('Filial ro’yxati 12 tadan oshmaydi', list.length <= 12, String(list.length));
+    ok('Filial kaliti faqat harf-raqam',
+      list.every(b => /^[a-z0-9-]+$/.test(b.id)), JSON.stringify(list.slice(0, 3)));
+  }
+  const setTch = await putDoc('meta/settings', Object.assign({}, set0, { branches: 'Men' }), tch);
+  eq('O’qituvchi sozlamani o’zgartira olmaydi', setTch.status, 403);
+  /* Sozlamani tiklaymiz */
+  await putDoc('meta/settings', set0, dir);
 
   /* ---------- tozalash ---------- */
   for (const p of ['memberships/' + ID('m'), 'students/' + ID('s'), 'groups/' + ID('g'),

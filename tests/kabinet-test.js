@@ -195,6 +195,32 @@ const GCODE = 'K' + R.slice(-5).toUpperCase();
   eq('Keyingi to’lov summasi', f.next.amount, myInv ? Math.round(myInv.final) : 0);
   eq('Keyingi to’lov oyi', f.next.month, '2026-09');
   ok('To’lov sanasi bor', /^\d{4}-\d{2}-\d{2}$/.test(f.next.dueDate), f.next.dueDate);
+  /* KABINETDAGI SANA HISOBDAGI SANAGA TO'G'RI KELISHI SHART.
+     Ilgari kabinet markaz uchun UMUMIY kunni ko'rsatardi, hisob esa
+     o'quvchining o'z kunini — ota-ona noto'g'ri sanani ko'rardi. */
+  eq('Kabinetdagi muddat hisobdagi muddat bilan bir xil',
+    f.next.dueDate, myInv ? myInv.dueDate : null);
+
+  /* O'z to'lov kuni (dueDay=22) — kabinet ham shu kunni ko'rsatadi */
+  const m1 = (await get('memberships/' + ID('m1'), dir)).json.data;
+  const upd = await put('memberships/' + ID('m1'), Object.assign({}, m1, { dueDay: 22 }), dir);
+  eq('To’lov kuni 22 ga o’zgartirildi', upd.status, 200);
+  await req('/api/doc?path=' + encodeURIComponent('invoices/' + (myInv || {}).id),
+    { method: 'DELETE', cookie: dir });
+  await req('/api/invoices/generate', { method: 'POST', body: { month: '2026-09' }, cookie: dir });
+  const inv22 = await req('/api/collection?name=invoices', { cookie: dir });
+  const myInv22 = Object.values(inv22.json.items || {}).filter(i => i.studentId === ID('s1'))[0];
+  eq('Hisob muddati 22-si', myInv22 && myInv22.dueDate, '2026-09-22');
+  const r22 = await kab(ID('s1'));
+  eq('Kabinet ham 22-sini ko’rsatadi', r22.json.finance.next.dueDate, '2026-09-22');
+  /* Eski holatga qaytaramiz — keyingi bo'limlar shunga tayangan */
+  await put('memberships/' + ID('m1'), m1, dir);
+  await req('/api/doc?path=' + encodeURIComponent('invoices/' + myInv22.id),
+    { method: 'DELETE', cookie: dir });
+  await req('/api/invoices/generate', { method: 'POST', body: { month: '2026-09' }, cookie: dir });
+  const invBack = await req('/api/collection?name=invoices', { cookie: dir });
+  const myInvBack = Object.values(invBack.json.items || {}).filter(i => i.studentId === ID('s1'))[0];
+  eq('Hisob tiklandi', !!myInvBack, true);
 
   // qisman to'lov
   const payRes = await req('/api/payment', {
