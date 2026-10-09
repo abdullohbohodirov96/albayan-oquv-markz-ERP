@@ -781,11 +781,24 @@
       h('button', {
         class: 'btn', onclick: function () {
           var bmap = Q.balanceMap();
-          UI.exportRows('oquvchilar', [['Kod', 'Familiya', 'Ism', 'Telefon', 'Ota-ona', 'Ota-ona telefoni', 'Guruhlar', 'Holat', 'Qarz', 'Avans']].concat(
+          var ym = A.thisMonth();
+          /* To'lov kuni ham chiqadi: "To'lov sanasi" — dars boshlagan
+             (to'lov hisoblanadigan) sana, "To'lov kuni" — har oyning
+             nechanchi sanasi, "Keyingi muddat" — shu oydagi sana.
+             Shu uchta ustun qayta import qilinganda ham o'qiladi.     */
+          UI.exportRows('oquvchilar', [['Kod', 'Familiya', 'Ism', 'Telefon', 'Ota-ona', 'Ota-ona telefoni', 'Guruhlar',
+            'To’lov sanasi', 'To’lov kuni', 'Keyingi muddat', 'Holat', 'Qarz', 'Avans']].concat(
             list.map(function (s) {
               var b = bmap[s.id] || { debt: 0, advance: 0 };
+              var mems = Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; });
+              var day = A.isDate(s.payDate)
+                ? Math.min(28, Math.max(1, Number(s.payDate.slice(8, 10))))
+                : (mems.length ? A.dueDayOf(mems[0], D.settings) : '');
+              var nextDue = mems.length ? A.dueDateOf(mems[0], ym, D.settings)
+                : (day ? A.dueDateFor(ym, day) : '');
               return [s.code || '', s.lastName, s.firstName, s.phone, s.parentName || '', s.parentPhone || '',
-              Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; }).map(function (m) { return Q.groupName(m.groupId); }).join(', '),
+              mems.map(function (m) { return Q.groupName(m.groupId); }).join(', '),
+              A.isDate(s.payDate) ? s.payDate : '', day || '', nextDue || '',
               s.status, b.debt, b.advance];
             })));
         }

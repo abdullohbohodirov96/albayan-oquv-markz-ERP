@@ -12,6 +12,12 @@
     parentPhone: ['ota ona telefoni', 'ota onasi telefoni', 'otaona telefon', 'vasiy telefoni', 'ota ona tel', 'родитель телефон', 'телефон родителя', 'parent phone', 'هاتف ولي الأمر'],
     parentName: ['ota ona', 'ota onasi', 'vasiy', 'ota ona ismi', 'родитель', 'фио родителя', 'parent', 'guardian', 'ولي الأمر'],
     birthDate: ['tugilgan sana', 'tugilgan', 'tugilgan kuni', 'дата рождения', 'др', 'birth', 'birthday', 'date of birth', 'تاريخ الميلاد'],
+    /* To'lov kuni — eksportdagi uchta ustun shu yerga tushadi.
+       "To'lov sanasi" to'liq sana, "To'lov kuni" esa 1…28 raqam.   */
+    payDate: ['tolov sanasi', 'tolov boshlangan sana', 'dars boshlagan sana', 'boshlagan sana',
+      'дата оплаты', 'дата начала оплаты', 'payment date', 'start date', 'تاريخ الدفع'],
+    payDay: ['tolov kuni', 'tolov kun', 'tolov sanasi kuni', 'har oyning', 'tolov qiladigan kun',
+      'день оплаты', 'число оплаты', 'payment day', 'due day', 'يوم الدفع'],
     group: ['guruh', 'guruhi', 'guruhlar', 'guruh kodi', 'guruh nomi', 'группа', 'группы', 'group', 'groups', 'group code', 'المجموعة'],
     course: ['kurs', 'kursi', 'yonalish', 'курс', 'направление', 'course', 'الدورة'],
     source: ['manba', 'qayerdan', 'источник', 'откуда', 'source', 'المصدر'],
@@ -48,6 +54,17 @@
   function looksLikePhone(v) {
     var d = String(v == null ? '' : v).replace(/\D/g, '');
     return d.length >= 7 && d.length <= 15;
+  }
+  /** "12", "12-kun", "har oyning 12-sida" → 12; aks holda 0 */
+  function dayNumber(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s) return 0;
+    if (A.isDate(s)) return Number(s.slice(8, 10));
+    var m = s.match(/\d{1,2}/);
+    if (!m) return 0;
+    var n = Number(m[0]);
+    if (!isFinite(n) || n < 1) return 0;
+    return Math.min(28, n);
   }
   function looksLikeDate(v) {
     return /^\d{4}-\d{2}-\d{2}/.test(String(v)) || /^\d{1,2}[./]\d{1,2}[./]\d{2,4}$/.test(String(v));
@@ -422,6 +439,13 @@
             birthDate: r.birthDate || '', status: 'faol',
             note: r.note || '', createdAt: A.nowStamp(), imported: true
           };
+          /* To'lov kuni: avval to'liq sana, bo'lmasa kun raqami.
+             Ikkisidan ham bittasi bo'lsa — o'quvchi SHU kunda
+             to'laydigan bo'lib yoziladi (a'zolikka ham tushadi).   */
+          var payDate = A.isDate(cellDate(r.payDate)) ? cellDate(r.payDate) : '';
+          var payDay = dayNumber(r.payDay);
+          if (!payDay && payDate) payDay = Math.min(28, Math.max(1, Number(payDate.slice(8, 10))));
+          if (payDate) st.payDate = payDate;
           /* Fayldagi tayyor shaxsiy kod — band bo'lmasa o'shasi olinadi.
              Band bo'lsa yoki yo'q bo'lsa, kodni server o'zi beradi.        */
           if (/^\d{4,5}$/.test(String(r.code || ''))) {
@@ -458,10 +482,13 @@
                 ' — "' + raw + '" guruhi topilmadi va yaratilmadi (huquq yo’q)');
               continue;
             }
-            await D.save('memberships', {
+            var mRec = {
               id: A.uid('mem'), studentId: st.id, groupId: gid,
-              joinedAt: A.today(), leftAt: null, status: 'faol', discount: null, imported: true
-            });
+              joinedAt: payDate || A.today(), leftAt: null, status: 'faol',
+              discount: null, imported: true
+            };
+            if (payDay) mRec.dueDay = payDay;
+            await D.save('memberships', mRec);
             enrolled++;
           }
         } else {

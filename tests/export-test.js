@@ -133,6 +133,45 @@ function unzipStored(buf) {
     }
   }
 
+  /* ---- O'QUVCHILAR SAHIFASIDAGI HAQIQIY "Excel" TUGMASI ----
+     Fayl ichida TO'LOV KUNI bo'lishi shart: aks holda eksportni
+     qaytarib import qilganda kim qachon to'lashi yo'qolardi.      */
+  out.push('\nO’quvchilar ro’yxati: to’lov kuni ustunlari');
+  await page.evaluate(() => window.A.App.go('students'));
+  await page.waitForTimeout(600);
+  const dlp3 = page.waitForEvent('download', { timeout: 15000 });
+  const clicked = await page.evaluate(() => {
+    const btns = [...document.querySelectorAll('button')]
+      .filter(b => /Excel/.test(b.textContent) && !/import/i.test(b.textContent));
+    if (!btns.length) return false;
+    btns[btns.length - 1].click();
+    return true;
+  });
+  ok('Sahifada "Excel" tugmasi bor', clicked);
+  let realPath = null;
+  try {
+    const dl3 = await dlp3;
+    realPath = path.join(dir, 'oquvchilar-real.xlsx');
+    await dl3.saveAs(realPath);
+  } catch (e) { /* pastda hisobga olinadi */ }
+  ok('Ro’yxat yuklab olindi', !!realPath);
+  if (realPath) {
+    const sheet3 = unzipStored(fs.readFileSync(realPath))['xl/worksheets/sheet1.xml'].toString('utf8');
+    const has = t => sheet3.indexOf('<t xml:space="preserve">' + t + '</t>') >= 0;
+    ok('Sarlavhada "To’lov sanasi" bor', has('To’lov sanasi'), sheet3.slice(0, 600));
+    ok('Sarlavhada "To’lov kuni" bor', has('To’lov kuni'));
+    ok('Sarlavhada "Keyingi muddat" bor', has('Keyingi muddat'));
+    ok('Eski "Guruhlar" ustuni joyida', has('Guruhlar'));
+    ok('Qarz va avans ham qoldi', has('Qarz') && has('Avans'));
+    /* Hech bo'lmasa bitta o'quvchida kun raqami yozilgan bo'lsin */
+    const dayCells = (sheet3.match(/<v>(\d{1,2})<\/v>/g) || []).length;
+    ok('Kun raqamlari yozildi (' + dayCells + ' ta)', dayCells > 0);
+    /* Sana ustunida HAQIQIY sana bo'lsin */
+    const dates = sheet3.match(/<t xml:space="preserve">(\d{4}-\d{2}-\d{2})<\/t>/g) || [];
+    ok('Sana ko’rinishi YYYY-MM-DD (' + dates.length + ' ta)', dates.length > 0,
+      dates.slice(0, 3).join(' '));
+  }
+
   /* ---- Noto'g'ri natijada sinov yiqilishini tekshirish (nazorat) ---- */
   out.push('\nNazorat: buzuq ma’lumot aniqlanadimi');
   const detects = await page.evaluate(() => {

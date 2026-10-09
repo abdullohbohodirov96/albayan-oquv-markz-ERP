@@ -494,6 +494,52 @@ function section(t) { results.push('\n' + t); }
       (D.one('students', m.studentId) || {}).lastName === 'Borguruh'),
     JSON.stringify(D.all('memberships').slice(-2)));
 
+  /* --- To'LOV KUNI eksportdan import'ga qaytib keladi ---
+     Ilgari eksportda to'lov kuni umuman yo'q edi: faylni qaytarib
+     import qilganda har bir o'quvchi markazning umumiy kuniga
+     tushib qolardi va kim qachon to'lashi yo'qolardi.              */
+  res = IH.analyse(IH.parseCsvText(
+    'Kod,Familiya,Ism,Telefon,Ota-ona,Ota-ona telefoni,Guruhlar,To’lov sanasi,To’lov kuni,Keyingi muddat,Holat,Qarz,Avans\n' +
+    '40771,Valiyev,Ali,901234567,Vali,+998901112233,A1,2026-03-12,12,2026-09-12,faol,0,0\n'));
+  eq('Eksportdagi "To’lov sanasi" tanildi', res.map.payDate, 7);
+  eq('Eksportdagi "To’lov kuni" tanildi', res.map.payDay, 8);
+  eq('"Keyingi muddat" sanani buzmaydi', res.map.birthDate, undefined);
+  eq('Tug’ilgan sana bilan aralashmadi', res.map.payDate === res.map.birthDate, false);
+
+  const impPay = await IH.doImport('students', [
+    { lastName: 'Kunli', firstName: 'Qodir', phone: '901239944',
+      group: 'A1', payDate: '2026-03-12', payDay: '12' },
+    { lastName: 'Kunsiz', firstName: 'Karim', phone: '901239933',
+      group: 'A1', payDay: 'har oyning 25-sida' },
+    { lastName: 'Sanali', firstName: 'Sanjar', phone: '901239922',
+      group: 'A1', payDate: '05.08.2026' }
+  ], false, impApp);
+  eq('Uchala o’quvchi qo’shildi', impPay.added, 3);
+  const byName = n => D.all('students').find(x => x.lastName === n) || {};
+  const memOfName = n => D.all('memberships').filter(m => m.studentId === byName(n).id)[0] || {};
+  eq('To’lov sanasi saqlandi', byName('Kunli').payDate, '2026-03-12');
+  eq('A’zolikka to’lov kuni yozildi', memOfName('Kunli').dueDay, 12);
+  eq('Guruhga kirgan sana ham o’sha', memOfName('Kunli').joinedAt, '2026-03-12');
+  eq('Muddat shu kundan hisoblanadi',
+    A.dueDateOf(memOfName('Kunli'), '2026-10', { dueDay: 5 }), '2026-10-12');
+  /* Faqat kun raqami berilgan — sana O'YLAB TOPILMAYDI */
+  eq('Sanasiz kun ham o’qiladi', memOfName('Kunsiz').dueDay, 25);
+  eq('Yo’q sana o’ylab topilmaydi', byName('Kunsiz').payDate, undefined);
+  eq('Kun bo’yicha muddat',
+    A.dueDateOf(memOfName('Kunsiz'), '2026-10', { dueDay: 5 }), '2026-10-25');
+  /* "05.08.2026" ko'rinishidagi sana ham tushuniladi */
+  eq('Nuqtali sana o’qildi', byName('Sanali').payDate, '2026-08-05');
+  eq('Undan kun olindi', memOfName('Sanali').dueDay, 5);
+  /* Buzuq sana import orqali ham kirmaydi */
+  const impBad = await IH.doImport('students', [
+    { lastName: 'Buzuq', firstName: 'Baxtiyor', phone: '901239911',
+      group: 'A1', payDate: '2026-13-45' }
+  ], false, impApp);
+  eq('Buzuq sanali qator ham qo’shildi', impBad.added, 1);
+  eq('Lekin buzuq sana yozilmadi', byName('Buzuq').payDate, undefined);
+  ok('A’zolik sanasi haqiqiy', A.isDate(memOfName('Buzuq').joinedAt),
+    memOfName('Buzuq').joinedAt);
+
   // Ruscha sarlavhalar
   res = IH.analyse(IH.parseCsvText('Фамилия,Имя,Телефон\nИванов,Иван,901112233\n'));
   eq('Ruscha "Фамилия" tanildi', res.map.lastName, 0);

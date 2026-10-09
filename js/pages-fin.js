@@ -767,12 +767,21 @@
       : UI.empty({ title: 'Qarzdorlik yo’q', text: 'Barcha hisoblar to’langan.' }), [
       h('button', {
         class: 'btn sm', onclick: function () {
-          UI.exportCsv('qarzdorlar.csv', [['O’quvchi', 'Telefon', 'Guruhlar', 'Qarz', 'Muddati o’tgan']].concat(
+          /* Qarzdorlar ro'yxatida TO'LOV KUNI ham bo'lsin — qo'ng'iroq
+             qilayotgan odam "qachon to'laysiz" deb so'rab o'tirmasin. */
+          var ymD = A.thisMonth();
+          UI.exportCsv('qarzdorlar.csv', [['O’quvchi', 'Telefon', 'Guruhlar',
+            'To’lov kuni', 'Keyingi muddat', 'Qarz', 'Muddati o’tgan']].concat(
             debtors.map(function (d) {
               var s = D.one('students', d.studentId);
+              var mems = Q.membershipsOf(d.studentId).filter(function (m) { return m.status === 'faol'; });
+              var day = mems.length ? A.dueDayOf(mems[0], D.settings)
+                : (A.isDate(s && s.payDate) ? Number(s.payDate.slice(8, 10)) : '');
+              var nextDue = mems.length ? A.dueDateOf(mems[0], ymD, D.settings)
+                : (day ? A.dueDateFor(ymD, day) : '');
               return [Q.studentName(d.studentId), (s && (s.parentPhone || s.phone)) || '',
-              Q.membershipsOf(d.studentId).filter(function (m) { return m.status === 'faol'; }).map(function (m) { return Q.groupName(m.groupId); }).join(', '),
-              d.debt, d.overdue];
+              mems.map(function (m) { return Q.groupName(m.groupId); }).join(', '),
+              day || '', nextDue || '', d.debt, d.overdue];
             })));
         }
       }, 'Excel')
