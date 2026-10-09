@@ -119,8 +119,15 @@
         .filter(function (i) { return i.remaining > 0; })
         .sort(function (a, b) { return String(a.month).localeCompare(String(b.month)); });
     },
+    /* Faol guruhlar. Tepada FILIAL tanlangan bo'lsa — faqat
+       o'sha filialniki. Jadval, davomat va bosh sahifa shu
+       ro'yxatdan oziqlanadi, shuning uchun filial ajratishi
+       hamma joyda bir xil ishlaydi.                           */
     activeGroups: function (user) {
-      return A.scopeGroups(user, D.all('groups').filter(function (g) { return g.status !== 'yakunlangan'; }));
+      var list = A.scopeGroups(user, D.all('groups').filter(function (g) { return g.status !== 'yakunlangan'; }));
+      var App = A.App;
+      if (App && App.inBranch) list = list.filter(function (g) { return App.inBranch(g); });
+      return list;
     },
     /** Berilgan kundagi barcha darslar */
     lessonsOn: function (dateIso, user) {
@@ -271,9 +278,13 @@
   A.Pages.dashboard = function (view, route, App) {
     var user = App.user;
     var ym = A.thisMonth(), today = A.today();
+    /* Qaysi filial ko'rsatilayotgani sarlavhada turadi — raqamlar
+       nimaga tegishli ekani shubha tug'dirmasin.                */
+    var brNow = App.branchLabel ? App.branchLabel() : '';
     view.appendChild(UI.pageHead(
       'Salom, ' + user.name.split(' ')[0] + '!',
-      A.dateLabel(today) + ' · ' + (A.ROLES[user.role] || '')
+      A.dateLabel(today) + ' · ' + (A.ROLES[user.role] || '') +
+      (brNow ? ' · ' + brNow : '')
     ));
 
     // Demo eslatmasi
@@ -303,8 +314,12 @@
       .reduce(function (s, e) { return s + e.amount; }, 0);
     var debtors = Q.debtors();
     var overdueTotal = debtors.reduce(function (s, d) { return s + d.overdue; }, 0);
-    var activeStudents = D.all('students').filter(function (s) { return s.status === 'faol'; }).length;
-    var activeGroups = D.all('groups').filter(function (g) { return g.status === 'faol'; }).length;
+    var activeStudents = D.all('students').filter(function (s) {
+      return s.status === 'faol' && App.studentInBranch(s.id);
+    }).length;
+    var activeGroups = D.all('groups').filter(function (g) {
+      return g.status === 'faol' && App.inBranch(g);
+    }).length;
     var lessonsToday = Q.lessonsOn(today, user);
 
     var tiles = h('div', { class: 'tiles' });
@@ -742,6 +757,11 @@
     var status = route.status || 'all';
     var groupId = route.groupId || '';
     var list = all.filter(function (s) {
+      /* Tepadagi filial tanlangan bo'lsa — faqat o'sha filial
+         guruhlarida o'qiydigan o'quvchilar. Guruhsiz o'quvchi
+         hech qaysi filialga tegishli emas, shuning uchun
+         ko'rinmaydi.                                          */
+      if (!App.studentInBranch(s.id)) return false;
       if (status !== 'all' && s.status !== status) return false;
       if (groupId && !Q.membershipsOf(s.id).some(function (m) { return m.groupId === groupId && m.status === 'faol'; })) return false;
       if (q) {
@@ -1110,13 +1130,27 @@
     var s = D.one('students', route.id);
     if (!s) { view.appendChild(UI.empty({ title: 'O’quvchi topilmadi' })); return; }
     var tab = route.tab || 'umumiy';
-    var bal = Q.balance(s.id);
-    var over = Q.overdue(s.id);
+    /* O'quvchining O'Z kartasida hisob-kitob HAMMA filial bo'yicha
+       ko'rsatiladi. Ro'yxat va hisobot filial bo'yicha ajraladi,
+       lekin bitta odamning qarzi bo'lingan holda ko'rsatilsa,
+       u bilan gaplashganda noto'g'ri raqam aytilardi.           */
+    var bal = A.balanceOf(s.id, A.Fin.everyInvoice(), A.Fin.everyPayment());
+    var over = A.overdueOf(s.id, A.Fin.everyInvoice(), A.Fin.everyPayment(), A.today());
 
     view.appendChild(h('button', { class: 'btn ghost sm', style: 'margin-bottom:8px', onclick: function () { App.go('students'); } },
       [UI.icon('back'), 'O’quvchilar']));
 
+    /* O'quvchi qaysi filial(lar)da o'qiyotgani sarlavhada turadi */
+    var stBranches = {};
+    Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; })
+      .forEach(function (m) {
+        var n = A.branchName(D.settings, A.branchOf(D.one('groups', m.groupId)));
+        if (n) stBranches[n] = 1;
+      });
+    var brLine = Object.keys(stBranches).join(', ');
+
     view.appendChild(UI.pageHead(s.lastName + ' ' + s.firstName,
+      (brLine ? brLine + ' · ' : '') +
       (s.phone || '') + (s.parentName ? ' · Ota-ona: ' + s.parentName + ' ' + (s.parentPhone || '') : ''),
       [
         s.code ? h('button', {

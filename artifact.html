@@ -83,6 +83,9 @@
         <input id="global-search" type="search" placeholder="Ism yoki telefon bo’yicha qidirish" autocomplete="off" aria-label="Qidirish">
       </div>
       <div class="rowflex" style="gap:8px">
+        <!-- Filial tanlagich: markazda bir nechta filial bo'lsa chiqadi.
+             Tanlangan filial butun tizimga ta'sir qiladi. -->
+        <select class="branch-pick" id="branch-pick" aria-label="Filial" hidden></select>
         <span class="pill mute" id="mode-pill" hidden></span>
         <div class="lang-pick" id="lang-pick" role="group" aria-label="Til"></div>
         <button class="btn sm" id="theme-toggle" title="Yorug' / qorong'i">

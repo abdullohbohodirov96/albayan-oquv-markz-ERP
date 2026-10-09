@@ -52,6 +52,7 @@
       var view = document.getElementById('view');
       UI.clear(view);
       renderNav();
+      if (A.renderBranchPick) A.renderBranchPick();
       var page = A.Pages[App.route.name];
       if (!page) { view.appendChild(UI.empty({ title: 'Sahifa topilmadi' })); return; }
       try {
@@ -2724,6 +2725,76 @@
     });
   }
   A.renderLangPick = renderLangPick;
+
+  /* ---------- Filial tanlash ----------
+
+     Tanlangan filial BUTUN tizimga ta'sir qiladi: o'quvchilar,
+     guruhlar, jadval, davomat, moliya, hisobot va bosh sahifa —
+     hammasi shunga qarab ajraladi. "Hammasi" tanlansa, avvalgidek
+     ikkala filial birga ko'rinadi.
+
+     Tanlov brauzerda eslab qolinadi (shu kompyuterda), chunki
+     odatda bitta odam bitta filialda ishlaydi va har kirganda
+     qayta tanlab o'tirmasin. U bazaga YOZILMAYDI — bu ko'rinish
+     sozlamasi, boshqa xodimning ekraniga ta'sir qilmaydi.       */
+  var BRANCH_KEY = 'albyana_branch';
+
+  App.branch = '';
+  try { App.branch = localStorage.getItem(BRANCH_KEY) || ''; } catch (e) { App.branch = ''; }
+
+  /** Shu guruh tanlangan filialdami? Filial tanlanmagan bo'lsa — hamma guruh */
+  App.inBranch = function (groupOrId) {
+    if (!App.branch) return true;
+    var g = typeof groupOrId === 'string' ? D.one('groups', groupOrId) : groupOrId;
+    return A.branchOf(g) === App.branch;
+  };
+
+  /** O'quvchi tanlangan filialdami? Guruhlari orqali tekshiriladi.
+      Guruhsiz o'quvchi filial tanlanganda ko'rinmaydi — u hali
+      hech qaysi filialga yozilmagan.                            */
+  App.studentInBranch = function (studentId) {
+    if (!App.branch) return true;
+    var mems = A.Q ? A.Q.membershipsOf(studentId) : [];
+    return mems.some(function (m) { return App.inBranch(m.groupId); });
+  };
+
+  /** Tanlangan filial nomi (yoki '') */
+  App.branchLabel = function () {
+    return App.branch ? A.branchName(D.settings, App.branch) : '';
+  };
+
+  function renderBranchPick() {
+    var sel = document.getElementById('branch-pick');
+    if (!sel) return;
+    var list = A.branchList(D.settings);
+    /* Bitta yoki umuman filial bo'lmasa — tanlagich keraksiz */
+    if (list.length < 2 || !App.user) {
+      sel.hidden = true;
+      if (App.branch) { App.branch = ''; try { localStorage.removeItem(BRANCH_KEY); } catch (e) { } }
+      return;
+    }
+    /* Sozlamada o'chirilgan filial tanlangan bo'lsa — "Hammasi" ga qaytamiz */
+    if (App.branch && !list.some(function (b) { return b.id === App.branch; })) {
+      App.branch = '';
+      try { localStorage.removeItem(BRANCH_KEY); } catch (e) { }
+    }
+    sel.hidden = false;
+    UI.clear(sel);
+    sel.appendChild(h('option', { value: '' }, 'Hamma filial'));
+    list.forEach(function (b) {
+      sel.appendChild(h('option', { value: b.id }, b.name));
+    });
+    sel.value = App.branch;
+    sel.onchange = function () {
+      App.branch = sel.value;
+      try {
+        if (App.branch) localStorage.setItem(BRANCH_KEY, App.branch);
+        else localStorage.removeItem(BRANCH_KEY);
+      } catch (e) { }
+      App.render();
+    };
+  }
+  A.renderBranchPick = renderBranchPick;
 
   var restPromise = null;
 

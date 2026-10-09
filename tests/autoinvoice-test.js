@@ -47,7 +47,7 @@ function thisMonth() {
   s0.autoInvoice = { enabled: false, day: 1 };
   await put('meta/settings', s0);
   await put('meta/autoinvoice', {});
-  for (const p2 of ['memberships/aim4', 'students/ai4']) {
+  for (const p2 of ['memberships/aim4', 'memberships/aim5', 'students/ai5', 'students/ai4']) {
     await req('/api/doc?path=' + encodeURIComponent(p2), { method: 'DELETE', cookie });
   }
   const before = await req('/api/collection?name=invoices', { cookie });
@@ -68,6 +68,11 @@ function thisMonth() {
   await put('memberships/aim1', { id: 'aim1', studentId: 'ai1', groupId: 'aig1', status: 'faol', joinedAt: ym + '-01' });
   await put('memberships/aim2', { id: 'aim2', studentId: 'ai2', groupId: 'aig1', status: 'faol', joinedAt: ym + '-01' });
   await put('memberships/aim3', { id: 'aim3', studentId: 'ai3', groupId: 'aig1', status: 'faol', joinedAt: ym + '-01' });
+  /* To'lov kuni HALI KELMAGAN o'quvchi: oyning 28-sida qo'shilgan.
+     Uning hisobi bugun yaratilmasligi kerak (agar bugun 28 dan
+     oldin bo'lsa).                                              */
+  await put('students/ai5', { id: 'ai5', firstName: 'Besh', lastName: 'Keyinroq', status: 'faol' });
+  await put('memberships/aim5', { id: 'aim5', studentId: 'ai5', groupId: 'aig1', status: 'faol', joinedAt: ym + '-28' });
 
   /* --- 1. O'chirilgan holatda ishlamaydi --- */
   section('1. O’chirilgan bo’lsa hech nima qilmaydi');
@@ -79,31 +84,32 @@ function thisMonth() {
   const inv0 = await req('/api/collection?name=invoices', { cookie });
   eq('Hisob yaratilmadi', mine(inv0).length, 0);
 
-  /* --- 2. Yoqilgan, lekin kuni kelmagan --- */
-  section('2. Belgilangan kun kelmasa kutadi');
+  /* --- 2. Har o'quvchining O'Z kuni --- */
+  section('2. To’lov kuni kelmaganga hisob yozilmaydi');
   const settings = (await req('/api/doc?path=meta/settings', { cookie })).json.data;
-  settings.autoInvoice = { enabled: true, day: 28 };
+  settings.autoInvoice = { enabled: true };
   await put('meta/settings', settings);
   const today = new Date(Date.now() + 5 * 3600 * 1000).getUTCDate();
   const run1 = await req('/api/invoices/auto/run', { method: 'POST', cookie });
+  ok('Ishga tushdi', run1.status === 200, run1.text.slice(0, 160));
+  const inv1list = mine(await req('/api/collection?name=invoices', { cookie }));
   if (today < 28) {
-    eq('Kutmoqda', run1.json.waiting, true);
-    const inv1 = await req('/api/collection?name=invoices', { cookie });
-    eq('Hali hisob yo’q', mine(inv1).length, 0);
+    ok('28-sida qo’shilganga hali hisob yo’q',
+      !inv1list.some(i => i.membershipId === 'aim5'),
+      JSON.stringify(inv1list.map(i => i.membershipId)));
+    ok('Kutayotganlar sanaldi', (run1.json.waiting || 0) >= 1, JSON.stringify(run1.json));
   } else {
     ok('Bugun 28-kundan keyin — bu qism o’tkazib yuborildi', true);
   }
 
-  /* --- 3. Kuni kelganda yaratadi --- */
-  section('3. Kun kelganda hisoblar yaratiladi');
-  settings.autoInvoice = { enabled: true, day: 1 };
-  await put('meta/settings', settings);
-  const run2 = await req('/api/invoices/auto/run', { method: 'POST', cookie });
+  /* --- 3. Kuni kelganlarga yaratadi --- */
+  section('3. Kuni kelganlarga hisob yaratiladi');
+  const run2 = { json: run1.json, status: run1.status };
   ok('Kamida ikkita hisob yaratildi (' + run2.json.created + ')', run2.json.created >= 2, JSON.stringify(run2.json));
   ok('Oy yozildi', run2.json.lastMonth === ym, run2.json.lastMonth);
   const inv2 = await req('/api/collection?name=invoices', { cookie });
   const invoices = mine(inv2);
-  eq('Sinov guruhida 2 ta hisob', invoices.length, 2);
+  ok('Sinov guruhida kamida 2 ta hisob', invoices.length >= 2, String(invoices.length));
   ok('Arxivdagi o’quvchiga yaratilmadi', !invoices.some(i => i.studentId === 'ai3'));
   ok('Summa guruh narxidan olindi', invoices.every(i => i.final === 400000),
     JSON.stringify(invoices.map(i => i.final)));
@@ -113,7 +119,7 @@ function thisMonth() {
   /* --- 4. Ikki marta yaratmaydi --- */
   section('4. Ikkinchi marta takrorlanmaydi');
   const run3 = await req('/api/invoices/auto/run', { method: 'POST', cookie });
-  eq('"done" deb qaytardi', run3.json.done, true);
+  eq('Yangi hisob yaratilmadi', run3.json.created, 0);
   const inv3 = await req('/api/collection?name=invoices', { cookie });
   eq('Hisoblar soni o’zgarmadi', mine(inv3).length, 2);
 
@@ -121,16 +127,25 @@ function thisMonth() {
   section('5. Yangi o’quvchiga hisob qo’shiladi (takrorsiz)');
   await put('students/ai4', { id: 'ai4', firstName: 'To’rt', lastName: 'Sinov', status: 'faol' });
   await put('memberships/aim4', { id: 'aim4', studentId: 'ai4', groupId: 'aig1', status: 'faol', joinedAt: ym + '-05' });
+  /* Qo'lda yaratish HAMMASIGA yozadi — kuni kelmaganlarga ham.
+     Avtomatik yo'l esa faqat kuni kelganlarga: ikkisi ataylab
+     farq qiladi, chunki qo'lda yaratish rahbarning qarori.     */
+  const before5 = mine(await req('/api/collection?name=invoices', { cookie })).length;
   const manual = await req('/api/invoices/generate', { method: 'POST', cookie, body: { month: ym } });
-  eq('Faqat bitta yangi hisob', manual.json.created, 1);
+  ok('Yangi hisob(lar) yaratildi (' + manual.json.created + ')', manual.json.created >= 1,
+    JSON.stringify(manual.json));
   ok('Mavjudlari o’tkazib yuborildi (' + manual.json.skipped + ')', manual.json.skipped >= 2, String(manual.json.skipped));
-  eq('Sinov guruhida endi 3 ta', mine(await req('/api/collection?name=invoices', { cookie })).length, 3);
+  const after5 = mine(await req('/api/collection?name=invoices', { cookie })).length;
+  eq('Soni yaratilganicha oshdi', after5, before5 + manual.json.created);
+  ok('Yangi o’quvchiga ham hisob bor',
+    mine(await req('/api/collection?name=invoices', { cookie })).some(i => i.membershipId === 'aim4'));
 
   /* --- 6. Holat va direktorga xabar --- */
   section('6. Natija saqlanadi va direktorga xabar boradi');
   const st1 = await req('/api/invoices/auto', { cookie });
   ok('Oxirgi ishga tushirish vaqti bor', !!st1.json.state.lastRunAt, JSON.stringify(st1.json.state));
-  ok('Yaratilgan soni saqlandi (' + st1.json.state.created + ')', st1.json.state.created >= 2, String(st1.json.state.created));
+  ok('Bugun yaratilgan soni saqlandi (' + st1.json.state.createdToday + ')',
+    (st1.json.state.createdToday || 0) >= 2, JSON.stringify(st1.json.state));
   ok('Xato yo’q', !st1.json.state.lastError);
 
   const chats = await req('/api/collection?name=chats', { cookie });

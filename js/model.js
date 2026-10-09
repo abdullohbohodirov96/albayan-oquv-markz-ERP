@@ -263,6 +263,60 @@
     return null;
   }
 
+  /* =============== FILIALLAR ===============
+
+     Markazda bir nechta filial bo'ladi. Filial GURUHGA
+     biriktiriladi: xona, jadval va ustoz ham guruhga bog'langan,
+     shuning uchun eng tabiiy joy shu. O'quvchi esa guruhi orqali
+     filialga tegishli bo'ladi — ikki filialda o'qisa, ikkalasida
+     ham ko'rinadi.
+
+     Sozlamada filiallar oddiy matn bo'lib yoziladi (har qatorda
+     bitta nom). Shunday qilingani — rahbar alohida "filial
+     qo'shish" ekraniga kirmasdan, ro'yxatni bir joyda tahrirlay
+     olsin.                                                      */
+  var BRANCH_MAX = 12;
+
+  /** Sozlamadagi matndan filiallar ro'yxati: [{id, name}] */
+  function branchList(settings) {
+    var raw = (settings && settings.branches) || '';
+    var names = (Array.isArray(raw) ? raw : String(raw).split('\n'))
+      .map(function (x) { return String(x && x.name != null ? x.name : x).trim(); })
+      .filter(Boolean);
+    var seen = {}, out = [];
+    names.forEach(function (n) {
+      var id = branchId(n);
+      if (!id || seen[id]) return;
+      seen[id] = 1;
+      if (out.length < BRANCH_MAX) out.push({ id: id, name: n.slice(0, 60) });
+    });
+    return out;
+  }
+
+  /** Nomdan barqaror kalit: nom o'zgarmaguncha kalit o'zgarmaydi */
+  function branchId(name) {
+    return String(name || '').toLowerCase().trim()
+      .replace(/[’'`]/g, '')
+      .replace(/[^a-z0-9Ѐ-ӿ]+/g, '-')
+      .replace(/^-+|-+$/g, '').slice(0, 40);
+  }
+
+  /** Sozlama tahrirlash maydoni uchun matn ko'rinishi */
+  function branchLines(settings) {
+    return branchList(settings).map(function (b) { return b.name; }).join('\n');
+  }
+
+  /** Guruh qaysi filialda. Belgilanmagan bo'lsa '' */
+  function branchOf(group) {
+    return String((group && group.branchId) || '');
+  }
+
+  /** Filial nomi (topilmasa — bo'sh) */
+  function branchName(settings, id) {
+    var b = branchList(settings).filter(function (x) { return x.id === String(id || ''); })[0];
+    return b ? b.name : '';
+  }
+
   /* ---------------- Bir dars narxi ----------------
      Oyda nechta dars bo'lishi oydan oyga o'zgaradi (ba'zi oyda 12,
      ba'zisida 13). Agar bir dars narxini HAR OY shu oydagi dars
@@ -729,6 +783,8 @@
     feeForMonth: feeForMonth, feeUpcoming: feeUpcoming,
     discountFor: discountFor, invoiceAmountFor: invoiceAmountFor,
     membershipActiveIn: membershipActiveIn, invoiceId: invoiceId, dueDateFor: dueDateFor,
+    branchList: branchList, branchId: branchId, branchLines: branchLines,
+    branchOf: branchOf, branchName: branchName,
     lessonsPerMonth: lessonsPerMonth, lessonPrice: lessonPrice,
     dueDayOf: dueDayOf, dueDateOf: dueDateOf,
     excusedCount: excusedCount, excusedCredit: excusedCredit,

@@ -9,14 +9,50 @@
 
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll'];
 
+  /* ---------------- FILIAL SUZGICHI ----------------
+
+     Tepada filial tanlangan bo'lsa, moliya ham o'sha filialniki
+     bo'lishi kerak — aks holda "1-filial tushumi" degan raqam
+     ikkala filialnikini qo'shib ko'rsatardi.
+
+     Qaysi yozuv qaysi filialga tegishli:
+       — hisob (invoice): guruhi bo'yicha;
+       — to'lov (payment): o'quvchining guruhlari bo'yicha;
+       — xarajat (expense): o'zida yozilgan filial bo'yicha.
+     Ish haqi (payroll) ajratilmaydi: bitta ustoz ikkala filialda
+     dars berishi mumkin, shuning uchun uni bo'lish noto'g'ri
+     bo'lardi — ekranda shu haqda yozib qo'yilgan.               */
+  function branchKeep(kind, rec) {
+    var App = A.App;
+    if (!App || !App.branch || !App.inBranch) return true;
+    if (!rec) return true;
+    if (kind === 'invoices') return App.inBranch(rec.groupId);
+    if (kind === 'payments') return App.studentInBranch(rec.studentId);
+    if (kind === 'expenses') {
+      /* Filiali yozilmagan xarajat UMUMIY deb qaraladi va
+         ikkala filialda ham ko'rinadi (ijara, reklama kabi).  */
+      return !rec.branchId || rec.branchId === App.branch;
+    }
+    return true;
+  }
+  function branchFilter(kind, list) {
+    var App = A.App;
+    if (!App || !App.branch) return list;
+    return list.filter(function (x) { return branchKeep(kind, x); });
+  }
+
   var Fin = {
-    /* --- To'plangan ro'yxatlar --- */
-    allInvoices: function () { return D.all('invoices'); },
-    allPayments: function () { return D.all('payments'); },
-    allExpenses: function () { return D.all('expenses'); },
+    /* --- To'plangan ro'yxatlar (filial suzgichi bilan) --- */
+    allInvoices: function () { return branchFilter('invoices', D.all('invoices')); },
+    allPayments: function () { return branchFilter('payments', D.all('payments')); },
+    allExpenses: function () { return branchFilter('expenses', D.all('expenses')); },
     monthItems: function (kind, ym) {
-      return D.all(kind).filter(function (x) { return x.month === ym; });
+      return branchFilter(kind, D.all(kind).filter(function (x) { return x.month === ym; }));
     },
+    /* Filialga qaramay HAMMASI kerak bo'lgan joylar uchun */
+    everyInvoice: function () { return D.all('invoices'); },
+    everyPayment: function () { return D.all('payments'); },
+    branchKeep: branchKeep,
     invoicesById: function () {
       var m = {};
       D.all('invoices').forEach(function (i) { m[i.id] = i; });

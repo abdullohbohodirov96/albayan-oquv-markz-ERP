@@ -324,9 +324,13 @@
       UI.clear(box);
       var cb = h('input', { type: 'checkbox', id: 'auto-inv-on' });
       cb.checked = conf.enabled === true;
+      /* Kun endi SOZLAMADAN emas, har o'quvchining o'zidan
+         olinadi — shuning uchun bu maydon ko'rsatilmaydi. U
+         faqat guruhga kirgan sanasi yozilmagan eski yozuvlar
+         uchun zaxira qiymat bo'lib qoladi.                   */
       var dayF = UI.field({
-        label: 'Oyning qaysi kunida', type: 'number', value: conf.day || 1,
-        help: 'Masalan 1 — har oyning 1-kuni hisoblar o’zi yaratiladi.'
+        label: 'Zaxira kun (sana yozilmaganlar uchun)', type: 'number', value: conf.day || 1,
+        hidden: true
       });
       var state = h('div', { class: 'small muted', style: 'margin-top:10px' },
         D.mode === 'server' ? 'Holat yuklanmoqda…'
@@ -334,8 +338,10 @@
 
       box.appendChild(UI.card('Oylik hisoblarni avtomatik yaratish', [
         h('p', { style: 'margin:0 0 12px' },
-          'Yoqilsa, har oy boshida barcha faol o’quvchilarga hisob o’zi yaratiladi. ' +
-          'Ikki marta yaratilmaydi — allaqachon bor hisob o’tkazib yuboriladi.'),
+          'Yoqilsa, HAR O’QUVCHIGA O’Z KUNIDA hisob o’zi yaratiladi: ' +
+          'guruhga 17-sida qo’shilgan bo’lsa, har oyning 17-sida hisobi ' +
+          'chiqadi va o’sha kundan qarzdor bo’ladi. Qo’lda "hisob yaratish" ' +
+          'kerak emas. Ikki marta yaratilmaydi.'),
         h('label', { class: 'list-item', style: 'cursor:pointer;border:1px solid var(--line);border-radius:10px' }, [
           cb,
           h('div', { class: 'main-col' }, [
@@ -344,6 +350,9 @@
           ])
         ]),
         h('div', { class: 'form-grid', style: 'margin-top:12px' }, [dayF.wrap]),
+        h('p', { class: 'small muted', style: 'margin:10px 0 0' },
+          'Server har 6 soatda tekshiradi, shuning uchun hisob to’lov kunida ' +
+          'yoki undan keyingi bir necha soat ichida paydo bo’ladi.'),
         state,
         h('div', { class: 'rowflex', style: 'margin-top:14px' }, [
           h('button', {
@@ -364,9 +373,8 @@
                 try {
                   var r = await D.api('POST', 'api/invoices/auto/run');
                   if (r.off) UI.toast('Avval avtomatik yaratishni yoqing.', 'bad');
-                  else if (r.waiting) UI.toast('Belgilangan kun hali kelmadi (' + r.day + '-kun).', 'info');
-                  else if (r.done) UI.toast('Bu oy uchun allaqachon yaratilgan.', 'info');
-                  else UI.toast((r.created || 0) + ' ta hisob yaratildi.', 'ok');
+                  else if (r.created) UI.toast(r.created + ' ta hisob yaratildi.', 'ok');
+                  else UI.toast('Bugun kuni kelgan o’quvchi yo’q — hammasida hisob bor.', 'info');
                   await D.loadBootstrap();
                   refresh();
                 } catch (err) { UI.toast(err.message, 'bad'); }
@@ -933,6 +941,15 @@
       { name: 'category', label: 'Kategoriya', type: 'select', required: true, value: e.category, options: cats.map(function (c) { return { value: c, label: c }; }) },
       { name: 'amount', label: 'Summa (so’m)', type: 'number', required: true, value: e.amount },
       { name: 'method', label: 'To’lov usuli', type: 'select', value: e.method, options: METHODS },
+      {
+        /* Filial: bo'sh qoldirilsa xarajat UMUMIY hisoblanadi va
+           ikkala filial hisobotida ham ko'rinadi (ijara, reklama). */
+        name: 'branchId', label: 'Filial', type: 'select',
+        value: e.branchId || '', hidden: !A.branchList(D.settings).length,
+        options: [{ value: '', label: 'Umumiy (ikkala filial)' }].concat(
+          A.branchList(D.settings).map(function (b) { return { value: b.id, label: b.name }; })),
+        help: 'Bo’sh qoldirsangiz, xarajat ikkala filial hisobotida ko’rinadi.'
+      },
       { name: 'note', label: 'Izoh', type: 'textarea', value: e.note, full: true }
     ]);
     UI.modal({
@@ -958,6 +975,15 @@
   function renderPayroll(view, ym, App) {
     App.guard('finance.payroll');
     var items = A.Fin.monthItems('payroll', ym);
+    /* Ish haqi filial bo'yicha AJRATILMAYDI: bitta ustoz ikkala
+       filialda dars berishi mumkin, shuning uchun uni bo'lish
+       noto'g'ri bo'lardi. Buni ekranda ochiq aytamiz.          */
+    if (App.branch) {
+      view.appendChild(h('div', { class: 'banner info' },
+        h('div', {}, [h('b', {}, A.branchLabel ? '' : ''),
+          'Ish haqi filial bo’yicha ajratilmaydi — bitta ustoz ikkala ' +
+          'filialda dars berishi mumkin. Bu yerda hamma xodim ko’rinadi.'])));
+    }
     var staffList = D.all('staff').filter(function (s) { return s.status === 'faol'; });
     var accrued = items.reduce(function (s, i) { return s + (i.accrued || 0); }, 0);
     var paid = items.reduce(function (s, i) { return s + (i.paid || 0); }, 0);
@@ -1483,7 +1509,10 @@
 
     var inRange = function (d) { return d >= from && d <= to; };
     var pays = A.Fin.allPayments().filter(function (p) { return inRange(p.date); });
-    var exps = D.all('expenses').filter(function (e) { return inRange(e.date); });
+    /* Xarajat ham FILIAL suzgichidan o'tadi — ilgari bu yerda
+       hamma xarajat olinardi va filial tanlanganda tushum
+       ajralib, xarajat ajralmay qolardi: foyda noto'g'ri edi. */
+    var exps = A.Fin.allExpenses().filter(function (e) { return inRange(e.date); });
     var cf = A.cashFlow(pays, exps.filter(function (e) { return !e.voided; }));
 
     var invs = A.Fin.allInvoices().filter(function (i) {
@@ -1493,12 +1522,32 @@
     var debtors = Q.debtors();
     var totalDebt = debtors.reduce(function (s, d) { return s + d.debt; }, 0);
 
+    /* ---- UMUMIY FOYDA / ZARAR ----
+       Sof pul oqimi ish haqini hisobga olmaydi, chunki u alohida
+       bo'limda yuritiladi. Rahbarga esa "oxirida qo'limda nima
+       qoldi" kerak, shuning uchun TO'LANGAN ish haqi ham ayriladi.
+       Oraliqdagi oylar bo'yicha olinadi.                        */
+    var payrollPaid = 0, payrollMonths = [];
+    for (var pm = A.ymOf(from); pm <= A.ymOf(to); pm = A.addMonths(pm, 1)) {
+      payrollMonths.push(pm);
+      D.all('payroll').filter(function (x) { return x.month === pm; })
+        .forEach(function (x) { payrollPaid += Math.round(x.paid || 0); });
+      if (payrollMonths.length > 36) break;        // cheksiz aylanmasin
+    }
+    var profit = cf.net - payrollPaid;
+
     var tiles = h('div', { class: 'tiles' }, [
       UI.tile({ label: 'Hisoblangan o’quv to’lovi', value: A.som(charged), hint: 'so’m' }),
       UI.tile({ label: 'Haqiqiy tushum', value: A.som(cf.income), hint: 'so’m', cls: 'money' }),
       UI.tile({ label: 'Qaytarilgan', value: A.som(cf.refunds), hint: 'so’m' }),
       UI.tile({ label: 'To’langan xarajatlar', value: A.som(cf.expenses), hint: 'so’m' }),
-      UI.tile({ label: 'Sof pul oqimi', value: A.som(cf.net), hint: 'tushum − qaytarish − xarajat', cls: cf.net < 0 ? 'alert' : 'money' }),
+      UI.tile({ label: 'To’langan ish haqi', value: A.som(payrollPaid), hint: 'so’m' }),
+      UI.tile({
+        label: profit < 0 ? 'Umumiy zarar' : 'Umumiy foyda', value: A.som(profit),
+        hint: 'tushum − qaytarish − xarajat − ish haqi',
+        cls: profit < 0 ? 'alert' : 'money'
+      }),
+      UI.tile({ label: 'Sof pul oqimi', value: A.som(cf.net), hint: 'ish haqisiz', cls: cf.net < 0 ? 'alert' : '' }),
       UI.tile({ label: 'Jami qarzdorlik', value: A.som(totalDebt), hint: debtors.length + ' o’quvchi', cls: totalDebt > 0 ? 'alert' : '' })
     ]);
     if (!App.can('reports.finance')) UI.clear(tiles);
@@ -1506,8 +1555,53 @@
 
     if (App.can('reports.finance')) {
       view.appendChild(h('div', { class: 'banner info' }, h('div', {}, [
-        h('b', {}, '"Sof pul oqimi" '), '— shu davrda kassaga kirgan va kassadan chiqqan pul farqi. Bu buxgalteriya foydasi emas.'
+        h('b', {}, '"Umumiy foyda" '),
+        '— shu davrda kassaga kirgan pul, undan qaytarish, xarajat va ' +
+        'to’langan ish haqi ayrilgani. Bu buxgalteriya foydasi emas: ' +
+        'faqat haqiqatan kirgan va chiqqan pul hisobga olinadi.'
       ])));
+
+      /* ---- HISOBGA QO'SHILMAGANLAR ----
+         Pul masalasida eng xavflisi — "raqam chiqdi, lekin nimadir
+         hisobga kirmay qolgan". Shuning uchun nima qo'shilmagani
+         ochiq sanab beriladi.                                    */
+      var missing = [];
+      var noBranch = A.Fin.allExpenses().filter(function (e) {
+        return inRange(e.date) && !e.voided && !e.branchId;
+      });
+      if (App.branch) {
+        if (noBranch.length) {
+          var sumNo = noBranch.reduce(function (s, e) { return s + e.amount; }, 0);
+          missing.push(noBranch.length + ' ta xarajat filialga biriktirilmagan (' +
+            A.som(sumNo) + ' so’m) — umumiy deb olindi, ikkala filialda ham ko’rinadi');
+        }
+        missing.push('Ish haqi filial bo’yicha ajratilmaydi — bu yerdagi summa hamma xodimniki');
+        var noGroup = D.all('students').filter(function (st) {
+          return st.status === 'faol' && !Q.membershipsOf(st.id)
+            .some(function (m) { return m.status === 'faol'; });
+        });
+        if (noGroup.length) {
+          missing.push(noGroup.length + ' ta o’quvchi hech qaysi guruhda emas — ' +
+            'hech bir filial hisobotiga qo’shilmagan');
+        }
+      }
+      var unpaidPayroll = 0;
+      payrollMonths.forEach(function (pm) {
+        D.all('payroll').filter(function (x) { return x.month === pm; })
+          .forEach(function (x) { unpaidPayroll += Math.max(0, Math.round((x.accrued || 0) - (x.paid || 0))); });
+      });
+      if (unpaidPayroll > 0) {
+        missing.push('Hisoblangan, lekin hali to’lanmagan ish haqi: ' +
+          A.som(unpaidPayroll) + ' so’m — foydaga qo’shilmagan');
+      }
+      if (totalDebt > 0) {
+        missing.push('O’quvchilar qarzi ' + A.som(totalDebt) +
+          ' so’m — pul kelmagani uchun foydaga qo’shilmagan');
+      }
+      if (missing.length) {
+        view.appendChild(UI.card('Hisobga qo’shilmagan', h('ul', { class: 'small' },
+          missing.map(function (m) { return h('li', {}, m); }))));
+      }
     }
 
     var cols = h('div', { class: 'grid cols-2' });
@@ -1777,7 +1871,16 @@
         },
         {
           name: 'dueDay', label: 'To’lov muddati (oyning kuni)', type: 'number', value: s.dueDay,
-          help: 'Shu kundan keyin to’lanmagan hisob "muddati o’tgan" hisoblanadi.'
+          help: 'Faqat guruhga kirgan sanasi yozilmagan o’quvchilar uchun. ' +
+            'Qolganlarida muddat o’zining kirgan kunidan olinadi.'
+        },
+        {
+          /* Filiallar: har qatorda bitta nom. Guruh qaysi filialda
+             bo'lsa, o'quvchi ham o'sha filialda hisoblanadi.      */
+          name: 'branches', label: 'Filiallar (har qatorda bittadan)', type: 'textarea',
+          value: A.branchLines(s),
+          help: 'Masalan: Taxtapul filiali / Tinchlik filiali. Guruh ochganda ' +
+            'qaysi filial ekanini tanlaysiz; hisobotlar shunga qarab ajraladi.'
         }
       ]);
       var langBtns = h('div', { class: 'rowflex' }, A.I18N.langs.map(function (l) {

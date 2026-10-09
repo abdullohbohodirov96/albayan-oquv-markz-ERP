@@ -174,6 +174,41 @@ const A = globalThis.A;
   eq('Birinchi oyda muddat qo’shilgan kunidan oldin emas',
     A.dueDateOf(mC, PREV, { dueDay: 5 }), PREV + '-26');
 
+  /* =============== 3b. Qo'shilgan zahoti QARZDOR =============== */
+  section('3b. Guruhga yozilgan zahoti qarz paydo bo’ladi');
+  /* O'quvchi oy O'RTASIDA qo'shiladi. Hisob darrov tuzilishi va
+     muddati AYNAN shu kun bo'lishi kerak: oy boshini kutib
+     o'tirmaydi, "hisob yaratish" tugmasini ham kutmaydi.       */
+  const MIDDAY = YM + '-19';
+  await put('students/' + ID('sqarz'), {
+    id: ID('sqarz'), firstName: 'Qarz', lastName: 'Sinov ' + R,
+    phone: '+99890888' + Math.floor(1000 + Math.random() * 8999), status: 'faol'
+  });
+  await put('memberships/' + ID('mqarz'), {
+    id: ID('mqarz'), studentId: ID('sqarz'), groupId: ID('g'),
+    joinedAt: MIDDAY, leftAt: null, status: 'faol', discount: null
+  });
+  /* Ilova guruhga yozilganda shu hisobni tuzadi; bu yerda
+     serverning o'sha mantiqini chaqiramiz.                   */
+  const genMid = await api('/api/invoices/generate', { method: 'POST', body: { month: YM } });
+  eq('Hisob tuzildi', genMid.status, 200);
+  const invMid = await get('invoices/' + A.invoiceId(ID('mqarz'), YM));
+  ok('Qo’shilgan oyda hisob bor', !!invMid, JSON.stringify(invMid));
+  eq('Muddat AYNAN qo’shilgan kuni', invMid && invMid.dueDate, MIDDAY);
+  eq('Summa to’liq oylik', invMid && invMid.final, FEE);
+  /* Keyingi oyda ham o'sha kun */
+  const NEXTM = A.addMonths(YM, 1);
+  await del('invoices/' + A.invoiceId(ID('mqarz'), NEXTM));
+  await api('/api/invoices/generate', { method: 'POST', body: { month: NEXTM } });
+  const invMid2 = await get('invoices/' + A.invoiceId(ID('mqarz'), NEXTM));
+  eq('Keyingi oyda ham 19-si', invMid2 && invMid2.dueDate, NEXTM + '-19');
+  /* Muddat o'tsa — qarzi "muddati o'tgan" bo'ladi */
+  const paidMap = {};
+  eq('To’lanmagan qoldiq to’liq', A.invoiceRemaining(invMid, paidMap), FEE);
+  ok('Muddat o’tgan bo’lsa qarz hisoblanadi',
+    A.overdueOf(ID('sqarz'), [Object.assign({}, invMid, { dueDate: '2020-01-01' })], [], A.today()) === FEE,
+    'muddat o’tgan hisob qarzga tushmadi');
+
   /* =============== 4. Davomat: sababli, kelmadi, keldi =============== */
   section('4. O’tgan oy davomati');
   /* O'tgan oyda 4 ta dars: A — 2 ta SABABLI, B — 2 ta KELMADI,
@@ -280,6 +315,8 @@ const A = globalThis.A;
     'invoices/' + A.invoiceId(ID('mc'), YM), 'invoices/' + A.invoiceId(ID('ma'), NEXT2),
     'invoices/' + A.invoiceId(ID('mb'), NEXT2), 'invoices/' + A.invoiceId(ID('mc'), NEXT2),
     'lessons/' + ID('g') + '__' + PREV,
+    'invoices/' + A.invoiceId(ID('mqarz'), YM), 'invoices/' + A.invoiceId(ID('mqarz'), NEXTM),
+    'memberships/' + ID('mqarz'), 'students/' + ID('sqarz'),
     'memberships/' + ID('ma'), 'memberships/' + ID('mb'), 'memberships/' + ID('mc'),
     'students/' + ID('sa'), 'students/' + ID('sb'), 'students/' + ID('sc'),
     'students/' + ID('skod'), 'students/' + ID('seski'),

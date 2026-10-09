@@ -26,7 +26,8 @@
   /* ================= GURUHLAR ================= */
   A.Pages.groups = function (view, route, App) {
     App.guard('group.view');
-    var list = A.scopeGroups(App.user, D.all('groups'));
+    var list = A.scopeGroups(App.user, D.all('groups'))
+      .filter(function (g) { return App.inBranch(g); });
     var status = route.status || 'all';
     if (status !== 'all') list = list.filter(function (g) { return g.status === status; });
     list = A.sortBy(list, 'name');
@@ -77,6 +78,11 @@
           g.status === 'faol' ? UI.pill('Faol', 'ok') : (g.status === 'rejalashtirilgan' ? UI.pill('Rejalashtirilgan', 'info') : UI.pill('Yakunlangan', 'mute'))
         ]),
         h('div', { class: 'small muted' }, Q.courseName(g.courseId) + ' · ' + Q.staffName(g.teacherId)),
+        /* Filial — "hamma filial" ko'rinishida qaysi guruh qayerdaligi
+           bir qarashda bilinsin.                                     */
+        A.branchName(D.settings, g.branchId)
+          ? h('div', { class: 'small' }, UI.pill(A.branchName(D.settings, g.branchId), 'mute'))
+          : null,
         h('div', { class: 'small' }, (g.days || []).map(function (d) { return A.WEEKDAYS_SHORT[d - 1]; }).join(', ') +
           ' · ' + g.startTime + '–' + g.endTime + ' · ' + Q.roomName(g.roomId)),
         h('div', { class: 'bar' + (fill > 90 ? ' warn' : '') }, h('i', { style: 'width:' + fill + '%' })),
@@ -162,7 +168,9 @@
 
     view.appendChild(h('button', { class: 'btn ghost sm', style: 'margin-bottom:8px', onclick: function () { App.go('groups'); } },
       [UI.icon('back'), 'Guruhlar']));
+    var gBranch = A.branchName(D.settings, g.branchId);
     view.appendChild(UI.pageHead(A.groupLabel(g),
+      (gBranch ? gBranch + ' · ' : '') +
       Q.courseName(g.courseId) + ' · ' + Q.staffName(g.teacherId) + ' · ' + Q.roomName(g.roomId) + ' · ' +
       (g.days || []).map(function (d) { return A.WEEKDAYS_SHORT[d - 1]; }).join(', ') + ' ' + g.startTime + '–' + g.endTime,
       [
@@ -402,6 +410,18 @@
         value: A.lessonsPerMonth(g), min: 1, max: 60,
         help: 'Bir dars narxi shu songa bo’lib hisoblanadi. Sababli qoldirilgan ' +
           'dars uchun keyingi oy hisobidan shuncha pul chegiriladi.'
+      },
+      {
+        /* Filial — guruhga biriktiriladi; o'quvchi guruhi orqali
+           o'sha filialga tegishli bo'ladi. Ro'yxat sozlamadan
+           keladi, bo'sh bo'lsa maydon ham chiqmaydi.            */
+        name: 'branchId', label: 'Filial', type: 'select',
+        value: g.branchId || '', hidden: !A.branchList(D.settings).length,
+        options: [{ value: '', label: 'Belgilanmagan' }].concat(
+          A.branchList(D.settings).map(function (b) {
+            return { value: b.id, label: b.name };
+          })),
+        help: 'Hisobot va ro’yxatlar shu filial bo’yicha ajraladi.'
       },
       {
         name: 'status', label: 'Holat', type: 'select', value: g.status,
@@ -664,10 +684,16 @@
     var firstMonthBox = h('div', { class: 'field full' });
     var fmMode, fmAmount, fmNote, fmDue;
     /** Standart to'lov muddati: sozlamadagi kun, lekin kirgan sanadan oldin bo'lmasin */
+    /* To'lov muddati — o'quvchining O'Z kuni, ya'ni guruhga
+       qo'shilgan sanasi. Birinchi oyda bu AYNAN kirgan kuni
+       bo'ladi: o'quvchi kirgan kuniyoq to'lashi kerak, demak shu
+       kundan qarzdor hisoblanadi.
+
+       Ilgari bu yerda sozlamadagi umumiy kun turardi va u
+       hisobga zo'rlab yozilardi — shuning uchun "har kim o'z
+       kunida to'lasin" degan qoida birinchi oyda ishlamasdi.   */
     function defaultDue(joined, ym) {
-      var due = A.dueDateFor(ym, (D.settings && D.settings.dueDay) || 5);
-      if (joined && joined > due) due = A.addDays(joined, 7);
-      return due;
+      return A.dueDateOf({ joinedAt: joined }, ym, D.settings);
     }
 
     function refreshFirstMonth() {
@@ -778,8 +804,17 @@
                 }
                 if (fmDue && fmDue.input.value) opts.dueDate = fmDue.input.value;
                 if (!Object.keys(opts).length) opts = null;
-                if (ym >= A.thisMonth() && g && g.status === 'faol') {
-                  await A.Ops.createSingleInvoice(rec, ym, opts, App.user);
+                /* Guruhga yozilgan zahoti hisob tuziladi — o'quvchi
+                   SHU KUNDAN qarzdor bo'ladi, oy boshini kutmaydi.
+                   O'tgan oyga yozilsa ham hisob o'sha oy uchun
+                   tuziladi: ilgari u butunlay tushib qolardi va
+                   o'quvchi tekinga o'qib yurardi.                 */
+                if (g && g.status === 'faol') {
+                  var inv = await A.Ops.createSingleInvoice(rec, ym, opts, App.user);
+                  if (inv) {
+                    UI.toast('Hisob tuzildi: ' + A.som(inv.final) + ' so’m, muddat ' +
+                      A.dateLabel(inv.dueDate), 'ok');
+                  }
                 }
               }
               c(); UI.toast('Saqlandi.', 'ok');

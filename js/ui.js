@@ -613,6 +613,9 @@
       if (d.node) { grid.appendChild(d.node); return; }
       var f = field(d);
       fields[d.name] = { f: f, def: d };
+      /* hidden: true — maydon formada bor (qiymati saqlanadi),
+         lekin ko'rinmaydi. Masalan filial ro'yxati bo'sh bo'lsa. */
+      if (d.hidden) f.wrap.hidden = true;
       grid.appendChild(f.wrap);
     });
     function values() {

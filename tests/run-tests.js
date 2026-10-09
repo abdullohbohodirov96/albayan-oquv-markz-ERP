@@ -90,6 +90,24 @@ function section(t) { results.push('\n' + t); }
   eq('Qo’lda yozilgan kun ustun turadi',
     A.dueDateOf({ joinedAt: '2026-09-17', dueDay: 10 }, '2026-10', { dueDay: 5 }), '2026-10-10');
 
+  /* --- Filiallar --- */
+  const brS = { branches: 'Taxtapul filiali\nTinchlik filiali' };
+  eq('Ikkita filial o’qildi', A.branchList(brS).length, 2);
+  eq('Kalit nomdan tuziladi', A.branchList(brS)[0].id, 'taxtapul-filiali');
+  eq('Nomi kalit bo’yicha topiladi', A.branchName(brS, 'tinchlik-filiali'), 'Tinchlik filiali');
+  eq('Yo’q kalitga bo’sh nom', A.branchName(brS, 'yoq'), '');
+  eq('Takror nom bir marta', A.branchList({ branches: 'Bir\nBir\nIkki' }).length, 2);
+  eq('Bo’sh qatorlar tashlanadi', A.branchList({ branches: '\n Bir \n\n' }).length, 1);
+  eq('Sozlama bo’sh bo’lsa filial yo’q', A.branchList({}).length, 0);
+  eq('Guruh filiali o’qiladi', A.branchOf({ branchId: 'taxtapul-filiali' }), 'taxtapul-filiali');
+  eq('Filialsiz guruhda bo’sh', A.branchOf({}), '');
+  eq('Guruh bo’lmasa ham yiqilmaydi', A.branchOf(null), '');
+  /* Apostrof va bo'sh joy kalitni buzmasin */
+  eq('Apostrofli nom kaliti', A.branchId('Bog’ishamol filiali'), 'bogishamol-filiali');
+  /* Matn qatori ham, ro'yxat ham qabul qilinadi (eski yozuvlar) */
+  eq('Ro’yxat ko’rinishida ham ishlaydi',
+    A.branchList({ branches: [{ name: 'Bir' }, { name: 'Ikki' }] }).length, 2);
+
   /* --- Bir dars narxi va sababli dars chegirmasi --- */
   const gFee = { fee: 880000, feeHistory: [{ fee: 880000, from: YM }], lessonsPerMonth: 12 };
   eq('880 000 oyiga 12 dars — bir dars 73 333', A.lessonPrice(gFee, YM), 73333);

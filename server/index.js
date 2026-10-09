@@ -917,32 +917,102 @@ async function autoInvoiceTick() {
   const conf = settings.autoInvoice || {};
   if (conf.enabled !== true) return { off: true };
 
-  const day = Math.min(28, Math.max(1, Number(conf.day || 1)));
-  const now = new Date(Date.now() + 5 * 3600 * 1000);       // Asia/Tashkent
-  const today = now.getUTCDate();
-  const ym = A.thisMonth();
+  /* Toshkent vaqti bo'yicha bugun */
+  const now = new Date(Date.now() + 5 * 3600 * 1000);
+  const todayIso = now.toISOString().slice(0, 10);
+  const ym = todayIso.slice(0, 7);
   const state = (await store.get('meta/autoinvoice')) || {};
-  if (today < day) return { waiting: true, day };
-  if (state.lastMonth === ym) return { done: true, month: ym };
 
   try {
-    const r = await withLock('invoices', () => generateInvoicesServer(ym, null));
+    const r = await withLock('invoices', () => autoInvoiceDue(todayIso, ym));
     const next = {
-      lastMonth: ym, lastRunAt: stamp(),
-      created: r.created, skipped: r.skipped,
+      lastRunAt: stamp(), lastDay: todayIso, lastMonth: ym,
+      created: r.created, waiting: r.waiting,
+      createdToday: (state.lastDay === todayIso ? (state.createdToday || 0) : 0) + r.created,
       errors: (r.errors || []).slice(0, 10), lastError: ''
     };
     await store.set('meta/autoinvoice', next);
-    console.log('  Oylik hisoblar avtomatik yaratildi: ' + r.created + ' ta (' + ym + ')');
-    await notifyDirectors('Oylik hisoblar avtomatik yaratildi: ' + r.created + ' ta (' +
-      ym + '). ' + (r.errors && r.errors.length ? 'Xatolar: ' + r.errors.length + ' ta.' : ''));
+    if (r.created) {
+      console.log('  Hisob avtomatik yaratildi: ' + r.created + ' ta (' + todayIso + ')');
+      await notifyDirectors('Bugun ' + r.created + ' ta o’quvchining oylik hisobi ' +
+        'avtomatik yaratildi — to’lov kuni keldi.');
+    }
     return next;
   } catch (e) {
     const next = Object.assign({}, state, { lastError: String(e.message), lastErrorAt: stamp() });
     await store.set('meta/autoinvoice', next);
-    await notifyDirectors('Oylik hisoblarni avtomatik yaratishda xato: ' + e.message);
+    await notifyDirectors('Hisoblarni avtomatik yaratishda xato: ' + e.message);
     return next;
   }
+}
+
+/* ------------------------------------------------------------------
+   HAR O'QUVCHIGA O'Z VAQTIDA HISOB
+
+   Ilgari hamma hisob oyning bitta kunida birdan yaratilardi. Endi
+   har o'quvchining O'Z to'lov kuni bor (guruhga qo'shilgan kuni),
+   shuning uchun hisob ham AYNAN o'sha kuni tuziladi:
+
+     17-sida qo'shilgan o'quvchiga har oyning 17-sida hisob chiqadi
+     va o'sha kundan qarzdor bo'ladi.
+
+   Shu sababli bu yerda "oyiga bir marta" degan qulf yo'q —
+   har kuni ishlaydi, lekin faqat KUNI KELGAN o'quvchilarga
+   hisob yozadi. Hisob raqami a'zolik+oy dan tuzilgani uchun
+   ikki marta yaratilmaydi.                                      */
+async function autoInvoiceDue(todayIso, ym) {
+  const settings = (await store.get('meta/settings')) || {};
+  const groups = {}, students = {};
+  (await store.list('groups/')).forEach(x => { groups[x.data.id] = x.data; });
+  (await store.list('students/')).forEach(x => { students[x.data.id] = x.data; });
+  const mems = (await store.list('memberships/')).map(x => x.data);
+
+  /* O'tgan oy davomati — sababli dars chegirmasi uchun */
+  const prevYm = A.addMonths(ym, -1);
+  const prevLessons = {};
+  for (const gid of Object.keys(groups)) {
+    try {
+      const doc = await store.get('lessons/' + gid + '__' + prevYm);
+      if (doc) prevLessons[gid] = doc;
+    } catch (e) { /* hujjat yo'q */ }
+  }
+
+  let created = 0, waiting = 0;
+  const errors = [];
+  for (const m of mems) {
+    try {
+      if (!m || m.status !== 'faol' || !A.membershipActiveIn(m, ym)) continue;
+      const g = groups[m.groupId], st = students[m.studentId];
+      if (!g || !st || st.status === 'arxiv' || g.status !== 'faol') continue;
+      if (g.startDate && g.startDate > A.monthEnd(ym)) continue;
+
+      /* Shu o'quvchining SHU oydagi to'lov kuni keldimi? */
+      const due = A.dueDateOf(m, ym, settings);
+      if (due > todayIso) { waiting++; continue; }
+
+      const id = A.invoiceId(m.id, ym);
+      if (await store.get('invoices/' + id)) continue;
+
+      const amt = A.invoiceAmountFor(g, m, ym);
+      const missed = A.excusedCount(prevLessons[m.groupId], m.id);
+      const credit = Math.min(amt.final, A.excusedCredit(g, ym, missed));
+      const note = credit
+        ? A.monthLabel(prevYm) + ': ' + missed + ' ta sababli dars — ' +
+          A.som(credit) + ' so’m chegirildi'
+        : '';
+      await store.set('invoices/' + id, {
+        id, membershipId: m.id, studentId: m.studentId, groupId: m.groupId, month: ym,
+        base: amt.base, discount: amt.discount + credit, final: amt.final - credit,
+        missedCredit: credit, missedLessons: missed, missedMonth: credit ? prevYm : '',
+        dueDate: due, createdAt: stamp(), createdBy: 'tizim', note
+      });
+      created++;
+    } catch (e) {
+      errors.push(String(e.message));
+    }
+  }
+  if (created) await writeAudit(null, 'Hisoblar avtomatik yaratildi', todayIso, created + ' ta');
+  return { created, waiting, errors };
 }
 
 /** Direktorga ichki suhbat orqali xabar */

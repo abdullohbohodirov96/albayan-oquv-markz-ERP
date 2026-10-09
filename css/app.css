@@ -2419,3 +2419,9 @@ button.cur-title:hover b{text-decoration:underline}
   border:1px solid color-mix(in srgb,var(--bad) 32%,transparent);
   color:var(--ink)}
 .bulk-bar b{margin-inline-end:auto}
+
+/* Tepadagi filial tanlagich */
+.branch-pick{padding:7px 10px;border:1px solid var(--line-strong);border-radius:9px;
+  background:var(--surface);color:var(--ink);font:inherit;font-size:13px;max-width:190px}
+.branch-pick:focus-visible{outline:2px solid var(--info);outline-offset:1px}
+@media (max-width:560px){ .branch-pick{max-width:120px;font-size:12px} }
