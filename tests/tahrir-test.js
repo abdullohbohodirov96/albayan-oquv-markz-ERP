@@ -17,6 +17,10 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+/* Oy hisobini ilovaning O'Z mantiqidan olamiz — ikki joyda
+   takrorlamaymiz.                                            */
+require('../server/shared');
+const A = globalThis.A;
 
 const PORT = process.argv[2] || 3300;
 const PASS = process.argv[3] || 'Albyana2026!';
@@ -582,6 +586,75 @@ function hasNumber(text, n) {
   }
 
   /* ================================================================
+     16b. "Dars boshlagan sana" — to'lov kuni shundan olinadi
+
+     Markaz rahbari so'radi: o'quvchi kartasida tug'ilgan sana
+     emas, dars boshlagan (ya'ni to'lov) sanasi tursin. Shu sana
+     yozilganda a'zolikdagi to'lov kuni ham o'zgarishi kerak,
+     aks holda hisob eski kunda chiqib qolardi.                 */
+  section('16b. Dars boshlagan sana to’lov kunini belgilaydi');
+  await reloadAndText(page, 'student?id=' + ID('s'));
+  const fieldLabels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#view .kv dt')).map(d => d.textContent.trim()));
+  ok('Kartada "Dars boshlagan sana" bor',
+    fieldLabels.indexOf('Dars boshlagan sana') >= 0, JSON.stringify(fieldLabels));
+  ok('"Tug’ilgan sana" olib tashlandi',
+    fieldLabels.indexOf('Tug’ilgan sana') < 0, JSON.stringify(fieldLabels));
+
+  /* Tahrirlash oynasida ham o'sha maydon bo'lsin */
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('#view button'))
+      .find(x => /Tahrirlash/.test(x.textContent));
+    if (b) b.click();
+  });
+  await page.waitForSelector('.modal', { timeout: 10000 });
+  await page.waitForTimeout(600);
+  const modalLabels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.modal label')).map(l => l.textContent.trim()));
+  ok('Oynada "Dars boshlagan sana" maydoni bor',
+    modalLabels.some(l => /Dars boshlagan sana/.test(l)), JSON.stringify(modalLabels));
+  ok('Oynada tug’ilgan sana yo’q',
+    !modalLabels.some(l => /Tug’ilgan sana/.test(l)), JSON.stringify(modalLabels));
+
+  /* Sanani yozamiz va saqlaymiz */
+  const PAYD = THIS + '-12';
+  await page.evaluate(d => {
+    const lab = Array.from(document.querySelectorAll('.modal label'))
+      .find(l => /Dars boshlagan sana/.test(l.textContent));
+    const inp = lab.parentElement.querySelector('input');
+    inp.value = d;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+  }, PAYD);
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('.modal button'))
+      .find(x => x.textContent.trim() === 'Saqlash');
+    if (b) b.click();
+  });
+  await page.waitForTimeout(2200);
+  const stAfter = await get('students/' + ID('s'));
+  eq('Sana o’quvchiga yozildi', stAfter && stAfter.payDate, PAYD);
+  const memAfter = await get('memberships/' + ID('m'));
+  eq('A’zolikdagi to’lov kuni ham 12 bo’ldi', memAfter && memAfter.dueDay, 12);
+
+  /* Endi hisob AYNAN shu kunda chiqadi */
+  const NEXTM = A.addMonths(THIS, 1);
+  await api('/api/doc?path=' + encodeURIComponent('invoices/inv_' + ID('m') + '_' + NEXTM),
+    { method: 'DELETE' });
+  await api('/api/invoices/generate', { method: 'POST', body: { month: NEXTM } });
+  const invNext = await get('invoices/inv_' + ID('m') + '_' + NEXTM);
+  eq('Keyingi oy hisobi 12-sida', invNext && invNext.dueDate, NEXTM + '-12');
+
+  /* Kartada ham tushunarli yozilsin */
+  await reloadAndText(page, 'student?id=' + ID('s'));
+  const payTxt = await page.evaluate(() => {
+    const dts = Array.from(document.querySelectorAll('#view .kv dt'));
+    const i = dts.findIndex(d => /Dars boshlagan sana/.test(d.textContent));
+    return i < 0 ? '' : document.querySelectorAll('#view .kv dd')[i].textContent;
+  });
+  ok('Kartada "har oyning 12-sida" yozilgan', /12-sida/.test(payTxt), payTxt);
+
+  /* ================================================================
      16. O'quvchini BUTUNLAY o'chirish — ekrandan boshlab bazagacha
 
      Arxivlash ma'lumotni saqlaydi, bu esa o'chiradi. Shuning uchun
@@ -646,7 +719,8 @@ function hasNumber(text, n) {
 
   /* --- tozalash --- */
   for (const p of ['payments/' + ID('p1'), 'payments/' + ID('p2'),
-    'invoices/inv_' + ID('m') + '_' + THIS, 'users/' + ID('u'),
+    'invoices/inv_' + ID('m') + '_' + THIS,
+    'invoices/inv_' + ID('m') + '_' + A.addMonths(THIS, 1), 'users/' + ID('u'),
     'memberships/' + ID('m'), 'groups/' + ID('g'), 'students/' + ID('s'),
     'courses/' + ID('c'), 'rooms/' + ID('r'), 'staff/' + ID('t'),
     'teachers/' + ID('tp'), 'leads/' + ID('l'),

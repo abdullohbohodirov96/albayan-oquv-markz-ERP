@@ -669,7 +669,15 @@
           return { value: g.id, label: g.name + ' · ' + A.som(A.feeForMonth(g, A.thisMonth())) + ' so’m/oy' };
         })
       },
-      { name: 'joinedAt', label: 'Guruhga kirgan sana', type: 'date', required: true, value: mem.joinedAt || A.today() },
+      {
+        /* Kirgan sana = to'lov sanasi. O'quvchi kartasida "dars
+           boshlagan sana" yozilgan bo'lsa, o'shasi taklif
+           qilinadi — ikki joyda ikki xil sana bo'lib qolmasin. */
+        name: 'joinedAt', label: 'Guruhga kirgan sana (shu kundan to’lov)',
+        type: 'date', required: true,
+        value: mem.joinedAt || (student && student.payDate) || A.today(),
+        help: 'Har oy shu kunda to’lov qiladi va shu kundan qarzdor bo’ladi.'
+      },
       {
         name: 'discountType', label: 'Chegirma turi', type: 'select',
         value: (mem.discount && mem.discount.type) || '',

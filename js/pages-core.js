@@ -1190,13 +1190,30 @@
     view.appendChild(UI.tabs(tabItems, tab, function (id) { App.go('student', { id: s.id, tab: id }); }));
 
     if (tab === 'umumiy') {
+      /** "12-oktabr · har oyning 12-sida to'laydi" ko'rinishi */
+      function payLine(st) {
+        var mems = Q.membershipsOf(st.id).filter(function (m) { return m.status === 'faol'; });
+        var day = null;
+        if (st.payDate && /^\d{4}-\d{2}-\d{2}$/.test(st.payDate)) {
+          day = Math.min(28, Math.max(1, Number(st.payDate.slice(8, 10))));
+        } else if (mems.length) {
+          day = A.dueDayOf(mems[0], D.settings);
+        }
+        if (!day) return '—';
+        var txt = st.payDate ? A.dateLabel(st.payDate) : '';
+        return (txt ? txt + ' · ' : '') + 'har oyning ' + day + '-sida to’laydi';
+      }
+
       var dl = h('dl', { class: 'kv' });
       [['Familiya, ism', s.lastName + ' ' + s.firstName],
       ['Shaxsiy kod', s.code || '—'],
       ['Telefon', s.phone ? UI.phoneLink(s.phone) : '—'],
       ['Ota-ona / vasiy', s.parentName || '—'],
       ['Ota-ona telefoni', s.parentPhone ? UI.phoneLink(s.parentPhone) : '—'],
-      ['Tug’ilgan sana', s.birthDate ? A.dateLabel(s.birthDate) : '—'],
+      /* Tug'ilgan sana emas — DARS BOSHLAGAN va to'lov sanasi.
+         Yonida keyingi to'lov kuni ham yozib qo'yiladi, rahbar
+         "qachon to'laydi" deb hisoblab o'tirmasin.              */
+      ['Dars boshlagan sana', payLine(s)],
       ['Qo’shilgan', s.createdAt || '—'],
       ['Izoh', s.note || '—']].forEach(function (r) {
         dl.appendChild(h('dt', {}, r[0]));
@@ -1520,7 +1537,21 @@
         name: 'parentPhone', label: 'Ota-ona telefoni (ixtiyoriy)', value: draft.parentPhone, placeholder: '+998 90 123 45 67',
         validate: function (v) { return v && A.phoneDigits(v).length < 7 ? 'Raqam to’liq emas.' : null; }
       },
-      { name: 'birthDate', label: 'Tug’ilgan sana (ixtiyoriy)', type: 'date', value: draft.birthDate },
+      {
+        /* Darsga kelgan va TO'LOV sanasi.
+
+           Markaz rahbari so'radi: bu yerda tug'ilgan sana emas,
+           o'quvchi qachondan dars boshlagani tursin — chunki har
+           oy AYNAN shu kunda to'lov qiladi.
+
+           Bu sana saqlanganda o'quvchining guruhdagi a'zoliklariga
+           to'lov kuni ham yoziladi, shuning uchun keyingi oylik
+           hisob o'sha kunda chiqadi.                             */
+        name: 'payDate', label: 'Dars boshlagan sana (shu kundan to’lov)',
+        type: 'date', value: draft.payDate || draft.startedAt || '',
+        help: 'Har oy shu kunda to’lov qiladi. Bo’sh qoldirsangiz, ' +
+          'guruhga qo’shilgan kuni olinadi.'
+      },
       {
         /* Shaxsiy kod — markaz o'zi beradi. Bo'sh qoldirilsa server tanlaydi.
            Berilgan kod o'zgarmaydi: bot ham, kabinet ham shu kod bilan ishlaydi. */
@@ -1603,6 +1634,21 @@
               delete rec._fromLead; delete rec._courseId; delete rec._groupId;
               if (isNew) { rec.id = A.uid('stu'); rec.createdAt = A.nowStamp(); }
               await D.save('students', rec);
+
+              /* To'lov sanasi yozilgan bo'lsa, uni o'quvchining
+                 GURUHDAGI a'zoliklariga ham yozamiz: oylik hisob
+                 a'zolik bo'yicha tuziladi, shuning uchun to'lov
+                 kuni o'sha yerda turishi kerak. Shunda keyingi
+                 hisob aynan shu kunda chiqadi.                   */
+              if (v.payDate && /^\d{4}-\d{2}-\d{2}$/.test(v.payDate)) {
+                var pDay = Math.min(28, Math.max(1, Number(v.payDate.slice(8, 10))));
+                var mems = Q.membershipsOf(rec.id)
+                  .filter(function (m) { return m.status === 'faol'; });
+                for (var mi = 0; mi < mems.length; mi++) {
+                  if (Number(mems[mi].dueDay) === pDay) continue;
+                  await D.save('memberships', Object.assign({}, mems[mi], { dueDay: pDay }));
+                }
+              }
               await A.Ops.audit(App.user, isNew ? 'O’quvchi qo’shildi' : 'O’quvchi tahrirlandi', rec.lastName + ' ' + rec.firstName, '');
               if (fromLead) {
                 fromLead.stage = 'oquvchi';
