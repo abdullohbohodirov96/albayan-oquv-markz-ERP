@@ -153,11 +153,52 @@ function compressBody(enc, buf) {
 }
 
 /** Javobni kerak bo'lsa siqib yuboradi. `req` berilmasa — siqilmaydi. */
+/* ---------------- Xavfsizlik sarlavhalari ----------------
+   Ilgari CSP, X-Frame-Options va HSTS umuman yo'q edi: sahifani
+   begona saytga <iframe> qilib qo'yib, foydalanuvchiga ko'rinmas
+   tugmalarni bostirish (clickjacking) mumkin edi.               */
+const CSP = [
+  "default-src 'self'",
+  /* Ilovaning o'zi bitta katta ichki <script> — 'unsafe-inline'
+     shuning uchun kerak. Tashqi manbalar aniq ro'yxatda.        */
+  "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://www.googletagmanager.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
+  "media-src 'self' data: blob:",
+  "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "upgrade-insecure-requests"
+].join('; ');
+
+function securityHeaders(req) {
+  const h = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=(), usb=()',
+    'Cross-Origin-Opener-Policy': 'same-origin'
+  };
+  /* HSTS faqat HTTPS orqali kelgan so'rovga: mahalliy http
+     ishlab chiqish brauzerda qulflanib qolmasin.               */
+  const proto = String((req && req.headers && req.headers['x-forwarded-proto']) || '').split(',')[0].trim();
+  if (process.env.NODE_ENV === 'production' && proto === 'https') {
+    h['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
+  }
+  return h;
+}
+
 function sendMaybeZip(req, res, code, head, buf) {
   const type = String(head['Content-Type'] || '');
   const enc = COMPRESSIBLE.test(type) && buf.length >= COMPRESS_MIN ? pickEncoding(req) : '';
   /* Vary — oraliq keshlar siqilgan javobni siqilmaganidan ajratsin */
-  const out = Object.assign({}, head, { Vary: 'Accept-Encoding' });
+  const out = Object.assign({}, securityHeaders(req), head, { Vary: 'Accept-Encoding' });
+  /* CSP faqat HTML sahifaga — rasm yoki JSON javobda keraksiz */
+  if (/text\/html/.test(type)) out['Content-Security-Policy'] = CSP;
   if (enc) {
     const packed = compressBody(enc, buf);
     if (packed && packed.length < buf.length) {
@@ -184,7 +225,7 @@ function send(res, code, body, headers, req) {
   const rq = req || res.req;
   if (rq) return sendMaybeZip(rq, res, code, head, buf);
   head['Content-Length'] = String(buf.length);
-  res.writeHead(code, head);
+  res.writeHead(code, Object.assign({}, securityHeaders(null), head));
   res.end(buf);
 }
 /* So'rov tanasi. `max` — ruxsat etilgan eng katta hajm (bayt).
@@ -2424,13 +2465,12 @@ async function handleApi(req, res, url) {
     }
     const buf = files.readBody(rec);
     if (!buf) return send(res, 404, { error: 'Fayl topilmadi.' });
-    res.writeHead(200, {
+    res.writeHead(200, Object.assign({}, securityHeaders(req), {
       'Content-Type': rec.type,
       'Content-Length': buf.length,
       'Content-Disposition': 'inline; filename="' + encodeURIComponent(rec.name) + '"',
-      'Cache-Control': 'private, max-age=300',
-      'X-Content-Type-Options': 'nosniff'
-    });
+      'Cache-Control': 'private, max-age=300'
+    }));
     return res.end(buf);
   }
   if (route === 'file/delete' && req.method === 'POST') {

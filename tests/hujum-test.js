@@ -839,6 +839,44 @@ function raw(pathRaw, opts = {}) {
     try { fs2.rmSync(dir2, { recursive: true, force: true }); } catch (e) { }
   })();
 
+  /* ================================================================
+     19. Xavfsizlik sarlavhalari
+     ================================================================ */
+  section('19. Xavfsizlik sarlavhalari');
+  /* Ilgari CSP, X-Frame-Options va HSTS umuman yo'q edi: sahifani
+     begona saytga <iframe> qilib qo'yib, foydalanuvchiga ko'rinmas
+     tugmalarni bostirish (clickjacking) mumkin edi.               */
+  const hdrPaths = ['/', '/api/health', '/robots.txt'];
+  for (const hp of hdrPaths) {
+    const r = await raw(hp).catch(() => ({ status: 0, headers: {} }));
+    const H = r.headers || {};
+    eq(hp + ' → X-Frame-Options: DENY', H['x-frame-options'], 'DENY');
+    eq(hp + ' → nosniff', H['x-content-type-options'], 'nosniff');
+    ok(hp + ' → Referrer-Policy bor', !!H['referrer-policy'], JSON.stringify(H['referrer-policy']));
+    ok(hp + ' → Permissions-Policy bor', !!H['permissions-policy'], '');
+  }
+  /* CSP — faqat HTML sahifada */
+  const htmlR = await raw('/');
+  const csp = (htmlR.headers || {})['content-security-policy'] || '';
+  ok('Sahifada CSP bor', !!csp, csp.slice(0, 80));
+  ok('  → frame-ancestors none', /frame-ancestors 'none'/.test(csp), csp.slice(0, 200));
+  ok('  → object-src none', /object-src 'none'/.test(csp), '');
+  ok('  → base-uri self', /base-uri 'self'/.test(csp), '');
+  ok('  → form-action self', /form-action 'self'/.test(csp), '');
+  ok('  → default-src self', /default-src 'self'/.test(csp), '');
+  /* GA va shriftlar ishlashi uchun ularga ruxsat bo'lishi kerak */
+  ok('  → GA uchun googletagmanager ruxsati bor',
+    csp.indexOf('googletagmanager.com') >= 0, '');
+  ok('  → shriftlar uchun fonts.gstatic ruxsati bor',
+    csp.indexOf('fonts.gstatic.com') >= 0, '');
+  /* Begona saytga ma'lumot yuborilmasin */
+  ok('  → connect-src da begona manba yo’q',
+    !/connect-src[^;]*(?<!google-analytics\.com|googletagmanager\.com|'self')\s+https:\/\/(?!www\.google-analytics|\*\.google-analytics|\*\.analytics\.google|www\.googletagmanager)/.test(csp),
+    csp.slice(0, 200));
+  /* JSON javobda CSP keraksiz — lekin boshqa sarlavhalar bo'lsin */
+  const apiR = await raw('/api/health');
+  ok('API javobida CSP yo’q (keraksiz)', !(apiR.headers || {})['content-security-policy'], '');
+
   /* ---------- tozalash ---------- */
   for (const p of ['memberships/' + ID('m'), 'students/' + ID('s'), 'groups/' + ID('g'),
     'courses/' + ID('c'), 'staff/' + ID('t'), 'users/' + ID('u'), 'users/' + ID('a')]) {
