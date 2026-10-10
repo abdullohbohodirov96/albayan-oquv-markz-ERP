@@ -121,7 +121,14 @@ function makePostgres(url) {
   const conf = pgConf(url);
   const pool = new Pool({
     connectionString: url,
-    ssl: conf.ssl ? { rejectUnauthorized: false } : false,
+    /* Sertifikat SUKUT BO'YICHA tekshiriladi. Ilgari hamma holatda
+       rejectUnauthorized:false edi — ya'ni o'rtadagi odam o'zini
+       baza deb ko'rsatib, parol va ma'lumotni o'qib olishi mumkin
+       edi. Kerak bo'lsa (o'zi imzolagan sertifikat) PGSSL_INSECURE=1
+       bilan o'chiriladi; ichki tarmoqda esa SSL umuman ishlatilmaydi. */
+    ssl: conf.ssl
+      ? (process.env.PGSSL_INSECURE === '1' ? { rejectUnauthorized: false } : { rejectUnauthorized: true })
+      : false,
     max: Number(process.env.PG_POOL_MAX || 4),
     idleTimeoutMillis: Number(process.env.PG_IDLE_MS || 15000),   // bo'sh ulanish yopilsin
     connectionTimeoutMillis: Number(process.env.PG_CONNECT_MS || 15000),
@@ -149,6 +156,16 @@ function makePostgres(url) {
       return await pool.query(text, params);
     } catch (e) {
       const msg = String(e.message || '');
+      /* Sertifikat xatosi — sababini ANIQ aytamiz, aks holda
+         "ulanmadi" deb qolib, nima qilishni bilib bo'lmaydi.   */
+      if (/self[- ]signed|unable to verify|CERT_|certificate/i.test(msg)) {
+        const hint = new Error(
+          'Bazaga ulanmadi: SSL sertifikati tekshiruvdan o’tmadi (' + msg + '). ' +
+          'Agar bazangiz o’zi imzolagan sertifikatdan foydalansa, ' +
+          'PGSSL_INSECURE=1 environment o’zgaruvchisini qo’ying.');
+        hint.code = e.code;
+        throw hint;
+      }
       const retryable = /terminat|ECONNRESET|Connection terminated|timeout|ENOTFOUND|EAI_AGAIN|not ready/i.test(msg);
       if (!retryable) throw e;
       await new Promise(r => setTimeout(r, 1200));

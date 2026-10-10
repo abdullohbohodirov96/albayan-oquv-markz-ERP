@@ -210,7 +210,15 @@ boradi — buni sozlamalarda o'chirib qo'yish mumkin.
 
 - SMS xabarnomalar
 - Onlayn to'lov va fiskal chek
-- Ota-ona uchun alohida kabinet (hozircha bot orqali)
-- Bir nechta filial
+- Mobil ilova (sayt telefonda ham to'liq ishlaydi)
 
 Tizimda bular bor deb ko'rsatuvchi ishlamaydigan tugmalar yo'q.
+
+### Allaqachon bor
+
+- **Ota-ona kabineti.** Ota-onaga O'Z kodi beriladi (farzandiniki
+  emas). U bir nechta farzandini bir joyda ko'radi: davomat, qarz,
+  to'lov va natija. O'quvchilar bo'limida "Ota-ona" dan qo'shasiz.
+- **Bir nechta filial.** Sozlamalarda filiallar ro'yxatini yozasiz,
+  har bir guruhga filial biriktirasiz. Tepadagi tanlagich bilan
+  butun tizim shu filial bo'yicha ko'rsatiladi.

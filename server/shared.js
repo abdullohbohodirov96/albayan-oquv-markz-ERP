@@ -59,6 +59,7 @@ function writePermFor(docPath) {
   }
   if (col === 'lessons') return 'attendance.mark';
   if (col === 'botstate' || col === 'botin') return '__server__';  // faqat bot yozadi
+  if (col === 'staffsess' || col === 'kabsess' || col === 'linktokens') return '__server__';
   return map[col] || '__server__';
 }
 
@@ -66,6 +67,8 @@ function writePermFor(docPath) {
 function readBlocked(docPath, user) {
   const col = String(docPath || '').split('/')[0];
   if (col === 'botstate') return true;
+  /* Sessiya va bir martalik tokenlar — hech kimga ko'rinmaydi */
+  if (col === 'staffsess' || col === 'kabsess' || col === 'linktokens') return true;
   if (col === 'photos') return true;               // rasm faqat /api/photo orqali beriladi
   /* Daraja testi: savollar ichida TO'G'RI JAVOB bor — hech kimga berilmaydi.
      Boshlangan test sessiyasi ham (savol ro'yxati) mijozga chiqmaydi.       */

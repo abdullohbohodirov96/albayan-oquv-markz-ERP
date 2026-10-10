@@ -113,8 +113,10 @@ async function setState(chatId, st) {
 /* ---------------- Bir martalik kod ---------------- */
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';   // chalkashadigan harflar yo'q (O/0, I/1)
 function makeCode() {
+  /* Math.random TAXMIN QILSA bo'ladi (bir necha natija ko'rilsa,
+     keyingisi hisoblanadi). Bir martalik kod uchun crypto. */
   let s = '';
-  for (let i = 0; i < 6; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  for (let i = 0; i < 6; i++) s += CODE_CHARS[crypto.randomInt(0, CODE_CHARS.length)];
   return s;
 }
 function normCode(t) {

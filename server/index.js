@@ -388,7 +388,27 @@ function testFail(ip) {
   if (testTries.size > 5000) testTries.clear();
 }
 
+/* IP bo'yicha qulf yetarli emas: 5 xonali kodda 90 000 variant bor,
+   hujumchi esa ko'p IP (mobil tarmoq, proksi) ishlatishi mumkin.
+   Shuning uchun BUTUN TIZIM bo'yicha ham chegara bor: qisqa vaqtda
+   juda ko'p NOTO'G'RI kod kelsa, kabinet kirishi birpas to'xtaydi. */
+const KAB_GLOBAL_MAX = Number(process.env.KABINET_GLOBAL_MAX || 60);
+const KAB_GLOBAL_MS = Number(process.env.KABINET_GLOBAL_MS || 10 * 60 * 1000);
+let kabGlobal = { n: 0, first: Date.now() };
+
+function kabinetGlobalGate() {
+  if (Date.now() - kabGlobal.first > KAB_GLOBAL_MS) kabGlobal = { n: 0, first: Date.now() };
+  if (kabGlobal.n < KAB_GLOBAL_MAX) return { ok: true };
+  return { ok: false, wait: Math.max(1, Math.ceil((KAB_GLOBAL_MS - (Date.now() - kabGlobal.first)) / 60000)) };
+}
+function kabinetGlobalFail() {
+  if (Date.now() - kabGlobal.first > KAB_GLOBAL_MS) kabGlobal = { n: 0, first: Date.now() };
+  kabGlobal.n++;
+}
+
 function kabinetGate(ip) {
+  const g = kabinetGlobalGate();
+  if (!g.ok) return g;
   const rec = kabinetTries.get(ip);
   if (!rec) return { ok: true };
   if (Date.now() - rec.first > KAB_LOCK_MS) { kabinetTries.delete(ip); return { ok: true }; }
@@ -396,6 +416,7 @@ function kabinetGate(ip) {
   return { ok: false, wait: Math.max(1, Math.ceil((KAB_LOCK_MS - (Date.now() - rec.first)) / 60000)) };
 }
 function kabinetFail(ip) {
+  kabinetGlobalFail();
   const rec = kabinetTries.get(ip);
   if (!rec || Date.now() - rec.first > KAB_LOCK_MS) {
     kabinetTries.set(ip, { n: 1, first: Date.now(), total: (rec && rec.total || 0) + 1 });
@@ -428,12 +449,71 @@ function parseCookies(req) {
   });
   return out;
 }
+/* ---------- Xodim sessiyalari ----------
+   Ilgari sessiyalar FAQAT xotirada edi: server qayta ishga tushsa
+   (Render har bir yangilanishda shunday qiladi) hamma xodim tizimdan
+   chiqib ketardi. Endi ular bazada ham saqlanadi — tokenning
+   faqat XESHI, xuddi kabinet sessiyalaridagidek (kabsess.js).     */
+const SESS_COL = 'staffsess/';
+function tokenHash(t) { return crypto.createHash('sha256').update(String(t)).digest('hex'); }
+
+async function sessionSave(token, userId) {
+  sessions.set(token, { userId, at: Date.now() });
+  try {
+    await store.set(SESS_COL + tokenHash(token), {
+      id: tokenHash(token), userId, at: Date.now(), stamp: stamp()
+    });
+  } catch (e) { /* bazaga yozilmasa ham xotirada ishlaydi */ }
+}
+async function sessionDrop(token) {
+  sessions.delete(token);
+  try { if (store.del) await store.del(SESS_COL + tokenHash(token)); } catch (e) { }
+}
+/** Bazadan tiklash — server qayta ko'tarilganda */
+async function sessionLoad(token) {
+  try {
+    const rec = await store.get(SESS_COL + tokenHash(token));
+    if (!rec || !rec.userId) return null;
+    if (Date.now() - Number(rec.at || 0) > SESSION_MS) {
+      if (store.del) await store.del(SESS_COL + tokenHash(token));
+      return null;
+    }
+    sessions.set(token, { userId: rec.userId, at: Number(rec.at) });
+    return sessions.get(token);
+  } catch (e) { return null; }
+}
+/** Foydalanuvchining BARCHA sessiyalarini yopish (parol almashganda) */
+async function sessionRevokeUser(userId) {
+  let n = 0;
+  for (const [t, v] of sessions) { if (v.userId === userId) { sessions.delete(t); n++; } }
+  try {
+    const rows = await store.list(SESS_COL);
+    for (const r of rows) {
+      if (r.data && r.data.userId === userId && store.del) { await store.del(r.path); }
+    }
+  } catch (e) { }
+  return n;
+}
+async function sessionCleanup() {
+  try {
+    const rows = await store.list(SESS_COL);
+    let n = 0;
+    for (const r of rows) {
+      if (!r.data || Date.now() - Number(r.data.at || 0) > SESSION_MS) {
+        if (store.del) { await store.del(r.path); n++; }
+      }
+    }
+    return n;
+  } catch (e) { return 0; }
+}
+
 async function currentUser(req) {
   const token = parseCookies(req).alb_session;
   if (!token) return null;
-  const s = sessions.get(token);
+  let s = sessions.get(token);
+  if (!s) s = await sessionLoad(token);          // restartdan keyin tiklanadi
   if (!s) return null;
-  if (Date.now() - s.at > SESSION_MS) { sessions.delete(token); return null; }
+  if (Date.now() - s.at > SESSION_MS) { await sessionDrop(token); return null; }
   const u = await store.get('users/' + s.userId);
   if (!u || u.active === false) return null;
   return u;
@@ -1252,6 +1332,7 @@ async function maintenanceTick() {
   try { done.quizSess = await quiz.cleanup(store); } catch (e) { }
   try { done.links = await link.cleanup(store); } catch (e) { }
   try { done.sessions = await kabsess.cleanup(store); } catch (e) { }
+  try { done.staffSessions = await sessionCleanup(); } catch (e) { }
   try { done.files = await files.sweep(store); } catch (e) { }
   const total = Object.values(done).reduce((a, b) => a + (Number(b) || 0), 0);
   if (total) {
@@ -2425,7 +2506,7 @@ async function handleApi(req, res, url) {
       await store.set('users/' + u.id, u);
     }
     const token = newToken();
-    sessions.set(token, { userId: u.id, at: Date.now() });
+    await sessionSave(token, u.id);
     return send(res, 200, { user: safeUser(u) }, {
       'Set-Cookie': 'alb_session=' + token + '; HttpOnly; SameSite=Lax; Path=/; Max-Age=' +
         Math.floor(SESSION_MS / 1000) + (process.env.NODE_ENV === 'production' ? '; Secure' : '')
@@ -2434,7 +2515,7 @@ async function handleApi(req, res, url) {
 
   if (route === 'logout' && req.method === 'POST') {
     const token = parseCookies(req).alb_session;
-    if (token) sessions.delete(token);
+    if (token) await sessionDrop(token);
     return send(res, 200, { ok: true }, { 'Set-Cookie': 'alb_session=; HttpOnly; Path=/; Max-Age=0' });
   }
 
@@ -3250,6 +3331,7 @@ async function handleApi(req, res, url) {
       if (!body || typeof body.data !== 'object' || body.data === null) {
         return send(res, 400, { error: 'Ma’lumot noto’g’ri.' });
       }
+      let passwordChangedFor = '';
       const oldDoc = p.indexOf('students/') === 0 ? await store.get(p) : null;
       const g = await guardWrite(user, p, 'PUT', body.data);
       if (g.error) return send(res, g.code || 403, { error: g.error });
@@ -3268,6 +3350,10 @@ async function handleApi(req, res, url) {
           Object.assign(body.data, makePassword(pass));
           body.data.isDefault = false;
           body.data.mustChange = false;
+          /* Parol almashdi — ESKI sessiyalar yopiladi (o'zinikidan
+             boshqasi): parol o'g'irlangan bo'lsa, almashtirish
+             o'g'rini chiqarib yuborsin.                            */
+          passwordChangedFor = body.data.id || seg[1];
         } else if (old) {
           body.data.salt = old.salt; body.data.hash = old.hash;
           body.data.iter = old.iter; body.data.algo = old.algo;
@@ -3282,6 +3368,13 @@ async function handleApi(req, res, url) {
         }
       }
       await store.set(p, body.data);
+      if (passwordChangedFor) {
+        const keep = parseCookies(req).alb_session;     // o'z sessiyasi qolsin
+        const mine = sessions.get(keep);
+        const n = await sessionRevokeUser(passwordChangedFor);
+        if (mine && mine.userId === passwordChangedFor) await sessionSave(keep, passwordChangedFor);
+        if (n) await writeAudit(user, 'Parol almashdi: sessiyalar yopildi', body.entity || p, n + ' ta');
+      }
       if (codeChanged) {
         const n = await kabsess.revokeForStudent(store, p.split('/')[1], { stamp });
         await writeAudit(user, 'Kabinet: kod almashdi, sessiyalar yopildi',
@@ -3459,8 +3552,17 @@ const server = http.createServer(async (req, res) => {
     if (e && e.tooBig) {
       try { return send(res, 413, { error: 'So’rov juda katta.' }); } catch (x) { return; }
     }
-    console.error(e);
-    try { send(res, 500, { error: e.message || 'Server xatosi' }); } catch (x) { /* ulanish yopilgan */ }
+    /* Texnik xabar FOYDALANUVCHIGA chiqmaydi: ichida yo'l, jadval
+       nomi yoki so'rov matni bo'lishi mumkin. Jurnalga esa to'liq
+       yoziladi va javobga faqat qidirish uchun belgi qo'yiladi.   */
+    const errId = crypto.randomBytes(4).toString('hex');
+    console.error('[' + errId + ']', e);
+    try {
+      send(res, 500, {
+        error: 'Serverda xatolik. Qayta urinib ko’ring.',
+        ref: errId
+      });
+    } catch (x) { /* ulanish yopilgan */ }
   }
 });
 

@@ -880,6 +880,84 @@ function raw(pathRaw, opts = {}) {
   const apiR = await raw('/api/health');
   ok('API javobida CSP yo’q (keraksiz)', !(apiR.headers || {})['content-security-policy'], '');
 
+  /* ================================================================
+     20. Kichik, lekin muhim tuzatishlar
+     ================================================================ */
+  section('20. Xato xabari, sessiya va tokenlar');
+
+  /* a) 500 javobida TEXNIK xabar chiqmasin */
+  const boom = await raw('/api/doc?path=' + encodeURIComponent('students/x'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Cookie: dir },
+    body: '{"data":'
+  }).catch(() => ({ status: 0, text: '' }));
+  ok('Buzuq JSON serverni yiqitmadi', boom.status >= 400 && boom.status < 600, String(boom.status));
+  ok('  → javobda fayl yo’li yoki stack yo’q',
+    !/\/home\/|at Object|node_modules|SyntaxError/.test(boom.text || ''), (boom.text || '').slice(0, 160));
+
+  /* b) Sessiya va token to'plamlari hech kimga ko'rinmaydi */
+  for (const col of ['staffsess', 'kabsess', 'linktokens']) {
+    const r = await req('/api/doc?path=' + encodeURIComponent(col + '/x'), { cookie: dir });
+    eq(col + ' o’qilmaydi', r.status, 403);
+    const w = await putDoc(col + '/x', { id: 'x' }, dir);
+    eq(col + ' ga yozilmaydi', w.status, 403);
+  }
+  const bootS = await req('/api/bootstrap', { cookie: dir });
+  const sRaw = JSON.stringify(bootS.json || {});
+  ok('Ro’yxatda ham sessiya yozuvlari yo’q',
+    sRaw.indexOf('staffsess') < 0 && sRaw.indexOf('linktokens') < 0, '');
+
+  /* c) Server QAYTA ISHGA TUSHSA sessiya saqlanib qoladi */
+  section('20b. Server qayta ishga tushsa ham tizimdan chiqarmaydi');
+  await (async function () {
+    const { spawn } = require('child_process');
+    const fs3 = require('fs');
+    const os3 = require('os');
+    const path3 = require('path');
+    const dir3 = fs3.mkdtempSync(path3.join(os3.tmpdir(), 'alb-sess-'));
+    const port3 = 3398;
+    const base3 = 'http://localhost:' + port3;
+    const env3 = Object.assign({}, process.env, {
+      PORT: String(port3), DATA_DIR: path3.join(dir3, 'd'),
+      BACKUP_DIR: path3.join(dir3, 'b'), FILES_DIR: path3.join(dir3, 'f'),
+      NODE_ENV: 'test', SEED_DIRECTOR_PASSWORD: PASS, DB_DRIVER: 'sqlite'
+    });
+    const boot3 = () => spawn(process.execPath, [path3.join(__dirname, '..', 'server', 'index.js')],
+      { env: env3, stdio: 'ignore' });
+    const wait3 = async () => {
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 400));
+        try { if ((await fetch(base3 + '/api/health')).status === 200) return true; } catch (e) { }
+      }
+      return false;
+    };
+    let srv3 = boot3();
+    ok('Sinov serveri ko’tarildi', await wait3());
+    const lg3 = await fetch(base3 + '/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login: 'admin', password: PASS })
+    });
+    const ck3 = (lg3.headers.get('set-cookie') || '').split(';')[0];
+    ok('Kirildi', !!ck3);
+    const me1 = await fetch(base3 + '/api/me', { headers: { Cookie: ck3 } });
+    eq('Sessiya ishlayapti', me1.status, 200);
+
+    /* QAYTA ISHGA TUSHIRAMIZ — Render har yangilanishda shunday qiladi */
+    try { srv3.kill('SIGKILL'); } catch (e) { }
+    await new Promise(r => setTimeout(r, 800));
+    srv3 = boot3();
+    ok('Server qayta ko’tarildi', await wait3());
+    const me2 = await fetch(base3 + '/api/me', { headers: { Cookie: ck3 } });
+    eq('Qayta ishga tushgandan keyin ham kirgan holatda', me2.status, 200);
+
+    /* Soxta token esa ishlamaydi */
+    const fake = await fetch(base3 + '/api/me', { headers: { Cookie: 'alb_session=' + 'a'.repeat(48) } });
+    eq('Soxta token o’tmaydi', fake.status, 401);
+
+    try { srv3.kill('SIGKILL'); } catch (e) { }
+    try { fs3.rmSync(dir3, { recursive: true, force: true }); } catch (e) { }
+  })();
+
   /* ---------- tozalash ---------- */
   for (const p of ['memberships/' + ID('m'), 'students/' + ID('s'), 'groups/' + ID('g'),
     'courses/' + ID('c'), 'staff/' + ID('t'), 'users/' + ID('u'), 'users/' + ID('a')]) {

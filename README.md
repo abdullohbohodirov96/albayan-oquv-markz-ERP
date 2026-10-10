@@ -583,11 +583,22 @@ yangilangandan keyin menyu to'g'ri o'lchamda bo'lishi o'lchanadi.
 
 ## 14. Nimalar hali yo'q
 
-- SMS xabarnomalar, onlayn to'lov, fiskal chek
-- O'quvchi va ota-ona uchun alohida veb-kabinet (bot buning o'rnini bosadi)
-- Bir nechta filial
+- SMS xabarnomalar
+- Onlayn to'lov va fiskal chek
+- Mobil ilova (sayt telefonda ham to'liq ishlaydi)
 
 Tizimda bular bor deb ko'rsatuvchi ishlamaydigan tugmalar yo'q.
+
+**Allaqachon bor** (ilgari bu ro'yxatda turgan edi):
+
+- **Shaxsiy kabinet** — o'quvchi 5 xonali kodi bilan kiradi, o'z
+  davomati, qarzi, vazifasi va test natijasini ko'radi.
+- **Ota-ona kabineti** — ota-onaning O'Z kodi bo'ladi (farzandiniki
+  emas) va u bir nechta farzandini bir joyda ko'radi.
+- **Bir nechta filial** — sozlamada filiallar ro'yxati yoziladi,
+  guruhga filial biriktiriladi, tepadagi tanlagich bilan butun
+  tizim (o'quvchi, guruh, jadval, davomat, moliya) shu filial
+  bo'yicha ko'rsatiladi.
 
 ## 15. Brauzer mosligi
 
