@@ -1783,22 +1783,36 @@ async function handleApi(req, res, url) {
   }
 
   /* Kabinet ma'lumoti — faqat o'z sessiyasi bilan */
+  /** Sessiya egasi HALI HAM bormi va faolmi.
+      HAR BIR kabinet so'rovida tekshiriladi: ilgari faqat
+      kabinet/me tekshirardi, qolgan yo'llar (learning, payments,
+      file va h.k.) esa o'quvchi arxivlangandan yoki ota-ona
+      o'chirilgandan keyin ham ishlashda davom etardi.           */
+  async function kabSubject(ses) {
+    if (!ses) return null;
+    if (ses.kind === 'parent') {
+      const par = await store.get(parents.COL + ses.parentId);
+      if (!par || par.active === false) return null;
+      return { kind: 'parent', parent: par };
+    }
+    const st = await store.get('students/' + ses.studentId);
+    if (!st || st.status === 'o’chirilgan' || st.status === 'arxiv') return null;
+    return { kind: 'student', student: st };
+  }
+
   if (route === 'kabinet/me' && req.method === 'GET') {
     const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
     if (!ses) return send(res, 401, { error: 'Kirish kerak.' });
-    if (ses.kind === 'parent') {
-      const par = await store.get(parents.COL + ses.parentId);
-      if (!par || par.active === false) {
-        return send(res, 401, { error: 'Kirish kerak.' }, { 'Set-Cookie': kabsess.clearHeader() });
-      }
-      const sum = await parents.summary(store, par, progress);
-      return send(res, 200, Object.assign({ csrf: ses.csrf }, sum));
-    }
-    const st = await store.get('students/' + ses.studentId);
-    if (!st || st.status === 'o’chirilgan') {
+    const subj = await kabSubject(ses);
+    if (!subj) {
+      await kabsess.revoke(store, ses.id, { stamp });
       return send(res, 401, { error: 'Kirish kerak.' }, { 'Set-Cookie': kabsess.clearHeader() });
     }
-    const sum = await kabinet.summary(store, st);
+    if (subj.kind === 'parent') {
+      const sum = await parents.summary(store, subj.parent, progress);
+      return send(res, 200, Object.assign({ csrf: ses.csrf }, sum));
+    }
+    const sum = await kabinet.summary(store, subj.student);
     return send(res, 200, Object.assign({ csrf: ses.csrf, kind: 'student' }, sum));
   }
 
@@ -1816,6 +1830,14 @@ async function handleApi(req, res, url) {
   if (route.indexOf('kabinet/') === 0) {
     const ses = await kabsess.read(store, parseCookies(req)[kabsess.COOKIE]);
     if (!ses) return send(res, 401, { error: 'Kirish kerak.' });
+    /* Subyekt HAR SO'ROVDA qayta tekshiriladi — o'chirilgan yoki
+       arxivlangan hisobning ochiq sessiyasi ishlashda davom
+       etmasin. Topilmasa sessiya ham darhol yopiladi.          */
+    const subj0 = await kabSubject(ses);
+    if (!subj0) {
+      await kabsess.revoke(store, ses.id, { stamp });
+      return send(res, 401, { error: 'Kirish kerak.' }, { 'Set-Cookie': kabsess.clearHeader() });
+    }
     const isParent = ses.kind === 'parent';
     const sub = route.slice('kabinet/'.length);
 
@@ -1828,8 +1850,11 @@ async function handleApi(req, res, url) {
     if (writing && !csrfOk()) return send(res, 403, { error: 'So’rov tasdiqlanmadi. Sahifani yangilang.' });
 
     /** Shu sessiya ko'rishi mumkin bo'lgan o'quvchi id lari */
+    /* Farzandlar ro'yxati sessiyadan EMAS, hozirgi ota-ona
+       yozuvidan olinadi: farzand ro'yxatdan chiqarilgan bo'lsa,
+       eski sessiya bilan uni ko'rib turish mumkin bo'lmasin.    */
     const mine = isParent
-      ? (Array.isArray(ses.studentIds) ? ses.studentIds.map(String) : [])
+      ? (Array.isArray(subj0.parent.studentIds) ? subj0.parent.studentIds.map(String) : [])
       : [String(ses.studentId)];
     function allowStudent(sid) { return mine.indexOf(String(sid)) >= 0; }
 
@@ -2660,8 +2685,10 @@ async function handleApi(req, res, url) {
     const id = String(body.id || '');
     if (!await store.get(parents.COL + id)) return send(res, 404, { error: 'Topilmadi.' });
     if (store.del) await store.del(parents.COL + id);
-    await writeAudit(user, 'Ota-ona hisobi o’chirildi', id, '');
-    return send(res, 200, { ok: true });
+    /* O'chirilgan ota-onaning kabineti ochiq qolib ketmasin */
+    const closedPar = await kabsess.revokeForStudent(store, '__parent__' + id, { stamp });
+    await writeAudit(user, 'Ota-ona hisobi o’chirildi', id, closedPar + ' ta sessiya yopildi');
+    return send(res, 200, { ok: true, closed: closedPar });
   }
 
   /* ---- Hisobotlar ---- */
@@ -2707,9 +2734,15 @@ async function handleApi(req, res, url) {
     const oldCode = st.code || '';
     st.code = code;
     await store.set('students/' + id, st);
+    /* Kod almashdi — ESKI kod bilan ochilgan kabinet sessiyalari
+       darhol yopiladi. Ilgari izohda shunday yozilgan edi, lekin
+       amalda yopilmasdi: kod o'g'irlangan bo'lsa, uni almashtirish
+       o'g'rini chiqarib yubormasdi.                                */
+    const closedCode = await kabsess.revokeForStudent(store, id, { stamp });
     await writeAudit(user, 'O’quvchi kodi yangilandi',
-      (st.lastName || '') + ' ' + (st.firstName || ''), oldCode + ' → ' + code);
-    return send(res, 200, { ok: true, code });
+      (st.lastName || '') + ' ' + (st.firstName || ''),
+      oldCode + ' → ' + code + ' · ' + closedCode + ' ta sessiya yopildi');
+    return send(res, 200, { ok: true, code, closed: closedCode });
   }
 
   /* ---------- O'quvchini BUTUNLAY o'chirish ----------
@@ -3125,9 +3158,13 @@ async function handleApi(req, res, url) {
       if (!body || typeof body.data !== 'object' || body.data === null) {
         return send(res, 400, { error: 'Ma’lumot noto’g’ri.' });
       }
+      const oldDoc = p.indexOf('students/') === 0 ? await store.get(p) : null;
       const g = await guardWrite(user, p, 'PUT', body.data);
       if (g.error) return send(res, g.code || 403, { error: g.error });
       body.data = g.data;
+      /* Shakl orqali kod almashtirilgan bo'lsa ham sessiyalar yopiladi */
+      const codeChanged = !!(oldDoc && oldDoc.code && body.data.code &&
+        String(oldDoc.code) !== String(body.data.code));
       // Parolni FAQAT server hisoblaydi — mijoz hash yubora olmaydi
       if (p.indexOf('users/') === 0) {
         const old = await store.get(p);
@@ -3153,6 +3190,11 @@ async function handleApi(req, res, url) {
         }
       }
       await store.set(p, body.data);
+      if (codeChanged) {
+        const n = await kabsess.revokeForStudent(store, p.split('/')[1], { stamp });
+        await writeAudit(user, 'Kabinet: kod almashdi, sessiyalar yopildi',
+          body.entity || p, n + ' ta');
+      }
       await writeAudit(user, body.action || 'Ma’lumot saqlandi', body.entity || p, body.details || '');
       // Bot navbatchisini uyg'otamiz (tasdiq/ e'lon darhol ketsin, bo'sh vaqtda esa baza tinch)
       if (p.indexOf('botreq/') === 0 || p.indexOf('botout/') === 0) {

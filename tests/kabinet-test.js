@@ -323,6 +323,79 @@ const GCODE = 'K' + R.slice(-5).toUpperCase();
     try { fs2.rmSync(dir2, { recursive: true, force: true }); } catch (e) { }
   }
 
+  /* ========== 9. KOD/HISOB O'ZGARSA SESSIYA YOPILADI ==========
+     Ilgari kod almashtirilsa ham eski sessiya ishlashda davom
+     etardi: kod o'g'irlangan bo'lsa, uni almashtirish o'g'rini
+     chiqarib yubormasdi. Ota-ona o'chirilsa ham shunday edi.
+     Kabinet ichki yo'llari esa subyektni umuman qayta
+     tekshirmasdi — arxivlangan o'quvchi kabineti ochiq qolardi. */
+  section('9. Kod almashsa va hisob o’chsa — kabinet yopiladi');
+
+  /* --- a) O'quvchi kodi almashtirilsa --- */
+  const sesA = await (async () => {
+    const mk = await kabLink(ID('s1'));
+    const r = await req('/api/kabinet/session', { method: 'POST', body: { token: mk.json.token } });
+    return r.cookie;
+  })();
+  const liveA = await req('/api/kabinet/me', { cookie: sesA });
+  eq('Sessiya ishlayapti', liveA.status, 200);
+  const newCode = await req('/api/student/code', {
+    method: 'POST', cookie: DIRC, body: { studentId: ID('s1') }
+  });
+  eq('Kod yangilandi', newCode.status, 200);
+  const deadA = await req('/api/kabinet/me', { cookie: sesA });
+  eq('Kod almashgach eski sessiya yopildi', deadA.status, 401);
+  const deadA2 = await req('/api/kabinet/learning', { cookie: sesA });
+  eq('  → ichki yo’l ham yopildi', deadA2.status, 401);
+
+  /* --- b) Shakl orqali kod almashtirilsa ham --- */
+  const sesB = await (async () => {
+    const mk = await kabLink(ID('s1'));
+    const r = await req('/api/kabinet/session', { method: 'POST', body: { token: mk.json.token } });
+    return r.cookie;
+  })();
+  eq('Yangi sessiya ochildi', (await req('/api/kabinet/me', { cookie: sesB })).status, 200);
+  const stNow = (await get('students/' + ID('s1'), DIRC)).json.data;
+  const freeCode = String(Number(stNow.code) === 99999 ? 10001 : Number(stNow.code) + 1);
+  await put('students/' + ID('s1'), Object.assign({}, stNow, { code: freeCode }), DIRC);
+  eq('Shakl orqali kod almashgach ham yopildi',
+    (await req('/api/kabinet/me', { cookie: sesB })).status, 401);
+
+  /* --- c) O'quvchi arxivlansa --- */
+  const sesC = await (async () => {
+    const mk = await kabLink(ID('s2'));
+    const r = await req('/api/kabinet/session', { method: 'POST', body: { token: mk.json.token } });
+    return r.cookie;
+  })();
+  eq('s2 sessiyasi ochildi', (await req('/api/kabinet/me', { cookie: sesC })).status, 200);
+  const s2Now = (await get('students/' + ID('s2'), DIRC)).json.data;
+  await put('students/' + ID('s2'), Object.assign({}, s2Now, { status: 'arxiv' }), DIRC);
+  eq('Arxivlangach kabinet yopildi', (await req('/api/kabinet/me', { cookie: sesC })).status, 401);
+  eq('  → ichki yo’l ham yopildi',
+    (await req('/api/kabinet/learning', { cookie: sesC })).status, 401);
+  await put('students/' + ID('s2'), s2Now, DIRC);     // qaytaramiz
+
+  /* --- d) Ota-ona o'chirilsa --- */
+  const parR = await req('/api/parent', {
+    method: 'POST', cookie: DIRC,
+    body: { name: 'Sinov Ota-ona', phone: '+998901119999', studentIds: [ID('s1')] }
+  });
+  const parId = parR.json && (parR.json.parent || {}).id;
+  const parCode = parR.json && (parR.json.parent || {}).code;
+  ok('Ota-ona yaratildi', !!parId, parR.text.slice(0, 140));
+  if (parId) {
+    const pSes = await req('/api/kabinet', { method: 'POST', body: { code: parCode } });
+    eq('Ota-ona kabinetga kirdi', pSes.status, 200);
+    eq('  → ma’lumot ko’rinadi',
+      (await req('/api/kabinet/me', { cookie: pSes.cookie })).status, 200);
+    const delP = await req('/api/parent/delete', { method: 'POST', cookie: DIRC, body: { id: parId } });
+    eq('Ota-ona o’chirildi', delP.status, 200);
+    eq('  → eski sessiya yopildi',
+      (await req('/api/kabinet/me', { cookie: pSes.cookie })).status, 401);
+    eq('  → ichki yo’l ham yopildi',
+      (await req('/api/kabinet/learning', { cookie: pSes.cookie })).status, 401);
+  }
+
   console.log(out.join('\n'));
   console.log('\n' + '─'.repeat(52));
   console.log((fail === 0 ? '✓ HAMMASI O’TDI' : '✗ XATOLAR BOR') + ` — ${pass} ta o'tdi, ${fail} ta xato`);
