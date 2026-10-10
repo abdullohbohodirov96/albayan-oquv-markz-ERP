@@ -49,7 +49,13 @@ function writePermFor(docPath) {
   };
   if (col === 'meta') {
     if (p === 'meta/settings') return 'settings.edit';
-    return null;                       // meta/finindex — har qanday kirgan foydalanuvchi
+    /* Qolgan meta/* FAQAT SERVERNIKI.
+       Ilgari bu yerda null qaytarilardi, ya'ni ruxsat tekshiruvi
+       umuman o'tkazib yuborilardi: har qanday kirgan xodim
+       meta/autoinvoice ga lastMonth yozib shu oyning avtomatik
+       hisoblarini to'xtatishi, yoki meta/backupstate ga yozib
+       zaxira xatolarini yashirishi mumkin edi.                   */
+    return '__server__';
   }
   if (col === 'lessons') return 'attendance.mark';
   if (col === 'botstate' || col === 'botin') return '__server__';  // faqat bot yozadi
@@ -69,6 +75,9 @@ function readBlocked(docPath, user) {
   /* Test natijalari — faqat murojaat/o'quvchi bilan ishlaydiganlarga */
   if (col === 'placements' && !A.can(user, 'lead.view')) return true;
   if (col === 'payroll' && !A.can(user, 'finance.payroll')) return true;
+  /* meta/*: sozlamadan boshqasi ichki holat (zaxira yo'llari, xato
+     matnlari, avtomatik hisob holati) — ID orqali ham berilmaydi. */
+  if (col === 'meta' && docPath !== 'meta/settings' && !META_PUBLIC[docPath]) return true;
   return false;
 }
 
@@ -103,6 +112,9 @@ function safeStudent(s, user) {
     phone: s.phone, status: s.status, telegram: s.telegram ? { id: s.telegram.id } : undefined
   };
 }
+
+/* Mijozga yuboriladigan meta hujjatlar (meta/settings alohida ishlanadi) */
+const META_PUBLIC = { 'meta/finindex': 1 };
 
 /* Markazning yagona umumiy suhbati — identifikator server tomonida belgilangan */
 const GENERAL_CHAT = 'chat_umumiy';
@@ -238,7 +250,13 @@ function visibleData(user, all) {
       return;
     }
     if (seg[0] === 'botstate') return;
-    if (seg[0] === 'meta') { docs[p] = data; return; }
+    if (seg[0] === 'meta') {
+      /* Mijozga faqat oq ro'yxatdagi meta hujjatlar. Ilgari BARCHASI
+         yuborilardi — meta/backupstate ichida zaxira yo'llari va
+         xato matnlari, meta/autoinvoice ichida ichki holat bor.   */
+      if (META_PUBLIC[p]) docs[p] = data;
+      return;
+    }
 
     if (seg.length === 2) {
       if (!allowCollection(seg[0])) return;

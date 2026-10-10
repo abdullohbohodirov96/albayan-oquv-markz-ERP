@@ -630,6 +630,51 @@ function raw(pathRaw, opts = {}) {
   /* Sozlamani tiklaymiz */
   await putDoc('meta/settings', set0, dir);
 
+  /* ================================================================
+     16. meta/* — faqat server yozadi
+     ================================================================ */
+  section('16. meta/* hujjatlari: xodim yoza ham, o’qiy ham olmaydi');
+  /* Ilgari writePermFor meta/settings dan boshqa meta/* uchun null
+     qaytarardi, ya'ni ruxsat tekshiruvi umuman o'tkazib yuborilardi:
+     har qanday kirgan xodim meta/autoinvoice ga lastMonth yozib shu
+     oyning AVTOMATIK HISOBLARINI to'xtatishi, yoki meta/backupstate
+     ga yozib zaxira xatolarini yashirishi mumkin edi.               */
+  const metaBefore = {};
+  for (const m of ['meta/autoinvoice', 'meta/backupstate']) {
+    metaBefore[m] = JSON.stringify(await getDoc(m, dir));
+  }
+  for (const [path, payload] of [
+    ['meta/autoinvoice', { lastMonth: '2099-12', stopped: true }],
+    ['meta/backupstate', { lastError: '', lastAt: '2099-01-01' }],
+    ['meta/yangi_hujjat', { x: 1 }]
+  ]) {
+    const w = await putDoc(path, payload, tch);
+    eq('O’qituvchi ' + path + ' ga yoza olmadi', w.status, 403);
+    const d = await putDoc(path, payload, dir);
+    eq('Direktor ham ' + path + ' ga yoza olmadi', d.status, 403);
+  }
+  for (const m of ['meta/autoinvoice', 'meta/backupstate']) {
+    eq('  → ' + m + ' o’zgarmadi', JSON.stringify(await getDoc(m, dir)), metaBefore[m]);
+  }
+  ok('Yangi meta hujjat yaratilmadi', !(await getDoc('meta/yangi_hujjat', dir)));
+
+  /* O'qish ham: ichki holat mijozga chiqmaydi */
+  for (const m of ['meta/autoinvoice', 'meta/backupstate']) {
+    const r = await req('/api/doc?path=' + encodeURIComponent(m), { cookie: tch });
+    ok('O’qituvchi ' + m + ' ni o’qiy olmadi',
+      r.status === 403 || !(r.json && r.json.data), r.status + ' ' + r.text.slice(0, 120));
+  }
+  const bootT = await req('/api/bootstrap', { cookie: tch });
+  const bootDocs = (bootT.json || {}).docs || {};
+  ok('Ro’yxatda ham meta/backupstate yo’q', !bootDocs['meta/backupstate'],
+    JSON.stringify(Object.keys(bootDocs).filter(k => k.indexOf('meta/') === 0)));
+  ok('Ro’yxatda ham meta/autoinvoice yo’q', !bootDocs['meta/autoinvoice'],
+    JSON.stringify(Object.keys(bootDocs).filter(k => k.indexOf('meta/') === 0)));
+  /* Sozlama esa ishlashda davom etsin */
+  const setOk = await req('/api/doc?path=' + encodeURIComponent('meta/settings'), { cookie: dir });
+  ok('meta/settings direktorga ochiq', setOk.status === 200 && !!setOk.json.data,
+    setOk.status + '');
+
   /* ---------- tozalash ---------- */
   for (const p of ['memberships/' + ID('m'), 'students/' + ID('s'), 'groups/' + ID('g'),
     'courses/' + ID('c'), 'staff/' + ID('t'), 'users/' + ID('u')]) {
