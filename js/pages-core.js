@@ -1308,14 +1308,42 @@
     }
 
     if (tab === 'davomat') {
+      /* QAYSI OYLAR O'QILADI.
+         Ilgari faqat BRAUZERGA ALLAQACHON yuklangan oylar sanalardi,
+         shuning uchun o'tgan oylardagi davomat ko'rinmasdi — guruh bir
+         necha oy oldin boshlangan bo'lsa, tarix bo'sh chiqardi.
+         Endi guruhga kirgan oydan bugungacha hammasi yuklanadi.      */
+      var wantMonths = [];
+      Q.membershipsOf(s.id).forEach(function (m) {
+        var g = D.one('groups', m.groupId);
+        if (!g) return;
+        var from = (A.isDate(m.joinedAt) && A.ymOf(m.joinedAt)) ||
+          (A.isDate(g.startDate) && A.ymOf(g.startDate)) || A.thisMonth();
+        var to = (A.isDate(m.leftAt) && A.ymOf(m.leftAt)) || A.thisMonth();
+        if (to > A.thisMonth()) to = A.thisMonth();
+        var ym = from, guard = 0;
+        while (ym <= to && guard++ < 60) {
+          wantMonths.push([g.id, ym]);
+          ym = A.addMonths(ym, 1);
+        }
+      });
+      var missing = wantMonths.filter(function (x) { return !D.lessonsCached(x[0], x[1]); });
+      if (missing.length) {
+        (async function () {
+          for (var i = 0; i < missing.length; i++) {
+            try { await D.loadLessons(missing[i][0], missing[i][1]); } catch (e) { }
+          }
+          App.render();
+        })();
+        view.appendChild(UI.card('Davomat', h('p', { class: 'muted' }, 'Yuklanmoqda…')));
+        return;
+      }
       var rows = [];
       Q.membershipsOf(s.id).forEach(function (m) {
         var g = D.one('groups', m.groupId);
         if (!g) return;
         var months = {};
-        Object.keys(D.docs).forEach(function (p) {
-          if (p.indexOf('lessons/' + g.id + '__') === 0) months[p.split('__')[1]] = 1;
-        });
+        wantMonths.forEach(function (x) { if (x[0] === g.id) months[x[1]] = 1; });
         months[A.thisMonth()] = 1;
         Object.keys(months).forEach(function (ym) {
           var doc = D.lessonsCached(g.id, ym);
@@ -1327,8 +1355,13 @@
       });
       rows = A.sortBy(rows, 'date', 'desc');
       var st = A.attendanceStats(rows);
+      /* FOIZ — "keldi" va "kechikdi" darsga kelgan hisoblanadi */
+      var keldiJami = st.keldi + st.kechikdi;
+      var foiz = st.jami ? Math.round(keldiJami * 100 / st.jami) : 0;
       view.appendChild(UI.card('Davomat', [
         h('div', { class: 'rowflex', style: 'margin-bottom:12px' }, [
+          UI.pill('Davomat: ' + foiz + '%', foiz >= 80 ? 'ok' : (foiz >= 60 ? 'warn' : 'bad')),
+          UI.pill('Jami dars: ' + st.jami, 'mute'),
           UI.pill('Keldi: ' + st.keldi, 'ok'), UI.pill('Kelmadi: ' + st.kelmadi, 'bad'),
           UI.pill('Kechikdi: ' + st.kechikdi, 'warn'), UI.pill('Sababli: ' + st.sababli, 'info')
         ]),

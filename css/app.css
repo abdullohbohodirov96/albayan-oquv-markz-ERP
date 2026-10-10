@@ -2425,3 +2425,12 @@ button.cur-title:hover b{text-decoration:underline}
   background:var(--surface);color:var(--ink);font:inherit;font-size:13px;max-width:190px}
 .branch-pick:focus-visible{outline:2px solid var(--info);outline-offset:1px}
 @media (max-width:560px){ .branch-pick{max-width:120px;font-size:12px} }
+
+/* Davomat: keyinroq yozilgan o'quvchilar alohida ajralib tursin */
+.att-sep {
+  padding: 10px 16px 6px;
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+}
+.att-row.att-late { background: var(--soft, rgba(0, 0, 0, .03)); }
+.att-row.att-late .nm { opacity: .85; }

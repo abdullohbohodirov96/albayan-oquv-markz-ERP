@@ -296,9 +296,16 @@
           lessons.forEach(function (l) {
             if (l.status === 'bekor') return;
             var a = l.attendance && l.attendance[m.id];
-            if (!a || !a.status) { if (l.date <= A.today()) st.belgilanmagan++; return; }
-            st[a.status]++;
+            if (a && a.status) { st[a.status]++; return; }
+            /* O'quvchi hali guruhda bo'lmagan darslar "belgilanmagan"
+               deb sanalmasin — aks holda o'rtada qo'shilgan o'quvchi
+               hisobotda noto'g'ri yomon ko'rinadi.                   */
+            if (m.joinedAt && l.date < m.joinedAt) return;
+            if (m.leftAt && l.date > m.leftAt) return;
+            if (l.date <= A.today()) st.belgilanmagan++;
           });
+          var tot = st.keldi + st.kechikdi + st.kelmadi + st.sababli;
+          st.foiz = tot ? Math.round((st.keldi + st.kechikdi) / tot * 100) : 0;
           return { m: m, st: st };
         });
         view.appendChild(UI.card(A.monthLabel(ym) + ' davomat hisoboti', rows.length ? UI.table([
@@ -310,17 +317,18 @@
           { label: 'Belgilanmagan', right: true, render: function (r) { return h('span', { class: 'mono muted' }, r.st.belgilanmagan); } },
           {
             label: 'Qatnashuv', right: true, render: function (r) {
-              var tot = r.st.keldi + r.st.kechikdi + r.st.kelmadi + r.st.sababli;
-              var pct = tot ? Math.round((r.st.keldi + r.st.kechikdi) / tot * 100) : 0;
+              var pct = r.st.foiz;
               return UI.pill(pct + '%', pct >= 80 ? 'ok' : (pct >= 60 ? 'warn' : 'bad'));
             }
           }
         ], rows) : h('p', { class: 'muted' }, 'O’quvchi yo’q.'), [
           h('button', {
             class: 'btn sm', onclick: function () {
-              UI.exportCsv('davomat-' + ym + '.csv', [['O’quvchi', 'Keldi', 'Kelmadi', 'Kechikdi', 'Sababli', 'Belgilanmagan']].concat(
+              UI.exportCsv('davomat-' + ym + '.csv',
+                [['O’quvchi', 'Keldi', 'Kelmadi', 'Kechikdi', 'Sababli', 'Belgilanmagan', 'Qatnashuv %']].concat(
                 rows.map(function (r) {
-                  return [Q.studentName(r.m.studentId), r.st.keldi, r.st.kelmadi, r.st.kechikdi, r.st.sababli, r.st.belgilanmagan];
+                  return [Q.studentName(r.m.studentId), r.st.keldi, r.st.kelmadi, r.st.kechikdi,
+                    r.st.sababli, r.st.belgilanmagan, r.st.foiz];
                 })));
             }
           }, 'Excel')
@@ -500,25 +508,62 @@
          o'zgartirdim, lekin guruhda eski raqam turibdi" degan
          tushunmovchilik chiqadi.                                     */
       var thisYm = A.thisMonth();
+      /* QAYSI OY OCHILADI.
+         Ilgari bu maydon HAR SAFAR keyingi oyni ko'rsatardi. Shuning
+         uchun "Oktabr" deb saqlagandan keyin qaytib kirilsa yana
+         "Noyabr" turardi, rejalashtirilgan narx o'zgarishi esa oynada
+         umuman ko'rinmasdi va uni boshqa oyga ko'chirib bo'lmasdi.
+         Endi: reja bo'lsa — o'sha oy, bo'lmasa — keyingi oy.        */
+      var planned = A.feeUpcoming(g, thisYm);
+      var startYm = planned ? planned.from : A.addMonths(thisYm, 1);
       var feeFrom = UI.field({
         label: 'Yangi narx qaysi oydan kuchga kiradi', type: 'month',
-        value: A.addMonths(thisYm, 1),
+        value: startYm,
         help: 'Narx shu oyning o’zidayoq amal qilishi kerak bo’lsa, ' +
           A.monthLabel(thisYm) + ' ni tanlang. Allaqachon yaratilgan ' +
           'hisoblar baribir o’zgarmaydi — ularni Moliya bo’limidan ' +
           'o’chirib, qaytadan yaratish kerak (to’lov qilingan hisob o’chmaydi).'
       });
+      /* Narx maydoni tanlangan oyga MOS tursin */
+      var feeFld = f.get('fee');
+      if (feeFld && feeFld.input) feeFld.input.value = A.feeForMonth(g, startYm);
+
       var feeNow = h('div', { class: 'small muted', style: 'margin-bottom:8px' });
       function paintFeeNow() {
-        feeNow.textContent = A.monthLabel(thisYm) + ' da amaldagi narx: ' +
-          A.som(A.feeForMonth(g, thisYm)) + ' so’m';
+        var sel = A.isMonth(feeFrom.input.value) ? feeFrom.input.value : startYm;
+        var lines = [A.monthLabel(thisYm) + ' da amaldagi narx: ' +
+          A.som(A.feeForMonth(g, thisYm)) + ' so’m'];
+        if (sel !== thisYm) {
+          lines.push(A.monthLabel(sel) + ' da hozir yozilgani: ' +
+            A.som(A.feeForMonth(g, sel)) + ' so’m');
+        }
+        if (planned) {
+          lines.push('Rejalashtirilgan: ' + A.monthLabel(planned.from) + ' dan ' +
+            A.som(planned.fee) + ' so’m');
+        }
+        UI.clear(feeNow);
+        lines.forEach(function (t) { feeNow.appendChild(h('div', {}, t)); });
       }
       paintFeeNow();
-      /* Oy o'zgarsa — narx maydoni o'sha oyning narxini ko'rsatsin. */
+      /* Oy o'zgarsa narx maydoni o'sha oyning narxini ko'rsatadi —
+         "qaysi oyda qancha" deb qarash uchun. Ikki holatda tegmaymiz:
+           1) foydalanuvchi narxni O'ZI yozgan bo'lsa;
+           2) rejalashtirilgan o'zgarish boshqa KELGUSI oyga
+              ko'chirilayotgan bo'lsa (aks holda ko'chirib bo'lmasdi). */
+      var feeTouched = false;
+      if (feeFld && feeFld.input) {
+        feeFld.input.addEventListener('input', function () { feeTouched = true; });
+      }
+      var prevYm = startYm;
       feeFrom.input.addEventListener('change', function () {
-        var ym = feeFrom.input.value || A.addMonths(thisYm, 1);
+        var ym = A.isMonth(feeFrom.input.value) ? feeFrom.input.value : A.addMonths(thisYm, 1);
         var fld = f.get('fee');
-        if (fld && fld.input) fld.input.value = A.feeForMonth(g, ym);
+        var movingPlan = !!planned && prevYm === planned.from && ym > thisYm;
+        if (fld && fld.input && !feeTouched && !movingPlan) {
+          fld.input.value = A.feeForMonth(g, ym);
+        }
+        prevYm = ym;
+        paintFeeNow();
       });
       feeNote.appendChild(feeNow);
       feeNote.appendChild(feeFrom.wrap);
@@ -584,11 +629,26 @@
                    oxirgi yozuvi bilan solishtirilsa, oraliq oyga narx
                    qo'yib bo'lmasdi.                                    */
                 rec.feeHistory = (g.feeHistory || []).slice();
-                var fromIn = feeNote.querySelector('input');
-                var from = (fromIn && fromIn.value) || A.thisMonth();
-                if (A.feeForMonth(g, from) !== Number(v.fee)) {
+                var from = A.isMonth(feeFrom.input.value)
+                  ? feeFrom.input.value : A.thisMonth();
+                var newFee = Number(v.fee);
+                /* REJANI KO'CHIRISH: oyna rejalashtirilgan o'zgarish
+                   bilan ochilgan bo'lsa va foydalanuvchi oyni almashtirgan
+                   bo'lsa, eski yozuv o'chadi va yangisi tanlangan oyga
+                   qo'yiladi. Ilgari eskisi joyida qolib, ikkita narx
+                   o'zgarishi paydo bo'lardi.                            */
+                if (planned && planned.from !== from) {
+                  rec.feeHistory = rec.feeHistory.filter(function (x) {
+                    return x.from !== planned.from;
+                  });
+                }
+                /* Solishtirish ESKI yozuv olib tashlangandan keyingi
+                   holat bilan bo'ladi, aks holda ko'chirilgan narx
+                   "o'zgarmadi" deb tashlab yuborilardi.                */
+                var base = { fee: g.fee, feeHistory: rec.feeHistory };
+                if (A.feeForMonth(base, from) !== newFee) {
                   rec.feeHistory = rec.feeHistory.filter(function (x) { return x.from !== from; });
-                  rec.feeHistory.push({ fee: Number(v.fee), from: from });
+                  rec.feeHistory.push({ fee: newFee, from: from });
                   rec.feeHistory.sort(function (a, b) { return String(a.from).localeCompare(String(b.from)); });
                 }
                 /* group.fee — tarix bo'lmaganda ishlatiladigan zaxira
@@ -1300,7 +1360,10 @@
 
   A.Pages.attendance = function (view, route, App) {
     App.guard('attendance.view');
-    var groups = Q.activeGroups(App.user).filter(function (g) { return g.status === 'faol'; });
+    /* Eski darslarga davomat qo'yish uchun REJALASHTIRILGAN guruh ham
+       ro'yxatda turadi: guruh bir oy oldin boshlangan bo'lsa, o'tgan
+       oylarni to'ldirish kerak bo'ladi.                               */
+    var groups = Q.activeGroups(App.user);
     if (!groups.length) {
       view.appendChild(UI.pageHead('Davomat'));
       view.appendChild(UI.card(null, UI.empty({ title: 'Faol guruh yo’q', text: 'Avval guruh oching va o’quvchi yozing.' })));
@@ -1321,7 +1384,8 @@
     var groupId = route.groupId || (auto && auto.groupId) || groups[0].id;
     var g = D.one('groups', groupId) || groups[0];
     if (!A.canSeeGroup(App.user, g)) { view.appendChild(UI.empty({ title: 'Ruxsat yo’q' })); return; }
-    var ym = route.date ? A.ymOf(route.date) : A.thisMonth();
+    var ym = A.isMonth(route.ym) ? route.ym
+      : (A.isDate(route.date) ? A.ymOf(route.date) : A.thisMonth());
 
     view.appendChild(UI.pageHead('Davomat', A.dateLabel(today) + ' · bugungi dars o’zi tanlanadi'));
 
@@ -1334,7 +1398,8 @@
       return;
     }
     var lessons = A.monthLessons(g, ym, D.lessonsCached(g.id, ym)).filter(function (l) { return l.status !== 'bekor'; });
-    var date = route.date || (auto && auto.date);
+    var date = (A.isMonth(route.ym) && A.ymOf(route.date || '') !== route.ym)
+      ? null : (route.date || (auto && auto.date));
     if (!date || !lessons.some(function (l) { return l.date === date; })) {
       // 1) bugun dars bo'lsa — bugun; 2) bo'lmasa — oxirgi o'tgan dars; 3) oyning birinchi darsi
       if (lessons.some(function (l) { return l.date === today; })) date = today;
@@ -1360,9 +1425,19 @@
       }) : [{ value: '', label: 'Dars yo’q' }]
     });
     fd.input.addEventListener('change', function () { App.go('attendance', { groupId: g.id, date: fd.input.value }); });
+    /* OY TANLAGICH — guruh bir necha oy oldin boshlangan bo'lsa,
+       istalgan o'tgan oyni ochib davomat to'ldirish mumkin.        */
+    var fm = UI.field({ label: 'Oy', type: 'month', value: ym });
+    fm.input.addEventListener('change', function () {
+      if (A.isMonth(fm.input.value)) App.go('attendance', { groupId: g.id, ym: fm.input.value });
+    });
+    function goMonth(delta) {
+      App.go('attendance', { groupId: g.id, ym: A.addMonths(ym, delta) });
+    }
     view.appendChild(h('div', { class: 'filters' }, [
-      fg.wrap, fd.wrap,
-      h('button', { class: 'btn sm', onclick: function () { App.go('attendance', { groupId: g.id, date: A.monthStart(A.addMonths(ym, -1)) }); } }, '‹ Oldingi oy'),
+      fg.wrap, fm.wrap, fd.wrap,
+      h('button', { class: 'btn sm', onclick: function () { goMonth(-1); } }, '‹ Oldingi oy'),
+      h('button', { class: 'btn sm', onclick: function () { goMonth(1); } }, 'Keyingi oy ›'),
       h('button', { class: 'btn sm', onclick: function () { App.go('group', { id: g.id, tab: 'davomat' }); } }, 'Oylik hisobot')
     ]));
 
@@ -1371,49 +1446,114 @@
       return;
     }
 
-    var members = Q.membersOf(g.id).filter(function (m) {
-      if (m.joinedAt && m.joinedAt > date) return false;
-      if (m.leftAt && m.leftAt < date) return false;
-      return true;
+    /* KIM KO'RINADI.
+       Ilgari "guruhga kirgan sanasi darsdan keyin" bo'lgan o'quvchi
+       ro'yxatdan butunlay tushib qolardi. Excel'dan import qilinganda
+       yoki yangi yozilganda bu sana BUGUN bo'lgani uchun, guruh bir oy
+       oldin boshlangan bo'lsa, o'tgan darslarda ro'yxat BO'SH chiqardi —
+       "davomat chiqmayapti" degani shu edi.
+       Endi ular ham ko'rinadi, faqat alohida bo'limda va belgisi bilan. */
+    var allMems = Q.membersOf(g.id).filter(function (m) {
+      return !(m.leftAt && m.leftAt < date);
     });
+    var members = allMems.filter(function (m) { return !(m.joinedAt && m.joinedAt > date); });
+    var later = allMems.filter(function (m) { return m.joinedAt && m.joinedAt > date; });
     var doc = D.lessonsCached(g.id, ym);
     var rec = (doc.items && doc.items[date]) || {};
     var state = {};
-    members.forEach(function (m) {
+    allMems.forEach(function (m) {
       state[m.id] = (rec.attendance && rec.attendance[m.id] && rec.attendance[m.id].status) || null;
     });
 
     var rowsBox = h('div');
+    function attRow(m, late) {
+      var opts = h('div', { class: 'att-opts' }, Object.keys(A.ATT).map(function (k) {
+        var conf = A.ATT[k];
+        return h('button', {
+          type: 'button', class: conf.cls, 'aria-pressed': state[m.id] === k ? 'true' : 'false',
+          disabled: !App.can('attendance.mark'),
+          onclick: function () { state[m.id] = state[m.id] === k ? null : k; paint(); }
+        }, conf.label);
+      }));
+      return h('div', { class: 'att-row' + (late ? ' att-late' : '') }, [
+        UI.avatar(Q.studentName(m.studentId)),
+        h('div', { class: 'nm' }, [
+          h('span', {}, Q.studentName(m.studentId)),
+          late ? h('span', { class: 'small muted' },
+            ' · ' + A.dateLabel(m.joinedAt) + ' dan yozilgan') : null
+        ].filter(Boolean)),
+        opts
+      ]);
+    }
+    /** Shu darsdagi davomat foizi (belgilanganlar ichida "keldi" ulushi) */
+    function pct() {
+      var marked = 0, came = 0;
+      allMems.forEach(function (m) {
+        if (!state[m.id]) return;
+        marked++;
+        if (state[m.id] === 'keldi' || state[m.id] === 'kechikdi') came++;
+      });
+      return { marked: marked, came: came, jami: allMems.length,
+        foiz: marked ? Math.round(came * 100 / marked) : 0 };
+    }
+    var pctBox = h('div', { class: 'small muted' });
+    function paintPct() {
+      var r = pct();
+      pctBox.textContent = 'Belgilangan: ' + r.marked + '/' + r.jami +
+        (r.marked ? ' · kelganlar: ' + r.foiz + '%' : '');
+    }
     function paint() {
       UI.clear(rowsBox);
-      members.forEach(function (m) {
-        var opts = h('div', { class: 'att-opts' }, Object.keys(A.ATT).map(function (k) {
-          var conf = A.ATT[k];
-          return h('button', {
-            type: 'button', class: conf.cls, 'aria-pressed': state[m.id] === k ? 'true' : 'false',
-            disabled: !App.can('attendance.mark'),
-            onclick: function () { state[m.id] = state[m.id] === k ? null : k; paint(); }
-          }, conf.label);
-        }));
-        rowsBox.appendChild(h('div', { class: 'att-row' }, [
-          UI.avatar(Q.studentName(m.studentId)),
-          h('div', { class: 'nm' }, Q.studentName(m.studentId)),
-          opts
-        ]));
-      });
+      members.forEach(function (m) { rowsBox.appendChild(attRow(m, false)); });
+      if (later.length) {
+        rowsBox.appendChild(h('div', { class: 'att-sep small muted' },
+          'Bu darsdan keyin guruhga yozilganlar (' + later.length + ' ta)'));
+        if (App.can('group.edit')) {
+          rowsBox.appendChild(h('div', { style: 'padding:0 16px 10px' }, [
+            h('button', {
+              class: 'btn sm', onclick: function (e) {
+                var btn = e.currentTarget;
+                UI.busy(btn, async function () {
+                  /* To'lov kuni O'ZGARMAYDI — faqat guruhga kirgan sana
+                     orqaga suriladi, aks holda hisob sanasi ham siljirdi. */
+                  for (var i = 0; i < later.length; i++) {
+                    var m = later[i];
+                    var upd = Object.assign({}, m, {
+                      joinedAt: date,
+                      dueDay: Number(m.dueDay) || A.dueDayOf(m, D.settings)
+                    });
+                    await D.save('memberships', upd);
+                  }
+                  UI.toast('Guruhga kirgan sana ' + A.dateLabel(date) +
+                    ' ga surildi. To’lov kuni o’zgarmadi.', 'ok');
+                  App.render();
+                });
+              }
+            }, 'Hammasi shu darsdan yozilgan deb belgilash')
+          ]));
+        }
+        later.forEach(function (m) { rowsBox.appendChild(attRow(m, true)); });
+      }
+      paintPct();
     }
     paint();
 
     var unmarkedCount = function () {
-      return members.filter(function (m) { return !state[m.id]; }).length;
+      return allMems.filter(function (m) { return !state[m.id]; }).length;
     };
     var footer = h('div', { class: 'rowflex', style: 'padding:14px 16px;border-top:1px solid var(--line);justify-content:space-between' }, [
-      h('div', { class: 'small muted' }, rec.markedAt ? ('Oxirgi o’zgartirish: ' + rec.markedAt + ' · ' + (rec.markedBy || '')) :
-        'Belgilanmagan o’quvchilar avtomatik "Kelmadi" hisoblanmaydi.'),
+      h('div', {}, [
+        pctBox,
+        h('div', { class: 'small muted' }, rec.markedAt ? ('Oxirgi o’zgartirish: ' + rec.markedAt + ' · ' + (rec.markedBy || '')) :
+          'Belgilanmagan o’quvchilar avtomatik "Kelmadi" hisoblanmaydi.')
+      ]),
       App.can('attendance.mark') ? h('div', { class: 'rowflex' }, [
         h('button', {
           class: 'btn', onclick: function () {
-            members.forEach(function (m) { if (!state[m.id]) state[m.id] = 'keldi'; });
+            /* EKRANDAGI hammasi — keyinroq yozilganlar ham. Ilgari
+               faqat "o'z vaqtida yozilganlar" belgilanardi, shuning
+               uchun eski darsda bu tugma hech nima qilmasdi.        */
+            allMems.forEach(function (m) { if (!state[m.id]) state[m.id] = 'keldi'; });
             paint();
           }
         }, 'Hammani "Keldi" deb belgilash'),
@@ -1424,7 +1564,7 @@
               await D.mutateLessons(g.id, ym, function (d) {
                 var r = d.items[date] || {};
                 r.attendance = r.attendance || {};
-                members.forEach(function (m) {
+                allMems.forEach(function (m) {
                   if (state[m.id]) {
                     r.attendance[m.id] = { status: state[m.id], at: A.nowStamp(), by: App.user.name };
                   } else {
@@ -1437,16 +1577,26 @@
                 d.items[date] = r;
               });
               await A.Ops.audit(App.user, 'Davomat saqlandi', g.name, A.dateLabel(date) +
-                ' · belgilangan: ' + (members.length - unmarkedCount()) + '/' + members.length);
+                ' · belgilangan: ' + (allMems.length - unmarkedCount()) + '/' + allMems.length);
               if (A.Bot) {
                 try {
-                  await A.Bot.notifyAttendance(g.id, date, members.map(function (m) {
+                  await A.Bot.notifyAttendance(g.id, date, allMems.map(function (m) {
                     return { studentId: m.studentId, status: state[m.id] };
                   }), App.user.name);
                 } catch (e) { console.error('bot', e); }
               }
-              UI.toast('Davomat saqlandi.', 'ok');
-              App.back('dashboard');   // saqlagandan keyin oldingi sahifaga qaytadi
+              /* Saqlagandan keyin SAHIFADAN CHIQIB KETMAYDI: ketma-ket
+                 bir necha darsning davomati qo'yiladi. Keyingi
+                 belgilanmagan dars o'zi ochiladi, bo'lmasa shu dars
+                 qoladi (✓ belgisi bilan).                              */
+              var nextUn = lessons.filter(function (l) {
+                return l.date > date && l.date <= today &&
+                  !(l.attendance && Object.keys(l.attendance).length);
+              })[0];
+              UI.toast(nextUn
+                ? 'Saqlandi. Keyingi dars: ' + A.dateLabel(nextUn.date)
+                : 'Davomat saqlandi.', 'ok');
+              App.go('attendance', { groupId: g.id, date: nextUn ? nextUn.date : date });
             });
           }
         }, 'Saqlash')
@@ -1454,7 +1604,8 @@
     ]);
 
     view.appendChild(UI.card(g.name + ' · ' + A.dateLabel(date),
-      members.length ? [rowsBox, footer] : UI.empty({ title: 'Guruhda o’quvchi yo’q', text: 'Avval o’quvchi qo’shing.' }),
+      allMems.length ? [rowsBox, footer]
+        : UI.empty({ title: 'Guruhda o’quvchi yo’q', text: 'Avval o’quvchi qo’shing.' }),
       null, true));
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -542,6 +542,132 @@ function hasNumber(text, n) {
     ok('Qayta yuklangach belgilangani turibdi', stillOn > 0, String(stillOn));
   }
 
+  /* ========== 13b. ESKI OY DAVOMATI ==========
+     Guruh o'tgan oydan beri ishlayapti, lekin o'quvchi BUGUN yozilgan
+     (import qilinganda joinedAt = bugun bo'ladi). Ilgari bunday
+     o'quvchi o'tgan oydagi darsda ro'yxatdan BUTUNLAY tushib qolardi —
+     ekran bo'sh chiqardi va "davomat chiqmayapti" deyilardi.         */
+  section('13b. O’tgan oydagi darsga davomat qo’yish');
+  const PREV = A.addMonths(THIS, -1);
+  /* Guruhni o'tgan oydan boshlangan qilamiz */
+  const g0 = await get('groups/' + ID('g'));
+  await put('groups/' + ID('g'), Object.assign({}, g0, { startDate: PREV + '-01' }));
+  /* O'quvchi BUGUN yozilgan bo'lsin */
+  const m0 = await get('memberships/' + ID('m'));
+  await put('memberships/' + ID('m'), Object.assign({}, m0, { joinedAt: A.today() }));
+
+  await reloadAndText(page, 'attendance?groupId=' + encodeURIComponent(ID('g')) + '&ym=' + PREV);
+  const prevView = await page.evaluate(() => ({
+    oy: (document.querySelector('#view input[type=month]') || {}).value,
+    qatorlar: document.querySelectorAll('#view .att-row').length,
+    kech: document.querySelectorAll('#view .att-row.att-late').length,
+    hammaTugma: !!Array.from(document.querySelectorAll('#view button')).find(x => /Hammani/.test(x.textContent))
+  }));
+  eq('O’tgan oy ochildi', prevView.oy, PREV);
+  ok('O’tgan oyda ham o’quvchi ro’yxati bor', prevView.qatorlar > 0, JSON.stringify(prevView));
+  ok('Keyinroq yozilgani belgilab qo’yildi', prevView.kech > 0, JSON.stringify(prevView));
+  ok('"Hammani Keldi" tugmasi bor', prevView.hammaTugma);
+
+  /* "Hammani Keldi" EKRANDAGI hammasini belgilashi kerak */
+  await page.evaluate(() => {
+    Array.from(document.querySelectorAll('#view button')).find(x => /Hammani/.test(x.textContent)).click();
+  });
+  await page.waitForTimeout(400);
+  const onCount = await page.evaluate(() =>
+    document.querySelectorAll('#view .att-opts button[aria-pressed="true"]').length);
+  ok('Keyinroq yozilganlar ham belgilandi', onCount >= prevView.qatorlar,
+    onCount + ' / ' + prevView.qatorlar);
+  const pctText = await page.evaluate(() =>
+    (Array.from(document.querySelectorAll('#view .small.muted'))
+      .map(x => x.textContent).find(t => /Belgilangan:/.test(t)) || ''));
+  ok('Davomat foizi ko’rsatilyapti', /Belgilangan:\s*\d+\/\d+/.test(pctText) && /%/.test(pctText), pctText);
+
+  const prevDate = await page.evaluate(() => {
+    const sels = Array.from(document.querySelectorAll('#view .filters select'));
+    const s = sels[sels.length - 1];
+    return s ? s.value : '';
+  });
+  await page.evaluate(() => {
+    const b = Array.from(document.querySelectorAll('#view .btn.primary')).find(x => /Saqlash/.test(x.textContent));
+    if (b) b.click();
+  });
+  await page.waitForTimeout(2000);
+  const prevDoc = await get('lessons/' + ID('g') + '__' + PREV);
+  const prevRec = prevDoc && prevDoc.items && prevDoc.items[prevDate];
+  ok('O’tgan oy davomati BAZAGA yozildi (' + prevDate + ')',
+    !!(prevRec && prevRec.attendance && Object.keys(prevRec.attendance).length),
+    JSON.stringify(prevDoc && Object.keys(prevDoc.items || {})));
+  ok('  → keyinroq yozilgan o’quvchi ham tushdi',
+    !!(prevRec && prevRec.attendance && prevRec.attendance[ID('m')]),
+    JSON.stringify(prevRec && prevRec.attendance));
+  /* To'lov sanasi O'ZGARMAGAN bo'lishi kerak — davomat pulga tegmaydi */
+  const mAfter = await get('memberships/' + ID('m'));
+  eq('Guruhga kirgan sana o’zgarmadi', mAfter.joinedAt, A.today());
+
+  /* ========== 13c. NARX QAYSI OYDAN KUCHGA KIRADI ==========
+     Ilgari bu maydon har safar keyingi oyni ko'rsatardi: "Dekabr" deb
+     saqlangan reja qaytib kirilganda ko'rinmasdi va uni boshqa oyga
+     ko'chirib bo'lmasdi.                                              */
+  section('13c. Narx: kuchga kiradigan oy saqlanadimi');
+  const PLAN = A.addMonths(THIS, 2);
+  const gBase = await get('groups/' + ID('g'));
+  await put('groups/' + ID('g'), Object.assign({}, gBase, {
+    fee: 500000, feeHistory: [{ fee: 500000, from: PREV }]
+  }));
+  await reloadAndText(page, 'group?id=' + encodeURIComponent(ID('g')));
+  const openForm = async () => {
+    await page.evaluate(id => window.A.groupForm(window.A.Data.one('groups', id), window.A.App), ID('g'));
+    await page.waitForTimeout(600);
+  };
+  const formVals = () => page.evaluate(() => {
+    const fee = Array.from(document.querySelectorAll('.modal input[type=number]'))
+      .find(i => /Oylik narx/.test((i.closest('.field') || {}).textContent || ''));
+    return { narx: fee ? fee.value : null,
+      oy: (document.querySelector('.modal input[type=month]') || {}).value };
+  });
+  const saveForm = async () => {
+    await page.evaluate(() => {
+      const b = Array.from(document.querySelectorAll('.modal button')).find(x => /Saqlash/.test(x.textContent));
+      if (b) b.click();
+    });
+    await page.waitForTimeout(1800);
+  };
+  await openForm();
+  await page.evaluate(v => {
+    const m = document.querySelector('.modal input[type=month]');
+    m.value = v; m.dispatchEvent(new Event('change', { bubbles: true }));
+    const f = Array.from(document.querySelectorAll('.modal input[type=number]'))
+      .find(i => /Oylik narx/.test((i.closest('.field') || {}).textContent || ''));
+    f.value = '777000'; f.dispatchEvent(new Event('input', { bubbles: true }));
+  }, PLAN);
+  await saveForm();
+  const gPlan = await get('groups/' + ID('g'));
+  ok('Reja bazaga yozildi (' + PLAN + ')',
+    (gPlan.feeHistory || []).some(x => x.from === PLAN && Number(x.fee) === 777000),
+    JSON.stringify(gPlan.feeHistory));
+  eq('Shu oyning narxi o’zgarmadi', A.feeForMonth(gPlan, THIS), 500000);
+
+  await reloadAndText(page, 'group?id=' + encodeURIComponent(ID('g')));
+  await openForm();
+  const reopened = await formVals();
+  eq('Qayta ochilganda O’SHA oy turibdi', reopened.oy, PLAN);
+  eq('Qayta ochilganda O’SHA narx turibdi', reopened.narx, '777000');
+
+  /* Rejani bir oy OLDINGA ko'chiramiz — ikkita yozuv paydo bo'lmasin */
+  const MOVED = A.addMonths(THIS, 1);
+  await page.evaluate(v => {
+    const m = document.querySelector('.modal input[type=month]');
+    m.value = v; m.dispatchEvent(new Event('change', { bubbles: true }));
+  }, MOVED);
+  await saveForm();
+  const gMoved = await get('groups/' + ID('g'));
+  const future = (gMoved.feeHistory || []).filter(x => x.from > THIS);
+  eq('Reja bitta bo’lib qoldi', future.length, 1);
+  eq('  → yangi oyga ko’chdi', future[0] && future[0].from, MOVED);
+  eq('  → narx o’zgarmadi', future[0] && Number(future[0].fee), 777000);
+  eq('Ko’chirilgandan keyin hisob to’g’ri', A.feeForMonth(gMoved, MOVED), 777000);
+  eq('Eski oyda eski narx', A.feeForMonth(gMoved, THIS), 500000);
+
   /* ================= 14. XARAJAT ================= */
   section('14. Xarajat — yozilgani moliyada ko’rinadimi');
   const expSum = 1234000;
