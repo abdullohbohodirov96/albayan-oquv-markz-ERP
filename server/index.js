@@ -861,13 +861,35 @@ async function applyAdvanceServer(id, student, body, user) {
   return rec;
 }
 
+
+/** Tanaffus (pauses) ro'yxatini bir marta o'qiydi */
+async function allPauses() {
+  try {
+    return (await store.list('pauses/'))
+      .filter(r => r.path.split('/').length === 2)
+      .map(r => r.data).filter(Boolean);
+  } catch (e) { return []; }
+}
+
+/** Tanaffus chegirmasini hisoblaydi (sozlamada yoqilgan bo'lsa).
+    Butun oy tanaffusda bo'lsa — hisob umuman yozilmasin.        */
+function pauseCut(settings, pauses, m, g, ym, finalAmt) {
+  if (!settings || settings.pauseDiscount === false) return { credit: 0, skip: false, days: 0 };
+  const days = A.pausedDays(pauses, m.studentId, ym);
+  if (!days) return { credit: 0, skip: false, days: 0 };
+  if (days >= A.daysInMonth(ym)) return { credit: 0, skip: true, days };
+  const credit = Math.min(finalAmt, A.pauseCredit(g, ym, days));
+  return { credit, skip: false, days };
+}
+
 async function generateInvoicesServer(ym, user) {
   const settings = (await store.get('meta/settings')) || {};
   const groups = {}, students = {};
   (await store.list('groups/')).forEach(x => { groups[x.data.id] = x.data; });
   (await store.list('students/')).forEach(x => { students[x.data.id] = x.data; });
   const mems = (await store.list('memberships/')).map(x => x.data);
-  let created = 0, skipped = 0;
+  const pauses = await allPauses();
+  let created = 0, skipped = 0, paused = 0;
   const errors = [];
 
   /* O'tgan oydagi davomat — sababli qoldirilgan dars uchun chegirma.
@@ -894,25 +916,40 @@ async function generateInvoicesServer(ym, user) {
       /* O'tgan oyda sababli qoldirilgan darslar uchun chegirma */
       const missed = A.excusedCount(prevLessons[m.groupId], m.id);
       const credit = Math.min(amt.final, A.excusedCredit(g, ym, missed));
-      const note = credit
-        ? A.monthLabel(prevYm) + ': ' + missed + ' ta sababli dars — ' +
-          A.som(credit) + ' so’m chegirildi'
-        : '';
+
+      /* TANAFFUS. Ilgari umuman hisobga olinmasdi: tanaffusdagi
+         o'quvchiga to'liq hisob chiqardi.                        */
+      const pc = pauseCut(settings, pauses, m, g, ym, amt.final - credit);
+      if (pc.skip) { paused++; continue; }
+
+      const notes = [];
+      if (credit) {
+        notes.push(A.monthLabel(prevYm) + ': ' + missed + ' ta sababli dars — ' +
+          A.som(credit) + ' so’m chegirildi');
+      }
+      if (pc.credit) {
+        notes.push('Tanaffus ' + pc.days + ' kun — ' + A.som(pc.credit) + ' so’m chegirildi');
+      }
 
       await store.set('invoices/' + id, {
         id, membershipId: m.id, studentId: m.studentId, groupId: m.groupId, month: ym,
-        base: amt.base, discount: amt.discount + credit, final: amt.final - credit,
+        base: amt.base, discount: amt.discount + credit + pc.credit,
+        final: amt.final - credit - pc.credit,
         missedCredit: credit, missedLessons: missed, missedMonth: credit ? prevYm : '',
+        pauseCredit: pc.credit, pauseDays: pc.days,
         dueDate: A.dueDateOf(m, ym, settings),
-        createdAt: stamp(), createdBy: user ? user.name : 'tizim', note
+        createdAt: stamp(), createdBy: user ? user.name : 'tizim', note: notes.join(' · ')
       });
       created++;
     } catch (e) {
       errors.push(String(e.message));
     }
   }
-  if (created) await writeAudit(user, 'Oylik hisoblar yaratildi', ym, created + ' ta');
-  return { created, skipped, errors };
+  if (created) {
+    await writeAudit(user, 'Oylik hisoblar yaratildi', ym,
+      created + ' ta' + (paused ? ' · ' + paused + ' ta tanaffusda — yozilmadi' : ''));
+  }
+  return { created, skipped, paused, errors };
 }
 
 
@@ -1086,7 +1123,8 @@ async function autoInvoiceDue(todayIso, ym) {
     } catch (e) { /* hujjat yo'q */ }
   }
 
-  let created = 0, waiting = 0;
+  const pausesAuto = await allPauses();
+  let created = 0, waiting = 0, paused = 0;
   const errors = [];
   for (const m of mems) {
     try {
@@ -1105,15 +1143,21 @@ async function autoInvoiceDue(todayIso, ym) {
       const amt = A.invoiceAmountFor(g, m, ym);
       const missed = A.excusedCount(prevLessons[m.groupId], m.id);
       const credit = Math.min(amt.final, A.excusedCredit(g, ym, missed));
-      const note = credit
-        ? A.monthLabel(prevYm) + ': ' + missed + ' ta sababli dars — ' +
-          A.som(credit) + ' so’m chegirildi'
-        : '';
+      const pc = pauseCut(settings, pausesAuto, m, g, ym, amt.final - credit);
+      if (pc.skip) { paused++; continue; }
+      const notes = [];
+      if (credit) {
+        notes.push(A.monthLabel(prevYm) + ': ' + missed + ' ta sababli dars — ' +
+          A.som(credit) + ' so’m chegirildi');
+      }
+      if (pc.credit) notes.push('Tanaffus ' + pc.days + ' kun — ' + A.som(pc.credit) + ' so’m chegirildi');
       await store.set('invoices/' + id, {
         id, membershipId: m.id, studentId: m.studentId, groupId: m.groupId, month: ym,
-        base: amt.base, discount: amt.discount + credit, final: amt.final - credit,
+        base: amt.base, discount: amt.discount + credit + pc.credit,
+        final: amt.final - credit - pc.credit,
         missedCredit: credit, missedLessons: missed, missedMonth: credit ? prevYm : '',
-        dueDate: due, createdAt: stamp(), createdBy: 'tizim', note
+        pauseCredit: pc.credit, pauseDays: pc.days,
+        dueDate: due, createdAt: stamp(), createdBy: 'tizim', note: notes.join(' · ')
       });
       created++;
     } catch (e) {
@@ -1121,7 +1165,7 @@ async function autoInvoiceDue(todayIso, ym) {
     }
   }
   if (created) await writeAudit(null, 'Hisoblar avtomatik yaratildi', todayIso, created + ' ta');
-  return { created, waiting, errors };
+  return { created, waiting, paused, errors };
 }
 
 /** Direktorga ichki suhbat orqali xabar */
@@ -1426,8 +1470,8 @@ async function guardWrite(user, p, method, next) {
     }
     if (data.dueDay != null && data.dueDay !== '') {
       const dd = Number(data.dueDay);
-      if (!Number.isFinite(dd) || dd < 1 || dd > 28 || Math.round(dd) !== dd) {
-        return { code: 400, error: 'To’lov kuni 1…28 orasida bo’lishi kerak.' };
+      if (!Number.isFinite(dd) || dd < 1 || dd > 31 || Math.round(dd) !== dd) {
+        return { code: 400, error: 'To’lov kuni 1…31 orasida bo’lishi kerak.' };
       }
       data.dueDay = dd;
     } else {

@@ -377,9 +377,14 @@
   function invoiceId(membershipId, ym) { return 'inv_' + membershipId + '_' + ym; }
 
   /** To'lov muddati sanasi */
+  /* To'lov kuni OYNING o'z uzunligiga moslanadi.
+     Ilgari hamma kun 28 ga qisilardi: 31-sanada qo'shilgan
+     o'quvchi fevralda 28-sida (to'g'ri), lekin martda ham
+     28-sida to'lardi — ya'ni har oy 3 kun ERTA.             */
   function dueDateFor(ym, dueDay) {
-    var d = Math.min(Math.max(Number(dueDay) || 5, 1), 28);
-    return ym + '-' + A.pad(d);
+    var want = Math.max(1, Math.min(31, Math.round(Number(dueDay) || 5)));
+    var last = A.isMonth(ym) ? A.daysInMonth(ym) : 28;
+    return ym + '-' + A.pad(Math.min(want, last));
   }
 
   /* ---------------- Har o'quvchining O'Z to'lov kuni ----------------
@@ -397,12 +402,12 @@
   function dueDayOf(membership, settings) {
     var m = membership || {};
     var manual = Math.round(Number(m.dueDay));
-    if (isFinite(manual) && manual >= 1) return Math.min(28, manual);
+    if (isFinite(manual) && manual >= 1) return Math.min(31, manual);
     if (A.isDate(m.joinedAt)) {
-      return Math.min(28, Math.max(1, Number(String(m.joinedAt).slice(8, 10))));
+      return Math.min(31, Math.max(1, Number(String(m.joinedAt).slice(8, 10))));
     }
     var s = Math.round(Number(settings && settings.dueDay));
-    return isFinite(s) && s >= 1 ? Math.min(28, s) : 5;
+    return isFinite(s) && s >= 1 ? Math.min(31, s) : 5;
   }
 
   /** A'zolik uchun shu oydagi to'lov muddati sanasi */
@@ -430,6 +435,37 @@
      keyin aniq bo'ladi va keyin o'zgarmaydi.
 
      `marks` — { '<sana>': { '<a'zolik id>': 'sababli' } } ko'rinishi.  */
+  /** Oy ichida o'quvchi TANAFFUSDA bo'lgan kunlar soni.
+      pauses: [{studentId, from, to}] — to bo'sh bo'lsa "hali ham".  */
+  function pausedDays(pauses, studentId, ym) {
+    if (!A.isMonth(ym)) return 0;
+    var start = A.monthStart(ym), end = A.monthEnd(ym);
+    var days = {};
+    (pauses || []).forEach(function (p) {
+      if (!p || String(p.studentId) !== String(studentId)) return;
+      var from = A.isDate(p.from) ? p.from : start;
+      var to = A.isDate(p.to) ? p.to : '9999-12-31';
+      if (from < start) from = start;
+      if (to > end) to = end;
+      if (from > to) return;
+      var d = from;
+      for (var i = 0; i < 40 && d <= to; i++) { days[d] = 1; d = A.addDays(d, 1); }
+    });
+    return Object.keys(days).length;
+  }
+
+  /** Tanaffus uchun chegirma: oyning necha kuni tanaffusda bo'lsa,
+      oylik narxning shuncha ulushi chegiriladi. Butun oy tanaffus
+      bo'lsa — hisob umuman yozilmaydi (chaqiruvchi hal qiladi).   */
+  function pauseCredit(group, ym, days) {
+    var n = Math.max(0, Math.round(Number(days) || 0));
+    if (!n) return 0;
+    var fee = feeForMonth(group, ym);
+    if (!fee) return 0;
+    var inMonth = A.isMonth(ym) ? A.daysInMonth(ym) : 30;
+    return Math.min(fee, Math.round(fee * Math.min(n, inMonth) / inMonth));
+  }
+
   function excusedCount(lessonDoc, membershipId) {
     if (!lessonDoc || !membershipId) return 0;
     var items = lessonDoc.items || {};
@@ -802,6 +838,7 @@
     branchList: branchList, branchId: branchId, branchLines: branchLines,
     branchOf: branchOf, branchName: branchName,
     lessonsPerMonth: lessonsPerMonth, lessonPrice: lessonPrice,
+    pausedDays: pausedDays, pauseCredit: pauseCredit,
     dueDayOf: dueDayOf, dueDateOf: dueDateOf,
     excusedCount: excusedCount, excusedCredit: excusedCredit,
     allocate: allocate, activePayments: activePayments, paidByInvoice: paidByInvoice,

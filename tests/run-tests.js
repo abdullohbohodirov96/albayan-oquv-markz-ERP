@@ -396,7 +396,14 @@ function section(t) { results.push('\n' + t); }
   section('15. Pul va sana');
   eq('Pul butun songa yaxlitlanadi', A.som(1234567.4), '1 234 567');
   eq('Kiritilgan matndan son olinadi', A.parseSom('1 250 000 so’m'), 1250000);
-  eq('To’lov muddati 28-kundan oshmaydi', A.dueDateFor('2026-09', 31), '2026-09-28');
+  /* To'lov kuni OYNING o'z uzunligiga moslanadi.
+     Ilgari hammasi 28 ga qisilardi: 31-sanada qo'shilgan o'quvchi
+     martda ham 28-sida to'lardi — har oy 3 kun ERTA.            */
+  eq('31 — sentabrda 30 ga tushadi', A.dueDateFor('2026-09', 31), '2026-09-30');
+  eq('31 — martda 31 bo’lib qoladi', A.dueDateFor('2026-03', 31), '2026-03-31');
+  eq('31 — fevralda 28 ga tushadi', A.dueDateFor('2026-02', 31), '2026-02-28');
+  eq('29 — kabisa fevralda 29', A.dueDateFor('2024-02', 29), '2024-02-29');
+  eq('5 — har oyda 5', A.dueDateFor('2026-02', 5), '2026-02-05');
   eq('Telefon normallashtiriladi', A.normPhone('901234567'), '+998901234567');
 
   /* ---------------- 16. Alohida ruxsatlar ---------------- */

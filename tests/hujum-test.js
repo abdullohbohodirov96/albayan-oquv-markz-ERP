@@ -577,13 +577,16 @@ function raw(pathRaw, opts = {}) {
   const memAfter = await getDoc(memPath, dir);
   eq('Rad etilgandan keyin sana o’zgarmadi', memAfter.joinedAt, '2026-09-01');
 
-  for (const bad of [0, 29, 99, -5, 1.5, 'abc', '7; DROP TABLE']) {
+  for (const bad of [0, 32, 99, -5, 1.5, 'abc', '7; DROP TABLE']) {
     const r = await putDoc(memPath, Object.assign({}, memOk, { dueDay: bad }), dir);
     eq('Buzuq to’lov kuni rad etiladi: ' + bad, r.status, 400);
   }
   const memDue = await putDoc(memPath, Object.assign({}, memOk, { dueDay: 12 }), dir);
   eq('To’g’ri to’lov kuni (12) qabul qilinadi', memDue.status, 200);
   eq('  → saqlandi', (await getDoc(memPath, dir)).dueDay, 12);
+  /* 31 ham to'g'ri: oyda shuncha kun bo'lmasa, oxirgi kunga tushadi */
+  const memDue31 = await putDoc(memPath, Object.assign({}, memOk, { dueDay: 31 }), dir);
+  eq('31-kun ham qabul qilinadi', memDue31.status, 200);
   const memBack = await putDoc(memPath, Object.assign({}, memOk, { leftAt: '2026-08-01' }), dir);
   eq('Chiqgan sana kirgandan oldin bo’lmaydi', memBack.status, 400);
 

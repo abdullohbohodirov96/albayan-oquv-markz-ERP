@@ -168,8 +168,14 @@ const A = globalThis.A;
   eq('Sana to’liq to’g’ri', A.dueDateOf(mB, YM, { dueDay: 5 }), YM + '-17');
   /* Qo'lda yozilgan kun ustun turadi */
   eq('Qo’lda yozilgan kun ustun', A.dueDayOf({ joinedAt: PREV + '-17', dueDay: 10 }, { dueDay: 5 }), 10);
-  /* 29, 30, 31 da qo'shilgan o'quvchi fevralda ham sanaga ega bo'lsin */
-  eq('31-sida qo’shilgan — 28 ga tushadi', A.dueDayOf({ joinedAt: '2026-01-31' }, {}), 28);
+  /* 29, 30, 31 da qo'shilgan o'quvchi: kuni SAQLANADI, lekin har
+     oyda o'sha oyning OXIRGI kunidan oshmaydi. Ilgari hammasi 28
+     ga qisilardi — mart, may, iyul kabi oylarda 3 kun erta.     */
+  eq('31-sida qo’shilgan — kuni 31 bo’lib qoladi',
+    A.dueDayOf({ joinedAt: '2026-01-31' }, {}), 31);
+  eq('  → fevralda 28-si', A.dueDateOf({ joinedAt: '2026-01-31' }, '2026-02', {}), '2026-02-28');
+  eq('  → martda 31-si', A.dueDateOf({ joinedAt: '2026-01-31' }, '2026-03', {}), '2026-03-31');
+  eq('  → aprelda 30-si', A.dueDateOf({ joinedAt: '2026-01-31' }, '2026-04', {}), '2026-04-30');
   /* Guruhga qo'shilgan kunidan OLDIN muddat qo'yilmaydi */
   eq('Birinchi oyda muddat qo’shilgan kunidan oldin emas',
     A.dueDateOf(mC, PREV, { dueDay: 5 }), PREV + '-26');
@@ -310,6 +316,90 @@ const A = globalThis.A;
 
   /* =============== 8. Tozalash =============== */
   section('8. Sinov ma’lumotlari tozalandi');
+  /* =============== TANAFFUS HISOBGA OLINADI ===============
+     Ilgari tanaffus (pauses) hisob yaratishda UMUMAN hisobga
+     olinmasdi: tanaffusdagi o'quvchiga to'liq hisob chiqardi. */
+  section('Tanaffus: hisob kamayadi, butun oy bo’lsa yozilmaydi');
+  /* TOZA oy: yuqoridagi bo'limlar YM va YM+1 uchun hisob yaratgan,
+     mavjud hisob esa qayta yozilmaydi (takrorlanmasin deb).      */
+  const PM = A.addMonths(YM, 4);
+
+  /* a) Yarim oy tanaffus — hisob kamayadi */
+  const halfFrom = PM + '-01';
+  const halfTo = PM + '-10';
+  const pz1 = await api('/api/pause', {
+    method: 'POST', body: { studentId: ID('sa'), from: halfFrom, to: halfTo, reason: 'Sinov' }
+  });
+  eq('Tanaffus yozildi', pz1.status, 200);
+
+  /* b) Butun oy tanaffus — hisob umuman yozilmasin */
+  const pz2 = await api('/api/pause', {
+    method: 'POST',
+    body: { studentId: ID('sb'), from: A.monthStart(PM), to: A.monthEnd(PM), reason: 'Uzoq' }
+  });
+  eq('Uzoq tanaffus yozildi', pz2.status, 200);
+
+  const pzGen = await api('/api/invoices/generate', { method: 'POST', body: { month: PM } });
+  eq('Hisoblar yaratildi', pzGen.status, 200);
+
+  const pzInvA = await get('invoices/' + A.invoiceId(ID('ma'), PM));
+  ok('Yarim oy tanaffusda hisob bor', !!pzInvA, JSON.stringify(pzInvA));
+  if (pzInvA) {
+    ok('  → tanaffus kunlari yozildi (' + pzInvA.pauseDays + ')', pzInvA.pauseDays === 10, String(pzInvA.pauseDays));
+    ok('  → chegirma qo’llandi', pzInvA.pauseCredit > 0, String(pzInvA.pauseCredit));
+    ok('  → summa to’liq narxdan kam', pzInvA.final < FEE, pzInvA.final + ' / ' + FEE);
+    ok('  → izohda tanaffus aytilgan', /Tanaffus/.test(pzInvA.note || ''), pzInvA.note);
+    /* Taxminan 10/31 ulush — aniq raqamni model hisoblaydi */
+    const pzKut = FEE - Math.round(FEE * 10 / A.daysInMonth(PM));
+    eq('  → summa aniq', pzInvA.final, pzKut);
+  }
+  const pzInvB = await get('invoices/' + A.invoiceId(ID('mb'), PM));
+  ok('Butun oy tanaffusda hisob YOZILMADI', !pzInvB, JSON.stringify(pzInvB));
+  const pzInvC = await get('invoices/' + A.invoiceId(ID('mc'), PM));
+  ok('Tanaffussiz o’quvchiga to’liq hisob', !!pzInvC && pzInvC.final === FEE,
+    pzInvC ? String(pzInvC.final) : 'yo’q');
+  ok('  → unga tanaffus chegirmasi yo’q', !pzInvC || !pzInvC.pauseCredit, String(pzInvC && pzInvC.pauseCredit));
+
+  /* =============== GURUH ALMASHSA NARX =============== */
+  section('Guruh almashsa: yaratilgan hisob o’zgarmaydi, yangisi yangi narxda');
+  const GM = A.addMonths(YM, 5);               // yana bitta toza oy
+  const G2 = ID('g2');
+  await put('groups/' + G2, {
+    id: G2, code: 'H2' + String(Date.now() % 90 + 9), name: 'Arzon guruh ' + R,
+    courseId: ID('c'), teacherId: ID('t'), days: [2, 4], startTime: '14:00', endTime: '15:30',
+    startDate: A.monthStart(PREV), fee: 500000, feeHistory: [{ fee: 500000, from: PREV }],
+    lessonsPerMonth: 12, limit: 20, status: 'faol'
+  });
+  /* c o'quvchisi uchun shu oyga hisob yaratamiz (qimmat guruhda) */
+  await api('/api/invoices/generate', { method: 'POST', body: { month: GM } });
+  const beforeMove = await get('invoices/' + A.invoiceId(ID('mc'), GM));
+  ok('Hisob qimmat guruh narxida yaratildi', !!beforeMove && beforeMove.final === FEE,
+    beforeMove ? String(beforeMove.final) : 'yo’q');
+
+  /* Guruhni almashtiramiz */
+  const mcNow = await get('memberships/' + ID('mc'));
+  await put('memberships/' + ID('mc'), Object.assign({}, mcNow, { groupId: G2 }));
+
+  /* Qayta yaratish YARATILGAN hisobni o'zgartirmaydi — bu ATAYLAB:
+     berilgan hisob (ehtimol to'langan) jim o'zgarib ketmasin.    */
+  await api('/api/invoices/generate', { method: 'POST', body: { month: GM } });
+  const afterMove = await get('invoices/' + A.invoiceId(ID('mc'), GM));
+  eq('Yaratilgan hisob summasi o’zgarmadi', afterMove.final, FEE);
+  eq('  → guruh ham eski davr bo’yicha qoladi', afterMove.groupId, ID('g'));
+
+  /* KEYINGI oyga esa YANGI guruh narxida yoziladi */
+  const GM2 = A.addMonths(GM, 1);
+  await api('/api/invoices/generate', { method: 'POST', body: { month: GM2 } });
+  const nextInv = await get('invoices/' + A.invoiceId(ID('mc'), GM2));
+  ok('Keyingi oy hisobi bor', !!nextInv, JSON.stringify(nextInv));
+  eq('  → yangi guruh narxida', nextInv && nextInv.final, 500000);
+  eq('  → yangi guruhga yozilgan', nextInv && nextInv.groupId, G2);
+  /* Eskisini o'chirib qayta yaratsa — yangi narxda bo'ladi */
+  await del('invoices/' + A.invoiceId(ID('mc'), GM));
+  await api('/api/invoices/generate', { method: 'POST', body: { month: GM } });
+  const regen = await get('invoices/' + A.invoiceId(ID('mc'), GM));
+  eq('O’chirib qayta yaratilsa — yangi narxda', regen && regen.final, 500000);
+
   const paths = [
     'invoices/' + A.invoiceId(ID('ma'), YM), 'invoices/' + A.invoiceId(ID('mb'), YM),
     'invoices/' + A.invoiceId(ID('mc'), YM), 'invoices/' + A.invoiceId(ID('ma'), NEXT2),
@@ -320,7 +410,10 @@ const A = globalThis.A;
     'memberships/' + ID('ma'), 'memberships/' + ID('mb'), 'memberships/' + ID('mc'),
     'students/' + ID('sa'), 'students/' + ID('sb'), 'students/' + ID('sc'),
     'students/' + ID('skod'), 'students/' + ID('seski'),
-    'groups/' + ID('g'), 'courses/' + ID('c'), 'staff/' + ID('t')
+    'groups/' + ID('g'), 'courses/' + ID('c'), 'staff/' + ID('t'),
+    'invoices/' + A.invoiceId(ID('ma'), PM), 'invoices/' + A.invoiceId(ID('mc'), PM),
+    'invoices/' + A.invoiceId(ID('mc'), GM), 'invoices/' + A.invoiceId(ID('mc'), GM2),
+    'groups/' + G2
   ];
   for (const p of paths) await del(p);
   const leftover = await get('groups/' + ID('g'));
