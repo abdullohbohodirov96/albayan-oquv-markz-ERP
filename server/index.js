@@ -9,7 +9,7 @@ const crypto = require('crypto');
 try { require('dotenv').config(); } catch (e) { /* dotenv ixtiyoriy */ }
 
 const { createStore } = require('./store');
-const { A, writePermFor, readBlocked, safeUser, safeStaff, visibleData, GENERAL_CHAT } = require('./shared');
+const { A, writePermFor, readBlocked, safeUser, safeStaff, safeStudent, visibleData, GENERAL_CHAT } = require('./shared');
 const backup = require('./backup');
 const kabinet = require('./kabinet');
 const link = require('./link');
@@ -1488,14 +1488,46 @@ async function filterReadDoc(user, p, data) {
     return data;
   }
 
+  /* Ota-ona yozuvida KABINET KODI bor — u bilan istalgan oilaning
+     qarzi va to'lovlari ko'rinadi. O'qituvchiga umuman berilmaydi. */
+  if (col === 'parents') {
+    if (user.role === 'oqituvchi') return false;
+    if (!A.can(user, 'student.view')) return false;
+    return data;
+  }
+
   if (user.role === 'oqituvchi') {
     const sc = await teacherScope(user);
     if (col === 'groups' && !sc.gid[data.id]) return false;
     if (col === 'memberships' && !sc.gid[data.groupId]) return false;
-    if (col === 'students' && !sc.sid[data.id]) return false;
+    if (col === 'students') {
+      if (!sc.sid[data.id]) return false;
+      /* ID orqali o'qiganda ham kabinet kodi va ortiqcha shaxsiy
+         ma'lumot chiqmasin — ro'yxatdagi bilan bir xil qoida.      */
+      return safeStudent(data, user);
+    }
     if (col === 'lessons') {
       const gidPart = String(seg[1] || '').split('__')[0];
       if (!sc.gid[gidPart]) return false;
+    }
+    /* O'quv to'plamlari ham o'z guruhi/o'quvchisi bilan cheklanadi */
+    if (col === 'quizzes' || col === 'questions' || col === 'feedback' || col === 'lessonlog') {
+      if (data.groupId && !sc.gid[data.groupId]) return false;
+    }
+    if (col === 'quizres' || col === 'asks' || col === 'pauses') {
+      if (!data.studentId || !sc.sid[data.studentId]) return false;
+    }
+    if (col === 'makeups') {
+      const okG = data.groupId && sc.gid[data.groupId];
+      const okS = data.studentId && sc.sid[data.studentId];
+      if (!okG && !okS) return false;
+    }
+    if (col === 'files') {
+      const ref = String(data.refPath || '').split('/');
+      if (ref[0] === 'students') { if (!sc.sid[ref[1]]) return false; }
+      else if (ref[0] === 'groups' || ref[0] === 'lessons') {
+        if (!sc.gid[String(ref[1] || '').split('__')[0]]) return false;
+      } else if (data.byUserId !== user.id) return false;
     }
   }
   return data;

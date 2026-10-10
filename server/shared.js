@@ -155,8 +155,12 @@ function visibleData(user, all) {
         return A.can(user, 'group.view') || A.can(user, 'student.view');
       case 'questions': case 'feedback':
         return A.can(user, 'group.view');
-      /* Ota-ona hisobi — o'quvchi bilan ishlaydiganlarga */
-      case 'parents': return A.can(user, 'student.view');
+      /* Ota-ona hisobi — o'quvchi bilan ishlaydiganlarga.
+         O'QITUVCHIGA UMUMAN YUBORILMAYDI: yozuvda ota-onaning
+         KABINET KODI bor, u bilan istalgan oilaning qarzi va
+         to'lovlari ko'rinardi.                                   */
+      case 'parents':
+        return user.role !== 'oqituvchi' && A.can(user, 'student.view');
       /* Fayl ma'lumotnomasi (mazmuni emas) — /api/file orqali olinadi */
       case 'files': return A.can(user, 'group.view') || A.can(user, 'student.view');
       case 'invoices': case 'payments': return A.can(user, 'finance.payments') || A.can(user, 'finance.debts');
@@ -189,6 +193,32 @@ function visibleData(user, all) {
       case 'invoices': case 'payments':
         if (user.role === 'oqituvchi') return null;
         return d;
+      /* --- O'QITUVCHI: faqat O'Z guruhi/o'quvchisi ---
+         Ilgari bu to'plamlar umuman filtrlanmasdi: ustoz boshqa
+         guruhlarning test natijalari, savol-javoblari, fayl
+         ma'lumotnomalari, dars jurnali, tanaffus va qo'shimcha
+         darslarini to'liq ko'rardi.                              */
+      case 'quizzes': case 'questions': case 'feedback': case 'lessonlog':
+        if (user.role !== 'oqituvchi') return d;
+        return (!d.groupId || myGroupIds[d.groupId]) ? d : null;
+      case 'quizres': case 'asks': case 'pauses':
+        if (user.role !== 'oqituvchi') return d;
+        return (d.studentId && myStudentIds[d.studentId]) ? d : null;
+      case 'makeups':
+        if (user.role !== 'oqituvchi') return d;
+        if (d.groupId && myGroupIds[d.groupId]) return d;
+        return (d.studentId && myStudentIds[d.studentId]) ? d : null;
+      case 'files': {
+        if (user.role !== 'oqituvchi') return d;
+        /* refPath "students/<id>" yoki "groups/<id>" ko'rinishida */
+        const ref = String(d.refPath || '').split('/');
+        if (ref[0] === 'students') return myStudentIds[ref[1]] ? d : null;
+        if (ref[0] === 'groups' || ref[0] === 'lessons') {
+          return myGroupIds[String(ref[1] || '').split('__')[0]] ? d : null;
+        }
+        /* Kimga tegishli ekani noma'lum bo'lsa — faqat o'zi yuklagani */
+        return d.byUserId === user.id ? d : null;
+      }
       case 'chats':
         // "type" mijozdan keladi — unga ishonilmaydi. Umumiy suhbat faqat bitta.
         if (d.id === GENERAL_CHAT) return d;

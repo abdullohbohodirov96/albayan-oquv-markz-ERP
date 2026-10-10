@@ -110,6 +110,112 @@ async function dbDoc(path, dirCookie) {
   eq('Begona guruhga yangi davomat ham yarata olmadi', newForeign.status, 403);
   ok('Yangi yozuv yaratilmadi', !(await dbDoc('lessons/pg_b__2099-02', dir)));
 
+  /* ========== 1b. OTA-ONA KODI VA BEGONA O'QUV YOZUVLARI ==========
+     Ilgari 'parents' to'plami student.view bo'lgan HAR KIMGA
+     yuborilardi, ustozda esa bu ruxsat bor. Yozuvda ota-onaning
+     KABINET KODI turadi — ustoz shu kod bilan istalgan oilaning
+     qarzi va to'lovlarini ko'ra olardi.                           */
+  section('1b. Ustoz ota-ona kodini va begona yozuvlarni ko’rmaydi');
+
+  /* Ikkala guruhga ham bittadan o'quvchi */
+  await put('students/pst_a', { id: 'pst_a', firstName: 'Oz', lastName: 'Oquvchi', phone: '+998901110001', status: 'faol' }, dir);
+  await put('students/pst_b', { id: 'pst_b', firstName: 'Begona', lastName: 'Oquvchi', phone: '+998901110002', status: 'faol' }, dir);
+  await put('memberships/pm_a', { id: 'pm_a', studentId: 'pst_a', groupId: 'pg_a', joinedAt: '2026-09-01', status: 'faol' }, dir);
+  await put('memberships/pm_b', { id: 'pm_b', studentId: 'pst_b', groupId: 'pg_b', joinedAt: '2026-09-01', status: 'faol' }, dir);
+
+  /* Ota-ona — kodini SERVER beradi */
+  const parRes = await req('/api/parent', {
+    method: 'POST', cookie: dir,
+    body: { name: 'Ota-ona P', phone: '+998901110003', studentIds: ['pst_a'] }
+  });
+  const parId = parRes.json && (parRes.json.parent || {}).id;
+  const parDoc = parId ? await dbDoc('parents/' + parId, dir) : null;
+  ok('Ota-ona yaratildi va kodi bor', !!(parDoc && parDoc.code),
+    parRes.status + ' ' + parRes.text.slice(0, 160));
+
+  if (parDoc) {
+    /* a) Ro'yxatda (bootstrap) ustozga parents umuman tushmasin */
+    const boot = await req('/api/bootstrap', { cookie: ustoz });
+    const col = (boot.json || {}).col || {};
+    eq('Bootstrap’da ustozga birorta ota-ona yuborilmadi',
+      Object.keys(col.parents || {}).length, 0);
+    const raw = JSON.stringify(boot.json || {});
+    ok('Ota-ona kodi javobda umuman yo’q', raw.indexOf(parDoc.code) < 0,
+      'kod javobda topildi: ' + parDoc.code);
+
+    /* b) ID orqali ham ochilmasin */
+    const byId = await get('parents/' + parId, ustoz);
+    ok('ID orqali ham ota-ona ochilmadi',
+      byId.status === 403 || !(byId.json && byId.json.data),
+      byId.status + ' ' + byId.text.slice(0, 140));
+
+    /* c) Direktorga esa ko'rinadi — ish buzilmasin */
+    const byDir = await get('parents/' + parId, dir);
+    ok('Direktor ota-onani ko’ra oladi', !!(byDir.json && byDir.json.data), byDir.text.slice(0, 120));
+  }
+
+  /* O'quvchining KABINET KODI ham ustozga chiqmasin */
+  const sDir = await dbDoc('students/pst_a', dir);
+  ok('O’quvchiga kabinet kodi berilgan', !!(sDir && sDir.code), JSON.stringify(sDir));
+  const sUst = await get('students/pst_a', ustoz);
+  ok('O’z o’quvchisini ko’ra oladi', !!(sUst.json && sUst.json.data), sUst.text.slice(0, 120));
+  ok('  → lekin kabinet kodisiz', !(sUst.json && sUst.json.data && sUst.json.data.code),
+    JSON.stringify(sUst.json && sUst.json.data));
+  const sForeign = await get('students/pst_b', ustoz);
+  ok('Begona o’quvchi umuman ochilmadi',
+    sForeign.status === 403 || !(sForeign.json && sForeign.json.data),
+    sForeign.status + '');
+
+  /* Begona guruhning o'quv yozuvlari ham chiqmasin.
+     MUHIM: bu to'plamlarni mijoz to'g'ridan-to'g'ri yoza olmaydi
+     ('__server__'), shuning uchun yozuvlar HAQIQIY yo'llar orqali
+     yaratiladi — aks holda sinov bo'sh bo'lib qolardi.            */
+  const logB = await req('/api/lesson/log', {
+    method: 'POST', cookie: dir,
+    body: { groupId: 'pg_b', date: '2026-09-02', title: 'Begona dars', note: 'Begona dars' }
+  });
+  const logBId = logB.json && (logB.json.log || {}).id;
+  ok('Begona guruhga dars yozuvi yaratildi', !!logBId, logB.status + ' ' + logB.text.slice(0, 140));
+
+  const fileB = await req('/api/file', {
+    method: 'POST', cookie: dir,
+    body: {
+      name: 'begona.txt', type: 'text/plain', purpose: 'dars',
+      refPath: 'students/pst_b',
+      data: Buffer.from('begona fayl').toString('base64')
+    }
+  });
+  const fileBId = fileB.json && (fileB.json.file || {}).id;
+  ok('Begona o’quvchiga fayl yuklandi', !!fileBId, fileB.status + ' ' + fileB.text.slice(0, 140));
+
+  if (logBId) {
+    const r = await get('lessonlog/' + logBId, ustoz);
+    ok('Begona dars jurnali ochilmadi',
+      r.status === 403 || !(r.json && r.json.data), r.status + ' ' + r.text.slice(0, 120));
+  }
+  if (fileBId) {
+    const r = await get('files/' + fileBId, ustoz);
+    ok('Begona fayl ma’lumotnomasi ochilmadi',
+      r.status === 403 || !(r.json && r.json.data), r.status + ' ' + r.text.slice(0, 120));
+  }
+  const boot2 = await req('/api/bootstrap', { cookie: ustoz });
+  const c2 = (boot2.json || {}).col || {};
+  ok('Ro’yxatda ham begona dars jurnali yo’q', !(logBId && c2.lessonlog && c2.lessonlog[logBId]),
+    JSON.stringify(Object.keys(c2.lessonlog || {})));
+  ok('Ro’yxatda ham begona fayl yo’q', !(fileBId && c2.files && c2.files[fileBId]),
+    JSON.stringify(Object.keys(c2.files || {})));
+  /* O'z guruhining yozuvi esa KO'RINISHI kerak — ish buzilmasin */
+  const logA = await req('/api/lesson/log', {
+    method: 'POST', cookie: dir,
+    body: { groupId: 'pg_a', date: '2026-09-02', title: 'O’z darsi', note: 'O’z darsi' }
+  });
+  const logAId = logA.json && (logA.json.log || {}).id;
+  if (logAId) {
+    const r = await get('lessonlog/' + logAId, ustoz);
+    ok('O’z guruhining dars jurnali ochiladi', !!(r.json && r.json.data),
+      r.status + ' ' + r.text.slice(0, 120));
+  }
+
   /* ================= 2. ISH HAQI TASDIQLASH ================= */
   section('2. Ish haqi: hisoblash va tasdiqlash ajratilgan');
   const PR = 'payroll/2099-01__pstf_a';
