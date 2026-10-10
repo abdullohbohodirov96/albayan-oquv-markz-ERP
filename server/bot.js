@@ -8,6 +8,7 @@
    yuborilgan/xato holati saqlanadi va xato bo'lsa qayta urinadi.            */
 'use strict';
 
+const crypto = require('crypto');
 const kabinet = require('./kabinet');
 const link = require('./link');
 
@@ -599,42 +600,77 @@ async function groupByTitle(title) {
   return { group: hits[0] };
 }
 
-/** Guruhni shu Telegram suhbatiga bog'lash */
-async function linkGroupChat(chatId, title) {
-  const r = await groupByTitle(title);
-  if (r.error === 'kod-yoq') {
-    await sendMessage(chatId,
-      'Assalomu alaykum! Bu guruhni markazga bog’lash uchun guruh nomiga ' +
-      '<b>guruh kodini</b> qo’shing — 4 ta raqam, masalan: <code>Arab tili A1 · 4821</code>\n' +
-      'Kodni ERP’dagi guruh sahifasidan olasiz. Nomni o’zgartirgach <code>/ulash</code> deb yozing.');
-    return null;
-  }
-  if (r.error === 'topilmadi') {
-    await sendMessage(chatId,
-      'Guruh nomidagi kod (' + r.codes.join(', ') + ') markazdagi hech bir guruhga to’g’ri kelmadi. ' +
-      'Kodni tekshirib, <code>/ulash</code> deb yozing.');
-    return null;
-  }
-  if (r.error === 'kop') {
-    await sendMessage(chatId, 'Nomda bir nechta kod bor. Faqat bittasini qoldiring va <code>/ulash</code> deb yozing.');
-    return null;
-  }
-  const g = r.group;
-  const already = String(g.tgChat || '') === String(chatId);
-  const rec = Object.assign({}, g, { tgChat: String(chatId), tgTitle: String(title || ''), tgAt: stamp() });
-  await store.set('groups/' + g.id, rec);
+/* Guruh kodi MAXFIY EMAS: u ERP sahifasida turadi, Telegram guruh
+   nomiga yoziladi va o'quvchilarga ko'rinadi. Shuning uchun u BILAN
+   bog'lanib bo'lmaydi. Ilgari shunday edi: begona odam guruh ochib,
+   nomiga kodni yozib, botni qo'shib /ulash yozsa, markazning barcha
+   e'lonlari o'sha begona suhbatga ketardi.
+
+   Endi ikki yo'l bor:
+     1) markaz xodimi ERP'da BIR MARTALIK token yaratadi va
+        guruhda "/ulash <token>" deb yoziladi;
+     2) tokensiz "/ulash" — faqat SO'ROV yaratadi, bog'lanmaydi;
+        markaz uni ERP'dan tasdiqlaydi.
+   Javob matni hamma holatda BIR XIL: kod to'g'ri yoki noto'g'ri
+   ekani bilinmaydi, aks holda kodlarni taxmin qilish oson bo'lardi. */
+const ULASH_JAVOBI =
+  'So’rov markazga yuborildi. Markaz xodimi tasdiqlagandan keyin ' +
+  'shu yerga xabar yozaman.\n\nTezroq bo’lishi uchun markazdan ' +
+  '<b>bir martalik ulash kodi</b> so’rang va <code>/ulash KOD</code> deb yozing.';
+
+/** Tokensiz so'rov: bog'lamaydi, faqat tasdiq kutadi */
+async function requestGroupLink(chatId, title) {
+  const codes = codesInTitle(title);
+  const id = 'bgr' + crypto.randomBytes(6).toString('hex');
+  await store.set('botreq/' + id, {
+    id, kind: 'guruh', chatId: String(chatId),
+    title: String(title || '').slice(0, 120),
+    codes: codes.slice(0, 3),
+    status: 'yangi', at: stamp()
+  });
+  await sendMessage(chatId, ULASH_JAVOBI);
+  return null;
+}
+
+/** Guruhni shu Telegram suhbatiga bog'lash (token tekshirilgandan keyin) */
+async function bindGroupChat(group, chatId, title) {
+  const already = String(group.tgChat || '') === String(chatId);
+  const rec = Object.assign({}, group, {
+    tgChat: String(chatId), tgTitle: String(title || ''), tgAt: stamp()
+  });
+  await store.set('groups/' + group.id, rec);
   await sendMessage(chatId,
     (already ? '✅ Bog’lanish yangilandi' : '✅ Ulandim!') + '\n\n' +
-    'Bu guruh <b>' + (g.name || g.id) + '</b> guruhiga bog’landi (kod <code>' + g.code + '</code>).\n' +
+    'Bu guruh <b>' + (group.name || group.id) + '</b> guruhiga bog’landi.\n' +
     'Endi shu yerga e’lon, dars va to’lov xabarlarini yubora olaman.');
   return rec;
+}
+
+/** /ulash [token] */
+async function linkGroupChat(chatId, title, token) {
+  if (!token) return requestGroupLink(chatId, title);
+  const r = await link.use(store, token, { usedBy: 'chat:' + chatId, stamp });
+  if (!r.ok || !r.groupId) {
+    /* Sabab aytilmaydi — token taxmin qilinmasin */
+    await sendMessage(chatId, 'Ulash kodi ishlamadi. Markazdan yangisini so’rang.');
+    return null;
+  }
+  const g = await store.get('groups/' + r.groupId);
+  if (!g) {
+    await sendMessage(chatId, 'Ulash kodi ishlamadi. Markazdan yangisini so’rang.');
+    return null;
+  }
+  return bindGroupChat(g, chatId, title);
 }
 
 /** Guruhdan kelgan xabar/hodisa */
 async function onGroupUpdate(chatId, title, text) {
   const t = String(text || '').trim().toLowerCase();
-  if (t === '/ulash' || t === '/start' || t.indexOf('/ulash@') === 0 || t.indexOf('/start@') === 0) {
-    return linkGroupChat(chatId, title);
+  /* "/ulash TOKEN" — token bo'lsa darhol bog'lanadi; tokensiz
+     "/ulash" yoki "/start" — faqat tasdiq so'rovi yaratiladi.   */
+  const mUlash = /^\/(?:ulash|start)(?:@\S+)?(?:\s+(\S+))?$/.exec(String(text || '').trim());
+  if (mUlash) {
+    return linkGroupChat(chatId, title, mUlash[1] || '');
   }
   if (t === '/id' || t.indexOf('/id@') === 0) {
     return sendMessage(chatId, 'Suhbat raqami: <code>' + chatId + '</code>');

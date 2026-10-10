@@ -2818,6 +2818,45 @@ async function handleApi(req, res, url) {
     return send(res, 200, { ok: true });
   }
 
+  /* ---- Telegram GURUHINI bog'lash ----
+     Guruh kodi maxfiy emas, shuning uchun u bilan bog'lanmaydi:
+     markaz BIR MARTALIK token beradi yoki so'rovni tasdiqlaydi. */
+  if (route === 'group/link' && req.method === 'POST') {
+    if (!A.can(user, 'group.edit')) return nope();
+    const body = await readBody(req);
+    const gid = String(body.groupId || '');
+    if (!/^[A-Za-z0-9_\-.]+$/.test(gid)) return send(res, 400, { error: 'Guruh noto’g’ri.' });
+    const g = await store.get('groups/' + gid);
+    if (!g) return send(res, 404, { error: 'Guruh topilmadi.' });
+    const made = await link.create(store, {
+      groupId: gid, kind: 'guruh', byUserId: user.id, stamp,
+      ttlMs: 2 * 60 * 60 * 1000              // 2 soat — yetarli va xavfsiz
+    });
+    await writeAudit(user, 'Telegram: guruh ulash kodi yaratildi', g.name || gid, '');
+    return send(res, 200, { ok: true, token: made.token, expiresAt: made.expiresAt });
+  }
+  if (route === 'group/link-approve' && req.method === 'POST') {
+    if (!A.can(user, 'group.edit')) return nope();
+    const body = await readBody(req);
+    const reqId = String(body.reqId || '');
+    const gid = String(body.groupId || '');
+    const br = await store.get('botreq/' + reqId);
+    if (!br || br.kind !== 'guruh') return send(res, 404, { error: 'So’rov topilmadi.' });
+    const g = await store.get('groups/' + gid);
+    if (!g) return send(res, 404, { error: 'Guruh topilmadi.' });
+    const rec = Object.assign({}, g, {
+      tgChat: String(br.chatId), tgTitle: String(br.title || ''), tgAt: stamp()
+    });
+    await store.set('groups/' + gid, rec);
+    br.status = 'tasdiqlangan';
+    br.groupId = gid;
+    br.handledAt = stamp();
+    br.handledBy = user.id;
+    await store.set('botreq/' + reqId, br);
+    await writeAudit(user, 'Telegram: guruh ulandi', g.name || gid, 'suhbat ' + br.chatId);
+    return send(res, 200, { ok: true });
+  }
+
   /* Administrator so'rovni tasdiqlaydi: botdagi suhbat o'quvchiga bog'lanadi */
   if (route === 'student/link-approve' && req.method === 'POST') {
     if (!A.can(user, 'student.edit')) return send(res, 403, { error: 'Sizda bu amal uchun ruxsat yo’q.' });

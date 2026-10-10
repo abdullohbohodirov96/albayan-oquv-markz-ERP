@@ -49,13 +49,17 @@ function parse(token) {
  */
 async function create(store, opts) {
   const studentId = String((opts && opts.studentId) || '');
-  if (!studentId) throw new Error('studentId kerak');
+  /* Guruhni Telegram suhbatiga bog'lash uchun ham shu modul
+     ishlatiladi — u yerda subyekt o'quvchi emas, GURUH bo'ladi. */
+  const groupId = String((opts && opts.groupId) || '');
+  if (!studentId && !groupId) throw new Error('studentId yoki groupId kerak');
   const id = 'lt' + crypto.randomBytes(6).toString('hex');
   const secret = crypto.randomBytes(16).toString('base64url');
   const expiresAt = Date.now() + (Number(opts && opts.ttlMs) || TTL_MS);
   await store.set(COL + id, {
     id,
     studentId,
+    groupId,
     kind: String((opts && opts.kind) || 'telegram'),
     hash: sha(secret),
     createdAt: nowStamp(opts),
@@ -87,7 +91,10 @@ async function use(store, token, opts) {
     rec.usedAt = nowStamp(opts);
     rec.usedBy = String((opts && opts.usedBy) || '');
     await store.set(COL + p.id, rec);
-    return { ok: true, studentId: rec.studentId, kind: rec.kind, createdBy: rec.createdBy };
+    return {
+      ok: true, studentId: rec.studentId, groupId: rec.groupId || '',
+      kind: rec.kind, createdBy: rec.createdBy
+    };
   });
 }
 

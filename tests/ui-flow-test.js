@@ -385,7 +385,10 @@ async function typeIn(page, sel, val) {
   /* Kod endi markaz o'zi yozgan ko'rinishda qoladi (B020, 4821, W1ZL…) —
      avval server uni majburan 4 xonali raqamga almashtirardi. */
   ok('Guruh kodi ko’rsatilgan', /^[A-Z0-9]{3,12}$/.test(tgInfo.code || ''), tgInfo.code);
-  ok('Nima qilish kerakligi yozilgan', /guruh nomiga/i.test(tgInfo.text || ''), (tgInfo.text || '').slice(0, 80));
+  /* Ko'rsatma o'zgardi: endi guruh nomidagi KOD bilan emas, markaz
+     bergan BIR MARTALIK kod bilan bog'lanadi.                      */
+  ok('Nima qilish kerakligi yozilgan',
+    /ulash kodi/i.test(tgInfo.text || ''), (tgInfo.text || '').slice(0, 120));
 
   /* ---- 5. Qo'ng'iroq tugmasi ----
      Administrator raqamni qo'lda terib o'tirmasin: raqam ham, yonidagi

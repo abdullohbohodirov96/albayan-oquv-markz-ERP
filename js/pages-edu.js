@@ -99,11 +99,35 @@
   /* ================= GURUH KARTASI ================= */
 
   /* ---------- Telegram guruhi ----------
-     Guruh kodi guruh NOMIGA yoziladi; bot qo'shilganda shu kodni ko'rib
-     o'zi ulanadi va guruhga "ulandim" deb yozadi. */
+     MUHIM: guruh kodi bilan BOG'LANMAYDI. Kod maxfiy emas (shu
+     sahifada turadi va Telegram guruh nomida ko'rinadi), shuning
+     uchun u bilan bog'lansa, begona odam guruh ochib, nomiga kodni
+     yozib, markazning e'lonlarini o'ziga tortib olardi.
+     Endi bog'lash BIR MARTALIK kod bilan bo'ladi.                */
   function tgGroupCard(g, App) {
     var linked = !!g.tgChat;
     var code = g.code || '—';
+    var tokenBox = h('div', { class: 'small', hidden: true, style: 'margin-top:8px' });
+    function makeToken(e) {
+      var btn = e.currentTarget;
+      UI.busy(btn, async function () {
+        try {
+          var r = await D.api('POST', 'api/group/link', { groupId: g.id });
+          UI.clear(tokenBox);
+          tokenBox.hidden = false;
+          tokenBox.appendChild(h('div', { class: 'banner info', style: 'margin:0' }, h('div', {}, [
+            h('b', {}, 'Telegram guruhida shuni yozing: '),
+            h('code', { class: 'mono' }, '/ulash ' + r.token),
+            h('div', { class: 'small muted', style: 'margin-top:6px' },
+              'Kod 2 soat ishlaydi va FAQAT BIR MARTA. Boshqa hech kimga bermang.')
+          ])));
+          tokenBox.appendChild(h('button', {
+            class: 'btn sm', style: 'margin-top:8px', type: 'button',
+            onclick: function () { UI.copy('/ulash ' + r.token); }
+          }, 'Nusxalash'));
+        } catch (err) { UI.toast(err.message || 'Kod olinmadi.', 'bad'); }
+      });
+    }
     var body = h('div', { class: 'tg-group' }, [
       h('div', { class: 'tg-code' }, [
         h('span', { class: 'small muted' }, 'Guruh kodi'),
@@ -116,18 +140,22 @@
         ]
         : [
           h('span', { class: 'small' },
-            'Telegram guruh nomiga shu kodni qo’shing (masalan “' + (g.name || 'Guruh') + ' · ' + code + '”), ' +
-            'so’ng botni guruhga admin qilib qo’shing — o’zi ulanadi.')
+            'Botni Telegram guruhiga admin qilib qo’shing, so’ng “Ulash kodini olish” ' +
+            'tugmasini bosing va chiqqan buyruqni o’sha guruhga yozing.')
         ]),
       h('div', { class: 'rowflex' }, [
         h('button', { class: 'btn sm', type: 'button', onclick: function () { UI.copy(String(code)); } },
           'Kodni nusxalash'),
+        App.can('group.edit')
+          ? h('button', { class: 'btn sm primary', type: 'button', onclick: makeToken },
+            linked ? 'Qayta ulash kodi' : 'Ulash kodini olish') : null,
         (linked && (App.can('group.edit') || App.can('bot.broadcast')))
           ? h('button', {
-            class: 'btn sm primary', type: 'button',
+            class: 'btn sm', type: 'button',
             onclick: function () { groupMessageForm(g); }
           }, [UI.icon('chat'), 'Guruhga xabar']) : null
-      ].filter(Boolean))
+      ].filter(Boolean)),
+      tokenBox
     ]);
     return UI.card('Telegram guruhi', body);
   }
