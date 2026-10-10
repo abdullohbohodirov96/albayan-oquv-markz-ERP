@@ -47,7 +47,15 @@ const login = b => api(b, '/api/login', { method: 'POST', body: { login: 'admin'
   const run = await api(SRC, '/api/backup/run', { method: 'POST', cookie: s, body: {} });
   ok('zaxira yaratildi (' + run.status + ')', run.status === 200 && !!(run.json && run.json.file), run.text.slice(0, 160));
   const name = run.json && run.json.file && run.json.file.name;
-  const dump = await api(SRC, '/api/backup/file?name=' + encodeURIComponent(name || ''), { cookie: s });
+  /* Zaxira fayli — eng maxfiy narsa (parol xeshlari, kabinet kodlari).
+     Shuning uchun PAROLNI QAYTA KIRITISH talab qilinadi.            */
+  const noPass = await api(SRC, '/api/backup/file?name=' + encodeURIComponent(name || ''), { cookie: s });
+  ok('Parolsiz zaxira fayli berilmadi', noPass.status === 403, noPass.status + ' ' + noPass.text.slice(0, 120));
+  const badPass = await api(SRC, '/api/backup/file?name=' + encodeURIComponent(name || '') +
+    '&password=' + encodeURIComponent('notogri-parol'), { cookie: s });
+  ok('Noto’g’ri parol bilan ham berilmadi', badPass.status === 403, badPass.status + '');
+  const dump = await api(SRC, '/api/backup/file?name=' + encodeURIComponent(name || '') +
+    '&password=' + encodeURIComponent(PASS), { cookie: s });
   ok('zaxira fayli o’qildi (' + dump.status + ')', dump.status === 200 && !!dump.json, dump.text.slice(0, 160));
   const before = await api(DST, '/api/collection?name=students', { cookie: d });
   const nBefore = Object.keys((before.json || {}).items || {}).length;
@@ -60,11 +68,20 @@ const login = b => api(b, '/api/login', { method: 'POST', body: { login: 'admin'
   ok('belgili o’quvchi sinov bazasida hali yo’q (' + nBefore + ' / ' + nSrc + ')',
     !JSON.stringify((before.json || {}).items || {}).includes(markName));
 
-  const noWord = await api(DST, '/api/backup/restore', { method: 'POST', cookie: d, body: { dump: dump.json } });
+  /* Tiklash users/* ni ham almashtiradi — parolsiz ishlamasin */
+  const noPassR = await api(DST, '/api/backup/restore', {
+    method: 'POST', cookie: d, body: { dump: dump.json, confirm: 'TIKLASH' }
+  });
+  ok('Parolsiz tiklanmadi', noPassR.status === 403, noPassR.status + ' ' + noPassR.text.slice(0, 120));
+  const noWord = await api(DST, '/api/backup/restore', {
+    method: 'POST', cookie: d, body: { dump: dump.json, password: PASS }
+  });
   ok('tasdiqlash so’zisiz tiklanmadi (' + noWord.status + ')', noWord.status === 400);
   const midway = await api(DST, '/api/collection?name=students', { cookie: d });
   ok('rad etilgandan keyin baza o’zgarmadi', Object.keys((midway.json || {}).items || {}).length === nBefore);
-  const res = await api(DST, '/api/backup/restore', { method: 'POST', cookie: d, body: { dump: dump.json, confirm: 'TIKLASH' } });
+  const res = await api(DST, '/api/backup/restore', {
+    method: 'POST', cookie: d, body: { dump: dump.json, confirm: 'TIKLASH', password: PASS }
+  });
   ok('tiklash so’rovi qabul qilindi (' + res.status + ')', res.status === 200, res.text.slice(0, 200));
   const after = await api(DST, '/api/collection?name=students', { cookie: d });
   const nAfter = Object.keys((after.json || {}).items || {}).length;

@@ -93,6 +93,22 @@ function read(name) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+/** Yuklab olinadigan nusxa: BOT TOKENI olib tashlanadi.
+    Token bilan botni butunlay egallab olish mumkin, zaxira esa
+    pochta yoki chatga yuborilib ketadi.                        */
+function readForDownload(name) {
+  const dump = read(name);
+  const docs = dump && dump.docs;
+  const st = docs && docs['meta/settings'];
+  if (st && st.bot && st.bot.token) {
+    docs['meta/settings'] = Object.assign({}, st, {
+      bot: Object.assign({}, st.bot, { token: '' })
+    });
+    dump.tokenOlibTashlandi = true;
+  }
+  return dump;
+}
+
 /* ---------------- Tekshirish ---------------- */
 
 const REQUIRED = ['users'];
@@ -188,23 +204,37 @@ async function preview(store, dump) {
  * Tiklash. Avval joriy holat zaxiraga olinadi, keyin hamma narsa almashtiriladi.
  * Natija: { ok, restored, removed, safety }
  */
-async function restore(store, dump) {
+/**
+ * Zaxiradan tiklash.
+ * @param {object} opts.keepUserId — SHU hisob zaxiradagi bilan
+ *   almashtirilmaydi va o'chirilmaydi. Tiklashni boshlagan odam
+ *   o'z tizimidan qulflanib qolmasin, va begona faylda yozilgan
+ *   "direktor" uning o'rnini egallab olmasin.
+ */
+async function restore(store, dump, opts) {
   const v = validate(dump);
   if (!v.ok) { const e = new Error(v.errors[0] || 'Zaxira yaroqsiz.'); e.details = v.errors; throw e; }
 
   const safety = await makeBackup(store, 'tiklashdan oldin', 'oldingi');
 
+  const keepUserId = String((opts && opts.keepUserId) || '');
+  const keepPath = keepUserId ? 'users/' + keepUserId : '';
+  const keepDoc = keepPath ? await store.get(keepPath) : null;
+
   const now = await store.all();
   const keep = new Set(Object.keys(v.docs));
   let removed = 0, restored = 0;
   for (const r of now) {
+    if (keepPath && r.path === keepPath) continue;        // o'zini o'chirmaydi
     if (!keep.has(r.path)) { await store.del(r.path); removed++; }
   }
   for (const p of Object.keys(v.docs)) {
+    if (keepPath && p === keepPath) continue;             // o'zini almashtirmaydi
     await store.set(p, v.docs[p]);
     restored++;
   }
-  return { ok: true, restored, removed, safety: safety.name };
+  if (keepDoc) await store.set(keepPath, keepDoc);        // joyida tursin
+  return { ok: true, restored, removed, safety: safety.name, kept: keepPath || null };
 }
 
 /* ---------------- Holat va jadval ---------------- */
@@ -249,6 +279,7 @@ function startSchedule(store, onFail) {
 }
 
 module.exports = {
+  readForDownload,
   DIR, FORMAT, tzDate, tzStamp,
   makeBackup, list, read, validate, preview, restore,
   readState, writeState, startSchedule, dumpOf, checksum, flattenOld, safeName

@@ -548,8 +548,15 @@ function raw(pathRaw, opts = {}) {
     rsNoAuth.status + '');
   const rsTch = await req('/api/backup/reset', { method: 'POST', cookie: tch, body: { confirm: 'O’CHIRAMAN' } });
   eq('O’qituvchi baza tozalay olmaydi', rsTch.status, 403);
+  /* Parol ham, tasdiqlash so'zi ham kerak — ikkisi ALOHIDA to'siq */
+  const rsNoPw = await req('/api/backup/reset', {
+    method: 'POST', cookie: dir, body: { confirm: 'O’CHIRAMAN' }
+  });
+  eq('Parolsiz baza tozalanmaydi', rsNoPw.status, 403);
   for (const bad of ['', 'ochiraman', 'O’CHIRAM', 'DELETE', 'HA']) {
-    const r = await req('/api/backup/reset', { method: 'POST', cookie: dir, body: { confirm: bad } });
+    const r = await req('/api/backup/reset', {
+      method: 'POST', cookie: dir, body: { confirm: bad, password: PASS }
+    });
     eq('Tasdiqlash so’zi "' + bad + '" qabul qilinmaydi', r.status, 400);
   }
   /* Eng muhimi: shu urinishlardan keyin ham baza TURIBDI */
@@ -675,9 +682,72 @@ function raw(pathRaw, opts = {}) {
   ok('meta/settings direktorga ochiq', setOk.status === 200 && !!setOk.json.data,
     setOk.status + '');
 
+  /* ================================================================
+     17. Zaxira: tiklash orqali o'zini direktor qilib bo'lmaydi
+     ================================================================ */
+  section('17. Zaxira va tiklash');
+  /* Ilgari BUTUN backup/* bloki faqat settings.edit talab qilardi.
+     backup/restore esa MIJOZ yuborgan fayl bilan users/* ni ham
+     almashtirardi — ya'ni sozlama huquqi bor har kim o'ziga
+     direktor hisobini yozib qo'yishi mumkin edi. backup/file esa
+     parol xeshlari, kabinet kodlari va BOT TOKENINI ochiq berardi. */
+
+  /* Sozlama huquqi bor, lekin direktor BO'LMAGAN foydalanuvchi */
+  const admLogin = 'adm' + Date.now().toString(36).slice(-5);
+  await putDoc('users/' + ID('a'), {
+    id: ID('a'), name: 'Administrator', login: admLogin, role: 'admin', active: true
+  }, dir, { password: 'Admin123456' });
+  const admRes = await login(admLogin, 'Admin123456');
+  const adm = admRes.cookie;
+  ok('Administrator kirdi', !!adm, admRes.text.slice(0, 120));
+
+  const run = await req('/api/backup/run', { method: 'POST', cookie: dir, body: {} });
+  const bname = run.json && run.json.file && run.json.file.name;
+  ok('Zaxira olindi', !!bname, run.text.slice(0, 140));
+
+  if (adm && bname) {
+    /* a) Administrator dumpni yuklab ololmaydi */
+    const dlAdm = await req('/api/backup/file?name=' + encodeURIComponent(bname) +
+      '&password=' + encodeURIComponent('Admin123456'), { cookie: adm });
+    eq('Administrator zaxira faylini ololmadi', dlAdm.status, 403);
+    /* b) Tiklay ham olmaydi */
+    const resAdm = await req('/api/backup/restore', {
+      method: 'POST', cookie: adm,
+      body: { name: bname, confirm: 'TIKLASH', password: 'Admin123456' }
+    });
+    eq('Administrator tiklay olmadi', resAdm.status, 403);
+    /* c) Bazani tozalay ham olmaydi */
+    const rstAdm = await req('/api/backup/reset', {
+      method: 'POST', cookie: adm, body: { confirm: 'O’CHIRAMAN', password: 'Admin123456' }
+    });
+    eq('Administrator bazani tozalay olmadi', rstAdm.status, 403);
+    ok('  → o’quvchi joyida', !!(await getDoc('students/' + ID('s'), dir)));
+
+    /* d) Direktor ham PAROLSIZ qila olmaydi */
+    const noPw = await req('/api/backup/file?name=' + encodeURIComponent(bname), { cookie: dir });
+    eq('Parolsiz zaxira fayli berilmadi', noPw.status, 403);
+    const badPw = await req('/api/backup/file?name=' + encodeURIComponent(bname) +
+      '&password=notogri', { cookie: dir });
+    eq('Noto’g’ri parol bilan ham berilmadi', badPw.status, 403);
+    const resNoPw = await req('/api/backup/restore', {
+      method: 'POST', cookie: dir, body: { name: bname, confirm: 'TIKLASH' }
+    });
+    eq('Parolsiz tiklanmadi', resNoPw.status, 403);
+
+    /* e) To'g'ri parol bilan dump beriladi, lekin BOT TOKENISIZ */
+    const okDl = await req('/api/backup/file?name=' + encodeURIComponent(bname) +
+      '&password=' + encodeURIComponent(PASS), { cookie: dir });
+    eq('Direktor parol bilan oldi', okDl.status, 200);
+    const st = okDl.json && okDl.json.docs && okDl.json.docs['meta/settings'];
+    ok('Yuklangan nusxada bot tokeni yo’q',
+      !(st && st.bot && st.bot.token), JSON.stringify(st && st.bot));
+    ok('Parol xeshi esa saqlanib qolgan (tiklash ishlasin)',
+      okDl.text.indexOf('"hash"') >= 0);
+  }
+
   /* ---------- tozalash ---------- */
   for (const p of ['memberships/' + ID('m'), 'students/' + ID('s'), 'groups/' + ID('g'),
-    'courses/' + ID('c'), 'staff/' + ID('t'), 'users/' + ID('u')]) {
+    'courses/' + ID('c'), 'staff/' + ID('t'), 'users/' + ID('u'), 'users/' + ID('a')]) {
     await req('/api/doc?path=' + encodeURIComponent(p), { method: 'DELETE', cookie: dir });
   }
 

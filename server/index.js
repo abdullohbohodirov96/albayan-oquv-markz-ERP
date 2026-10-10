@@ -142,8 +142,13 @@ function send(res, code, body, headers, req) {
 const BODY_MAX = Number(process.env.BODY_MAX_BYTES || 4e6);
 const BODY_MAX_FILE = Number(process.env.BODY_MAX_FILE_BYTES || 16e6);
 function readBody(req, max) {
+  /* Bir so'rov tanasi BIR MARTA o'qiladi (oqim). Ba'zi yo'llar uni
+     ikki marta so'raydi (masalan avval parolni tekshirib, keyin
+     asosiy ma'lumotni olish) — ikkinchi o'qish bo'sh oqimda
+     abadiy kutib qolmasin, shuning uchun natija keshlanadi.      */
+  if (req.__body) return req.__body;
   const cap = Number(max) || BODY_MAX;
-  return new Promise((resolve, reject) => {
+  const pr = new Promise((resolve, reject) => {
     /* MUHIM: bo'laklar avval BAYT ko'rinishida to'planadi, matnga esa
        oxirida bir marta o'giriladi. Har bir bo'lakni alohida matnga
        aylantirish xavfli: o'zbek "’" yoki arab harfi ikki bo'lak
@@ -168,6 +173,10 @@ function readBody(req, max) {
     });
     req.on('error', reject);
   });
+  /* Rad etilgan va'da keshda qolsa, ikkinchi chaqiruv ham o'sha
+     xatoni qaytaradi — bu to'g'ri: tana baribir o'qib bo'lingan. */
+  req.__body = pr;
+  return pr;
 }
 
 /* ---------------- So'rov cheklovi (webhook uchun) ---------------- */
@@ -2806,6 +2815,30 @@ async function handleApi(req, res, url) {
   if (route.indexOf('backup') === 0) {
     if (!A.can(user, 'settings.edit')) return send(res, 403, { error: 'Zaxira bilan ishlash uchun ruxsat yo’q.' });
 
+    /* --- ENG XAVFLI IKKI AMAL: TIKLASH va DUMPNI YUKLAB OLISH ---
+       Tiklash mijoz yuborgan fayl bilan users/* ni ham almashtiradi:
+       ya'ni sozlama huquqi bor har kim o'ziga direktor hisobini
+       yozib qo'yishi mumkin edi. Yuklab olingan dump esa parol
+       hashlari, kabinet kodlari va bot tokenini ochiq beradi.
+       Shuning uchun: faqat direktor (yoki users.manage) + PAROLNI
+       QAYTA KIRITISH.                                            */
+    const DANGEROUS = { 'backup/restore': 1, 'backup/file': 1, 'backup/reset': 1 };
+    if (DANGEROUS[route]) {
+      if (user.role !== 'direktor' && !A.can(user, 'users.manage')) {
+        return send(res, 403, { error: 'Bu amalni faqat direktor bajaradi.' });
+      }
+      /* Zaxira fayli katta bo'lishi mumkin — tana KATTA chegara
+         bilan o'qiladi (kesh tufayli keyin qayta o'qilmaydi).    */
+      const pass = req.method === 'GET'
+        ? String(url.searchParams.get('password') || '')
+        : String((await readBody(req, BODY_MAX_FILE)).password || '');
+      const fresh = await store.get('users/' + user.id);
+      if (!pass || !fresh || !verifyPassword(fresh, pass)) {
+        await writeAudit(user, 'Zaxira amali rad etildi (parol)', route, '');
+        return send(res, 403, { error: 'Parolni qaytadan kiriting.' });
+      }
+    }
+
     if (route === 'backup/db' && req.method === 'GET') {
     let stats = null;
     try { stats = store.stats ? await store.stats() : null; } catch (e) { stats = null; }
@@ -2837,7 +2870,10 @@ async function handleApi(req, res, url) {
     if (route === 'backup/file' && req.method === 'GET') {
       const name = String(url.searchParams.get('name') || '');
       try {
-        const dump = backup.read(name);
+        /* Bot tokeni olib tashlangan nusxa — zaxira fayli pochta
+           yoki chatga yuborilib ketsa, bot egallab olinmasin.   */
+        const dump = backup.readForDownload(name);
+        await writeAudit(user, 'Zaxira fayli yuklab olindi', name, 'bot tokeni olib tashlandi');
         return send(res, 200, dump);
       } catch (e) { return send(res, 404, { error: e.message }); }
     }
@@ -2901,7 +2937,10 @@ async function handleApi(req, res, url) {
       const dump = body.name ? backupReadSafe(body.name) : body.dump;
       if (!dump) return send(res, 400, { error: 'Zaxira berilmadi.' });
       try {
-        const r = await withLock('backup', () => backup.restore(store, dump));
+        /* Tiklashni boshlagan hisob zaxiradagi bilan ALMASHTIRILMAYDI:
+           begona faylda yozilgan "direktor" uning o'rnini egallab
+           olmasin va u o'z tizimidan qulflanib qolmasin.          */
+        const r = await withLock('backup', () => backup.restore(store, dump, { keepUserId: user.id }));
         await writeAudit(user, 'Ma’lumotlar zaxiradan tiklandi',
           body.name || 'yuklangan fayl', r.restored + ' yozuv tiklandi, ' + r.removed + ' ta olib tashlandi');
         return send(res, 200, r);

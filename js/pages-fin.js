@@ -2242,6 +2242,9 @@
       label: 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing',
       placeholder: 'O’CHIRAMAN'
     });
+    /* Parolni qayta kiritish — ochiq qolgan kompyuterdan
+       bosilgan tasodifiy tugma bazani o'chirib yubormasin. */
+    var pw = UI.field({ label: 'O’z parolingiz', type: 'password' });
     var err = h('div', { class: 'err-msg', hidden: true });
     UI.modal({
       title: 'Hammasini o’chirish',
@@ -2253,7 +2256,7 @@
         h('p', { class: 'small muted', style: 'margin:0 0 12px' },
           'Kirish hisoblari, xodimlar va markaz sozlamasi qoladi. ' +
           'Tozalashdan oldin zaxira nusxa o’zi olinadi.'),
-        f.wrap, err
+        f.wrap, pw.wrap, err
       ],
       actions: [
         { label: 'Bekor qilish' },
@@ -2264,9 +2267,14 @@
               err.hidden = false; err.textContent = 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing.';
               return;
             }
+            if (!pw.input.value) {
+              err.hidden = false; err.textContent = 'Parolingizni kiriting.';
+              return;
+            }
             UI.busy(btn, async function () {
               try {
-                var r = await D.api('POST', 'api/backup/reset', { confirm: 'O’CHIRAMAN' });
+                var r = await D.api('POST', 'api/backup/reset',
+                  { confirm: 'O’CHIRAMAN', password: pw.input.value });
                 await D.loadBootstrap();
                 close();
                 UI.toast(r.removed + ' ta yozuv o’chdi. Zaxira: ' + r.backup, 'ok');
@@ -2288,6 +2296,9 @@
     var result = h('div', { style: 'margin-top:12px' });
     var chosen = null;           // {dump, name}
     var confirmInput = h('input', { class: 'inp', placeholder: 'TIKLASH' });
+    /* Tiklash kirish hisoblarini ham almashtiradi — shuning uchun
+       parolni qayta kiritish talab qilinadi (server ham tekshiradi). */
+    var pwInput = h('input', { class: 'inp', type: 'password', placeholder: 'O’z parolingiz' });
     var applyBtn = null;
 
     if (D.mode === 'server') {
@@ -2299,9 +2310,11 @@
       }).catch(function () { });
       serverPick.onchange = function () {
         if (!serverPick.value) return;
-        D.api('GET', 'api/backup/file?name=' + encodeURIComponent(serverPick.value))
+        if (!pwInput.value) { UI.toast('Avval parolingizni kiriting.', 'bad'); serverPick.value = ''; return; }
+        D.api('GET', 'api/backup/file?name=' + encodeURIComponent(serverPick.value) +
+          '&password=' + encodeURIComponent(pwInput.value))
           .then(function (dump) { chosen = { dump: dump, name: serverPick.value, fromServer: true }; show(); })
-          .catch(function (e) { UI.toast(e.message, 'bad'); });
+          .catch(function (e) { UI.toast(e.message, 'bad'); serverPick.value = ''; });
       };
     }
 
@@ -2371,6 +2384,8 @@
       body: [
         h('div', { class: 'banner info' }, h('div', {},
           'Tiklash hozirgi ma’lumotlarni zaxiradagi holat bilan almashtiradi. Avval fayl tekshiriladi va o’zgarish ko’rsatiladi.')),
+        D.mode === 'server' ? h('label', { class: 'fld' },
+          [h('span', {}, 'O’z parolingiz (xavfsizlik uchun)'), pwInput]) : null,
         D.mode === 'server' ? h('label', { class: 'fld' }, [h('span', {}, 'Serverdagi zaxira'), serverPick]) : null,
         h('label', { class: 'fld' }, [h('span', {}, 'Yoki kompyuteringizdagi fayl'), fileInput]),
         result
@@ -2384,12 +2399,15 @@
           if (confirmInput.value.trim() !== 'TIKLASH') {
             UI.toast('Tasdiqlash uchun TIKLASH deb yozing.', 'bad'); return;
           }
+          if (D.mode === 'server' && !pwInput.value) {
+            UI.toast('Parolingizni kiriting.', 'bad'); return;
+          }
           UI.busy(btn, async function () {
             try {
               if (D.mode === 'server') {
                 var body = chosen.fromServer
-                  ? { name: chosen.name, confirm: 'TIKLASH' }
-                  : { dump: chosen.dump, confirm: 'TIKLASH' };
+                  ? { name: chosen.name, confirm: 'TIKLASH', password: pwInput.value }
+                  : { dump: chosen.dump, confirm: 'TIKLASH', password: pwInput.value };
                 var r = await D.api('POST', 'api/backup/restore', body);
                 UI.toast('Tiklandi: ' + r.restored + ' yozuv. Oldingi holat "' + r.safety + '" fayliga saqlandi.', 'ok');
                 await D.loadBootstrap();
