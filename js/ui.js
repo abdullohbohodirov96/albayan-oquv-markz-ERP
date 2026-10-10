@@ -118,6 +118,7 @@
     }
     close.clean = markClean;
     function onKey(e) {
+      if (opts.closable === false) return;        // yopib bo'lmaydigan oyna
       if (e.key === 'Escape' && modalStack[modalStack.length - 1] === back) { e.preventDefault(); close(); }
     }
     (opts.actions || []).forEach(function (a) {
@@ -134,7 +135,9 @@
     var box = h('div', { class: 'modal' + (opts.wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': opts.title || '' }, [
       h('div', { class: 'm-head' }, [
         h('h2', {}, opts.title || ''),
-        h('button', { class: 'x-btn', type: 'button', 'aria-label': 'Yopish', onclick: close }, [
+        /* closable: false — majburiy oyna (masalan birinchi kirishda
+           parol almashtirish). Yopish tugmasi umuman chizilmaydi.  */
+        opts.closable === false ? null : h('button', { class: 'x-btn', type: 'button', 'aria-label': 'Yopish', onclick: close }, [
           (function () {
             var s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('width', '18'); s.setAttribute('height', '18');
@@ -143,12 +146,14 @@
             p.setAttribute('d', 'M18 6 6 18M6 6l12 12'); s.appendChild(p); return s;
           })()
         ])
-      ]),
+      ].filter(Boolean)),
       body,
       (opts.actions && opts.actions.length) ? foot : null
     ]);
     back.appendChild(box);
-    back.addEventListener('mousedown', function (e) { if (e.target === back && opts.dismissable !== false) close(); });
+    back.addEventListener('mousedown', function (e) {
+      if (e.target === back && opts.dismissable !== false && opts.closable !== false) close();
+    });
     // kiritilgan ma'lumotni kuzatamiz
     body.addEventListener('input', function () { dirty = true; });
     body.addEventListener('change', function () { dirty = true; });

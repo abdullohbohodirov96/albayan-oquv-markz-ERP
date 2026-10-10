@@ -70,14 +70,14 @@ async function dbDoc(path, dirCookie) {
     fee: 400000, feeHistory: [{ fee: 400000, from: '2026-09' }], limit: 10, status: 'faol'
   }, dir);
   for (const u of [
-    { id: 'usr_pust', login: 'pustoz', name: 'Ustoz A', role: 'oqituvchi', staffId: 'pstf_a', pw: 'Ustoz12345' },
+    { id: 'usr_pust', login: 'pustoz', name: 'Ustoz A', role: 'oqituvchi', staffId: 'pstf_a', pw: 'Pm7Qoriq42' },
     { id: 'usr_pbux', login: 'pbux', name: 'Buxgalter P', role: 'buxgalter', pw: 'Buxgalter12345' }
   ]) {
     await put('users/' + u.id,
       { id: u.id, login: u.login, name: u.name, role: u.role, staffId: u.staffId || null, active: true },
       dir, { password: u.pw });
   }
-  const ustoz = await login('pustoz', 'Ustoz12345');
+  const ustoz = await login('pustoz', 'Pm7Qoriq42');
   const bux = await login('pbux', 'Buxgalter12345');
   ok('O’qituvchi kirdi', !!ustoz);
   ok('Buxgalter kirdi', !!bux);

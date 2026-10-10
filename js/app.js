@@ -45,6 +45,14 @@
 
     render: function () {
       if (!App.user) return;
+      /* BIRINCHI KIRISH: parol tizim tomonidan yaratilgan bo'lsa,
+         boshqa hech narsa ochilmaydi — avval parol almashtiriladi.
+         Aks holda tasodifiy parol logda qolib, uzoq vaqt
+         o'zgartirilmasdan ishlatilib yuriladi.                    */
+      if (D.mode === 'server' && App.user.mustChange && A.forcePasswordChange) {
+        A.forcePasswordChange(App);
+        return;
+      }
       /* Hisob-kitob keshini tozalaymiz: u FAQAT shu chizish davomida
          yashaydi, shuning uchun ekranda hech qachon eski raqam
          qolmaydi (to'lov yozilgach darhol yangilanadi).            */
@@ -287,11 +295,21 @@
     var fLogin = UI.field({ label: 'Login', id: 'login-user', required: true, autocomplete: 'username' });
     var fPass = UI.field({ label: 'Parol', id: 'login-pass', type: 'password', required: true, autocomplete: 'current-password' });
     var err = h('div', { class: 'err-msg', hidden: true });
-    var hint = D.all('users').some(function (u) { return u.login === 'admin' && u.isDefault; })
-      ? h('div', { class: 'banner info', style: 'margin:0' }, h('div', {}, [
-        h('b', {}, 'Birinchi kirish: '), 'login ', h('b', {}, 'admin'), ', parol ', h('b', {}, '1234'), '. Sozlamalar bo’limida parolni albatta o’zgartiring.'
-      ]))
-      : null;
+    /* Haqiqiy serverda parol TASODIFIY yaratiladi va faqat server
+       jurnalida bir marta ko'rsatiladi — uni bu yerda yozib
+       bo'lmaydi. Namoyish nusxasida esa avvalgidek 1234.          */
+    var needHint = D.all('users').some(function (u) {
+      return u.login === 'admin' && (u.isDefault || u.mustChange);
+    });
+    var hint = !needHint ? null
+      : (D.mode === 'server'
+        ? h('div', { class: 'banner info', style: 'margin:0' }, h('div', {}, [
+          h('b', {}, 'Birinchi kirish: '), 'login ', h('b', {}, 'admin'),
+          '. Parol server jurnalida bir marta ko’rsatilgan. Kirgandan keyin uni almashtirish so’raladi.'
+        ]))
+        : h('div', { class: 'banner info', style: 'margin:0' }, h('div', {}, [
+          h('b', {}, 'Namoyish nusxasi: '), 'login ', h('b', {}, 'admin'), ', parol ', h('b', {}, '1234'), '.'
+        ])));
 
     var btn = h('button', { class: 'btn primary block lg', type: 'submit' }, 'Kirish');
     var formEl = h('form', { class: 'login', onsubmit: onSubmit }, [

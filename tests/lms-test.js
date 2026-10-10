@@ -123,8 +123,8 @@ const ID = n => R + '_' + n;
   await put('users/' + ID('u1'), {
     id: ID('u1'), login: 'ust_' + R, name: 'Ustoz Lms', role: 'oqituvchi',
     staffId: ID('t1'), active: true
-  }, dir, { password: 'Ustoz12345' });
-  const teach = await login('ust_' + R, 'Ustoz12345');
+  }, dir, { password: 'Pm7Qoriq42' });
+  const teach = await login('ust_' + R, 'Pm7Qoriq42');
   ok('O’qituvchi kirdi', !!teach);
 
   /* ---------- 1. Dastur ---------- */

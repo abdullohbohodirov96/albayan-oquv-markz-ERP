@@ -167,14 +167,14 @@ async function login(l, p) {
     method: 'PUT', cookie: dirCookie,
     body: {
       data: { id: 'usr_ustoz', login: 'ustoz', name: 'Ustoz Bir', role: 'oqituvchi', staffId: 'stf_t1', active: true },
-      password: 'Ustoz12345'
+      password: 'Pm7Qoriq42'
     }
   });
   await req('/api/doc?path=' + encodeURIComponent('users/usr_admin2'), {
     method: 'PUT', cookie: dirCookie,
     body: {
       data: { id: 'usr_admin2', login: 'manager', name: 'Administrator', role: 'admin', active: true },
-      password: 'Manager12345'
+      password: 'Zx9Tepalik7'
     }
   });
   await req('/api/doc?path=' + encodeURIComponent('users/usr_bux'), {
@@ -185,8 +185,8 @@ async function login(l, p) {
     }
   });
 
-  const ustozCookie = await login('ustoz', 'Ustoz12345');
-  const adminCookie = await login('manager', 'Manager12345');
+  const ustozCookie = await login('ustoz', 'Pm7Qoriq42');
+  const adminCookie = await login('manager', 'Zx9Tepalik7');
   const buxCookie = await login('hisob', 'Buxgalter12345');
   ok('O’qituvchi kirdi', !!ustozCookie);
   ok('Administrator kirdi', !!adminCookie);
@@ -384,22 +384,28 @@ async function login(l, p) {
   ok('Fayllar ro’yxati bor', (bkState.json.files || []).length > 0);
 
   const bkName = bkRun.json.file.name;
-  const bkFile = await req('/api/backup/file?name=' + encodeURIComponent(bkName), { cookie: dirCookie });
-  ok('Zaxira fayli yuklab olindi', bkFile.status === 200 && !!bkFile.json.docs);
-  const traversal = await req('/api/backup/file?name=' + encodeURIComponent('../../server/index.js'), { cookie: dirCookie });
+  /* Zaxirani yuklab olish va tiklash PAROLNI QAYTA KIRITISHNI talab
+     qiladi (qarang: hujum-test 17-bo'lim).                          */
+  const PW = { password: PASS };
+  const bkFile = await req('/api/backup/file?name=' + encodeURIComponent(bkName) +
+    '&password=' + encodeURIComponent(PASS), { cookie: dirCookie });
+  ok('Zaxira fayli yuklab olindi', bkFile.status === 200 && !!bkFile.json.docs, bkFile.text.slice(0, 140));
+  const traversal = await req('/api/backup/file?name=' + encodeURIComponent('../../server/index.js') +
+    '&password=' + encodeURIComponent(PASS), { cookie: dirCookie });
   eq('Papkadan chiqishga urinish rad etildi', traversal.status, 404);
 
   const noConfirm = await req('/api/backup/restore', {
-    method: 'POST', cookie: dirCookie, body: { name: bkName }
+    method: 'POST', cookie: dirCookie, body: Object.assign({ name: bkName }, PW)
   });
   eq('Tasdiqlashsiz tiklash rad etildi', noConfirm.status, 400);
   const badDump = await req('/api/backup/restore', {
     method: 'POST', cookie: dirCookie,
-    body: { confirm: 'TIKLASH', dump: { app: 'albyana-erp', docs: { 'students/x': { id: 'x' } } } }
+    body: Object.assign({ confirm: 'TIKLASH', dump: { app: 'albyana-erp', docs: { 'students/x': { id: 'x' } } } }, PW)
   });
   eq('Foydalanuvchisiz zaxira rad etildi', badDump.status, 400);
   const teacherRestore = await req('/api/backup/restore', {
-    method: 'POST', cookie: ustozCookie, body: { confirm: 'TIKLASH', name: bkName }
+    method: 'POST', cookie: ustozCookie,
+    body: { confirm: 'TIKLASH', name: bkName, password: 'Pm7Qoriq42' }
   });
   eq('O’qituvchi tiklay olmadi', teacherRestore.status, 403);
 
@@ -408,7 +414,7 @@ async function login(l, p) {
   const beforeRestore = await req('/api/doc?path=rooms/zax_test', { cookie: dirCookie });
   ok('Sinov yozuvi qo’shildi', !!(beforeRestore.json && beforeRestore.json.data));
   const doRestore = await req('/api/backup/restore', {
-    method: 'POST', cookie: dirCookie, body: { confirm: 'TIKLASH', name: bkName }
+    method: 'POST', cookie: dirCookie, body: { confirm: 'TIKLASH', name: bkName, password: PASS }
   });
   ok('Tiklash bajarildi', doRestore.status === 200 && doRestore.json.ok, doRestore.text);
   ok('Tiklashdan oldingi zaxira saqlandi', !!doRestore.json.safety);

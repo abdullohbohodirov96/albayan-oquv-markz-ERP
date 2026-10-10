@@ -160,10 +160,10 @@ function thisMonth() {
     method: 'PUT', cookie,
     body: {
       data: { id: 'ai_ustoz', login: 'ai_ustoz', name: 'Ustoz', role: 'oqituvchi', active: true },
-      password: 'Ustoz12345'
+      password: 'Pm7Qoriq42'
     }
   });
-  const uc = (await req('/api/login', { method: 'POST', body: { login: 'ai_ustoz', password: 'Ustoz12345' } })).cookie;
+  const uc = (await req('/api/login', { method: 'POST', body: { login: 'ai_ustoz', password: 'Pm7Qoriq42' } })).cookie;
   ok('O’qituvchi kirdi', !!uc);
   eq('Holatni ko’ra olmadi', (await req('/api/invoices/auto', { cookie: uc })).status, 403);
   eq('Ishga tushira olmadi', (await req('/api/invoices/auto/run', { method: 'POST', cookie: uc })).status, 403);

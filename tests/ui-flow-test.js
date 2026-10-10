@@ -21,7 +21,7 @@ function section(t) { out.push('\n' + t); }
 
 const R = 'w' + Date.now().toString(36);
 const LOGIN = 'ustoz' + Date.now().toString(36).slice(-4);
-const PW = 'Ustoz12345';
+const PW = 'Pm7Qoriq42';
 
 async function modals(page) {
   return page.evaluate(() => ({

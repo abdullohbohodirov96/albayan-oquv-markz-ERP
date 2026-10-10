@@ -1946,7 +1946,8 @@
         { label: 'Xodim', render: function (u) { return u.staffId ? Q.staffName(u.staffId) : '—'; } },
         {
           label: 'Parol', render: function (u) {
-            return u.isDefault ? UI.pill('Standart (1234)', 'bad') : UI.pill('O’zgartirilgan', 'ok');
+            return (u.isDefault || u.mustChange)
+              ? UI.pill('Almashtirilmagan', 'bad') : UI.pill('O’zgartirilgan', 'ok');
           }
         },
         { label: 'Holat', render: function (u) { return u.active === false ? UI.pill('O’chirilgan', 'mute') : UI.pill('Faol', 'ok'); } },
@@ -2805,4 +2806,54 @@
     });
   }
   A.userForm = userForm;
+
+  /* ---------- Birinchi kirishda parolni majburiy almashtirish ----------
+     Tizim yaratgan tasodifiy parol server jurnalida qolib ketadi.
+     Shuning uchun u bilan kirgan odam boshqa HECH NARSA ko'rmaydi:
+     avval o'z parolini qo'yadi.                                        */
+  function forcePasswordChange(App) {
+    if (forcePasswordChange._ochiq) return;
+    forcePasswordChange._ochiq = true;
+    var p1 = UI.field({ label: 'Yangi parol', type: 'password' });
+    var p2 = UI.field({ label: 'Yangi parolni takrorlang', type: 'password' });
+    var err = h('div', { class: 'err-msg', hidden: true });
+    UI.modal({
+      title: 'Parolni almashtiring',
+      closable: false,
+      body: [
+        h('div', { class: 'banner warn', style: 'margin:0 0 10px' }, h('div', {}, [
+          h('b', {}, 'Birinchi kirish. '),
+          'Hozirgi parolni tizim yaratgan va u server jurnalida qolgan. ' +
+          'Davom etish uchun o’z parolingizni qo’ying.'
+        ])),
+        h('p', { class: 'small muted', style: 'margin:0 0 10px' },
+          'Kamida 8 belgi, ichida harf ham, raqam ham bo’lsin. Login bilan bir xil bo’lmasin.'),
+        p1.wrap, p2.wrap, err
+      ],
+      actions: [{
+        label: 'Saqlash va davom etish', cls: 'primary',
+        onClick: function (close, btn) {
+          var a = String(p1.input.value || ''), b = String(p2.input.value || '');
+          if (a !== b) { err.hidden = false; err.textContent = 'Parollar bir xil emas.'; return; }
+          if (a.length < 8) { err.hidden = false; err.textContent = 'Parol kamida 8 belgidan iborat bo’lsin.'; return; }
+          UI.busy(btn, async function () {
+            try {
+              var rec = Object.assign({}, D.one('users', App.user.id) || App.user);
+              delete rec.hash; delete rec.salt; delete rec.iter; delete rec.algo;
+              rec.mustChange = false; rec.isDefault = false;
+              await D.saveUser(rec, a);
+              App.user.mustChange = false; App.user.isDefault = false;
+              forcePasswordChange._ochiq = false;
+              close();
+              UI.toast('Parol o’zgartirildi.', 'ok');
+              App.render();
+            } catch (e) {
+              err.hidden = false; err.textContent = e.message || 'Saqlanmadi.';
+            }
+          });
+        }
+      }]
+    });
+  }
+  A.forcePasswordChange = forcePasswordChange;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -745,6 +745,100 @@ function raw(pathRaw, opts = {}) {
       okDl.text.indexOf('"hash"') >= 0);
   }
 
+  /* ================================================================
+     18. Parol qoidalari
+     ================================================================ */
+  section('18. Zaif parol qabul qilinmaydi');
+  /* Ilgari eng kam uzunlik 4 edi — "1234" ham o'tardi. Seed parol ham
+     "1234" bo'lgani uchun internetda ochiq turgan nusxaga
+     "admin / 1234" bilan kirib olish mumkin edi.                    */
+  const PWU = 'users/' + ID('p');
+  for (const bad of ['1234', 'abc', '1234567', '12345678', 'password',
+    'admin123', '11111111', 'aaaaaaaa']) {
+    const r = await putDoc(PWU, {
+      id: ID('p'), name: 'Parol sinovi', login: 'pw' + R.slice(-4), role: 'oqituvchi', active: true
+    }, dir, { password: bad });
+    eq('Zaif parol rad etildi: "' + bad + '"', r.status, 400);
+  }
+  ok('Zaif parolli foydalanuvchi yaratilmadi', !(await getDoc(PWU, dir)));
+  /* Login bilan bir xil bo'lmasin */
+  const sameLogin = await putDoc(PWU, {
+    id: ID('p'), name: 'Parol sinovi', login: 'ustozlogin', role: 'oqituvchi', active: true
+  }, dir, { password: 'ustozlogin9' });
+  eq('Login ichida bo’lgan parol rad etildi', sameLogin.status, 400);
+  /* To'g'ri parol esa qabul qilinadi */
+  const goodPw = await putDoc(PWU, {
+    id: ID('p'), name: 'Parol sinovi', login: 'pwok' + R.slice(-4), role: 'oqituvchi', active: true
+  }, dir, { password: 'Qoriq7tepa' });
+  eq('Yaxshi parol qabul qilindi', goodPw.status, 200);
+  const pwRec = await getDoc(PWU, dir);
+  ok('Javobda ochiq parol ham, xesh ham yo’q',
+    !!pwRec && JSON.stringify(pwRec).indexOf('Qoriq7tepa') < 0 && !pwRec.hash && !pwRec.salt,
+    JSON.stringify(pwRec));
+  /* Haqiqiy dalil: shu parol bilan kirish ishlaydi */
+  const pwLogin = await login(pwRec.login, 'Qoriq7tepa');
+  ok('Yangi parol bilan kirildi', !!pwLogin.cookie, pwLogin.status + ' ' + pwLogin.text.slice(0, 100));
+  const pwWrong = await login(pwRec.login, 'Qoriq7tepaX');
+  eq('Noto’g’ri parol bilan kirilmadi', pwWrong.status, 401);
+  await req('/api/doc?path=' + encodeURIComponent(PWU), { method: 'DELETE', cookie: dir });
+
+  /* --- Seed paroli: env berilmasa TASODIFIY bo'lsin ---
+     Alohida, BO'SH bazali server ko'tariladi (bu serverga tegilmaydi). */
+  section('18b. Birinchi kirish paroli tasodifiy');
+  await (async function () {
+    const { spawn } = require('child_process');
+    const fs2 = require('fs');
+    const os2 = require('os');
+    const path2 = require('path');
+    const dir2 = fs2.mkdtempSync(path2.join(os2.tmpdir(), 'alb-seed-'));
+    const port2 = 3397;
+    /* .env faylidagi SEED_DIRECTOR_PASSWORD ta'sir qilmasin:
+       dotenv faqat ishchi papkadagi .env ni o'qiydi.            */
+    const env = Object.assign({}, process.env, {
+      PORT: String(port2), DATA_DIR: path2.join(dir2, 'd'),
+      BACKUP_DIR: path2.join(dir2, 'b'), FILES_DIR: path2.join(dir2, 'f'),
+      NODE_ENV: 'test'
+    });
+    delete env.SEED_DIRECTOR_PASSWORD;
+    delete env.SEED_DIRECTOR_LOGIN;
+    const srv = spawn(process.execPath, [path2.join(__dirname, '..', 'server', 'index.js')],
+      { cwd: dir2, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    let log = '';
+    srv.stdout.on('data', c => { log += String(c); });
+    srv.stderr.on('data', c => { log += String(c); });
+    let up = false;
+    for (let i = 0; i < 25 && !up; i++) {
+      await new Promise(r => setTimeout(r, 400));
+      try { up = (await fetch('http://localhost:' + port2 + '/api/health')).status === 200; } catch (e) { }
+    }
+    ok('Bo’sh bazali server ko’tarildi', up, log.slice(-300));
+    if (up) {
+      const try1234 = await fetch('http://localhost:' + port2 + '/api/login', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login: 'admin', password: '1234' })
+      });
+      eq('"admin / 1234" bilan kirib bo’lmadi', try1234.status, 401);
+      const m = log.match(/BIRINCHI KIRISH PAROLI: (\S+)/);
+      ok('Tasodifiy parol jurnalda bir marta chiqdi', !!m, log.slice(-400));
+      if (m) {
+        ok('  → uzunligi yetarli (' + m[1].length + ')', m[1].length >= 12, m[1].length + '');
+        ok('  → harf, raqam va belgi bor',
+          /[a-z]/.test(m[1]) && /[A-Z]/.test(m[1]) && /\d/.test(m[1]), '');
+        const okLogin = await fetch('http://localhost:' + port2 + '/api/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ login: 'admin', password: m[1] })
+        });
+        eq('  → shu parol bilan kirildi', okLogin.status, 200);
+        const me = await (await fetch('http://localhost:' + port2 + '/api/me', {
+          headers: { Cookie: (okLogin.headers.get('set-cookie') || '').split(';')[0] }
+        })).json();
+        eq('  → "parolni almashtiring" belgisi qo’yilgan', (me.user || {}).mustChange, true);
+      }
+    }
+    try { srv.kill('SIGKILL'); } catch (e) { }
+    try { fs2.rmSync(dir2, { recursive: true, force: true }); } catch (e) { }
+  })();
+
   /* ---------- tozalash ---------- */
   for (const p of ['memberships/' + ID('m'), 'students/' + ID('s'), 'groups/' + ID('g'),
     'courses/' + ID('c'), 'staff/' + ID('t'), 'users/' + ID('u'), 'users/' + ID('a')]) {

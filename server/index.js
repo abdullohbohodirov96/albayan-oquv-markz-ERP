@@ -43,6 +43,57 @@ function legacyHash(login, pass, salt) {
 
 /** Parolni saqlash uchun PBKDF2-SHA256 (sekin, brute-force'ga chidamli) */
 const PBKDF2_ITER = 150000;
+/** Birinchi kirish uchun tasodifiy, lekin o'qib bo'ladigan parol */
+function randomPassword() {
+  /* Adashtiradigan belgilar yo'q: 0/O, 1/l/I olib tashlangan */
+  const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const abc = 'abcdefghijkmnpqrstuvwxyz';
+  const num = '23456789';
+  const sym = '!@#$%&*';
+  const pick = set => set[crypto.randomInt(0, set.length)];
+  let out = [pick(ABC), pick(abc), pick(num), pick(sym)];
+  const all = ABC + abc + num + sym;
+  while (out.length < 14) out.push(pick(all));
+  /* Aralashtirish — birinchi to'rtta belgi tartibi sezilmasin */
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(0, i + 1);
+    const t = out[i]; out[i] = out[j]; out[j] = t;
+  }
+  return out.join('');
+}
+
+/* Eng ko'p ishlatiladigan va shuning uchun eng xavfli parollar */
+const WEAK_PASSWORDS = [
+  '12345678', '123456789', '1234567890', 'password', 'parol123',
+  'qwertyui', 'qwerty123', 'admin123', 'administrator', '11111111',
+  '00000000', 'abc12345', 'iloveyou', 'welcome1', 'passw0rd',
+  'albayan1', 'albayan123', 'direktor', 'oqituvchi', '87654321'
+];
+
+/**
+ * Parol qoidalari. Xato bo'lsa — sababini qaytaradi, aks holda ''.
+ * Ilgari eng kam uzunlik 4 edi: "1234" ham o'tardi.
+ */
+function passwordProblem(pass, login) {
+  const p = String(pass || '');
+  if (p.length < 8) return 'Parol kamida 8 belgidan iborat bo’lsin.';
+  if (p.length > 200) return 'Parol juda uzun.';
+  const low = p.toLowerCase();
+  if (WEAK_PASSWORDS.indexOf(low) >= 0) return 'Bu parol juda oddiy — boshqasini tanlang.';
+  if (/^(\d)\1+$/.test(p)) return 'Bir xil raqamdan iborat parol bo’lmaydi.';
+  if (/^(?:0?1?2?3?4?5?6?7?8?9?)+$/.test(p) && p.length < 12) {
+    return 'Ketma-ket raqamlardan iborat parol bo’lmaydi.';
+  }
+  const lg = String(login || '').toLowerCase();
+  if (lg && lg.length >= 3 && low.indexOf(lg) >= 0) {
+    return 'Parol ichida login bo’lmasin.';
+  }
+  if (!/[a-zA-Z]/.test(p) || !/\d/.test(p)) {
+    return 'Parolda kamida bitta harf va bitta raqam bo’lsin.';
+  }
+  return '';
+}
+
 function pbkdf2(pass, salt, iter) {
   return crypto.pbkdf2Sync(String(pass), String(salt), iter || PBKDF2_ITER, 32, 'sha256').toString('hex');
 }
@@ -476,16 +527,24 @@ async function ensureSeed() {
   const users = await store.list('users/');
   if (!users.length) {
     const login = (process.env.SEED_DIRECTOR_LOGIN || 'admin').toLowerCase();
-    // SEED_DIRECTOR_PASSWORD berilmasa — birinchi kirish uchun oddiy parol (1234).
-    // Bu vaqtinchalik: ilova kirgandan keyin uni almashtirishni so'raydi.
+    /* SEED_DIRECTOR_PASSWORD berilmasa — TASODIFIY parol yaratiladi
+       va logga BIR MARTA chiqariladi. Ilgari bu yerda "1234" turardi:
+       internetda ochiq turgan har qanday nusxaga "admin / 1234" bilan
+       kirib olish mumkin edi.                                        */
     const envPass = process.env.SEED_DIRECTOR_PASSWORD || '';
-    const pass = envPass || '1234';
+    const pass = envPass || randomPassword();
     await store.set('users/usr_admin', Object.assign({
       id: 'usr_admin', login, name: 'Direktor', role: 'direktor', staffId: null,
-      active: true, isDefault: !envPass, createdAt: stamp()
+      active: true, isDefault: !envPass, mustChange: !envPass, createdAt: stamp()
     }, makePassword(pass)));
-    console.log('  Direktor hisobi yaratildi: ' + login +
-      (envPass ? '' : ' (parol: 1234 — kirgandan keyin almashtiring!)'));
+    console.log('  Direktor hisobi yaratildi: ' + login);
+    if (!envPass) {
+      console.log('  ──────────────────────────────────────────────');
+      console.log('  BIRINCHI KIRISH PAROLI: ' + pass);
+      console.log('  Bu parol FAQAT SHU YERDA ko’rsatiladi. Kirgandan');
+      console.log('  keyin tizim uni almashtirishni so’raydi.');
+      console.log('  ──────────────────────────────────────────────');
+    }
   }
 }
 
@@ -3035,13 +3094,16 @@ async function handleApi(req, res, url) {
         delete body.data.hash; delete body.data.salt; delete body.data.iter; delete body.data.algo;
         const pass = String(body.password || '');
         if (pass) {
-          if (pass.length < 4) return send(res, 400, { error: 'Parol kamida 4 belgidan iborat bo’lsin.' });
+          const bad = passwordProblem(pass, body.data.login || (old && old.login));
+          if (bad) return send(res, 400, { error: bad });
           Object.assign(body.data, makePassword(pass));
           body.data.isDefault = false;
+          body.data.mustChange = false;
         } else if (old) {
           body.data.salt = old.salt; body.data.hash = old.hash;
           body.data.iter = old.iter; body.data.algo = old.algo;
           body.data.isDefault = old.isDefault;
+          body.data.mustChange = old.mustChange;
         } else {
           return send(res, 400, { error: 'Yangi foydalanuvchi uchun parol kerak.' });
         }

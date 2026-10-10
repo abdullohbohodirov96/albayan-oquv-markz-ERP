@@ -92,13 +92,13 @@ const BASE = 'http://localhost:' + PORT;
     await D.saveUser({
       id: 'usr_ustoz2', login: 'ustoz', name: 'Ustoz Bir', role: 'oqituvchi',
       staffId: 'stf_1', active: true
-    }, 'Ustoz12345');
+    }, 'Pm7Qoriq42');
   });
   await page.waitForTimeout(600);
   await ctx.close();
 
   const { ctx: c2, page: p2 } = await open({ width: 1320, height: 900 });
-  await login(p2, 'ustoz', 'Ustoz12345');
+  await login(p2, 'ustoz', 'Pm7Qoriq42');
   const navItems = await p2.locator('#nav button').allInnerTexts();
   steps.push('O’qituvchi menyusi: ' + navItems.map(s => s.trim()).join(', '));
   const blocked = await p2.evaluate(async () => {
