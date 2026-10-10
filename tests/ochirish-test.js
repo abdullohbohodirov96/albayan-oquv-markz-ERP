@@ -234,17 +234,22 @@ const A = globalThis.A;
 
   /* =============== 7. Bazani tozalash himoyasi =============== */
   section('7. Bazani tozalash himoyasi');
-  /* Tasdiq so'zisiz — tozalanmaydi */
-  const noWord = await api('/api/backup/reset', { method: 'POST', body: {} });
+  /* Parolsiz — umuman o'tmaydi (birinchi to'siq) */
+  const noPw = await api('/api/backup/reset', { method: 'POST', body: { confirm: 'O’CHIRAMAN' } });
+  eq('Parolsiz tozalanmadi', noPw.status, 403);
+  /* Tasdiq so'zisiz — tozalanmaydi (ikkinchi to'siq) */
+  const noWord = await api('/api/backup/reset', { method: 'POST', body: { password: PASS } });
   eq('Tasdiq so’zisiz tozalanmadi', noWord.status, 400);
-  const badWord = await api('/api/backup/reset', { method: 'POST', body: { confirm: 'ha' } });
+  const badWord = await api('/api/backup/reset', {
+    method: 'POST', body: { confirm: 'ha', password: PASS }
+  });
   eq('Noto’g’ri so’z bilan ham tozalanmadi', badWord.status, 400);
   /* Baza o'zgarmaganini tekshiramiz */
   ok('B o’quvchisi hali ham joyida', !!(await get('students/' + ID('sb'))));
   /* Direktor bo'lmagan odam tozalay olmaydi */
   if (tLogin.cookie) {
     const tReset = await api('/api/backup/reset', {
-      method: 'POST', body: { confirm: 'O’CHIRAMAN' }, cookie: tLogin.cookie
+      method: 'POST', body: { confirm: 'O’CHIRAMAN', password: 'Sinov12345' }, cookie: tLogin.cookie
     });
     ok('O’qituvchi tozalay olmadi', tReset.status === 403, String(tReset.status));
     ok('B hali ham joyida', !!(await get('students/' + ID('sb'))));
