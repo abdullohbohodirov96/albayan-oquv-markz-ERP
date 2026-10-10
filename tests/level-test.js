@@ -341,6 +341,89 @@ const submit = (b) => req('/api/test/submit', { method: 'POST', body: b });
   const nl1 = Object.values((await req('/api/collection?name=leads', { cookie: dir })).json.items || {}).length;
   eq('Murojaatlar soni o’zgarmadi', nl1, nl0);
 
+  /* ---------- 8. Serverdagi tekshiruvlar ----------
+     Ilgari ism va telefon mijoz nima yozsa o'shandayligicha
+     murojaatga tushardi, muddat esa faqat ekranda sanalardi. */
+  section('8. Ism, telefon va muddat SERVERDA tekshiriladi');
+
+  const allLeads = async () =>
+    Object.values((await req('/api/collection?name=leads', { cookie: dir })).json.items || {});
+
+  /* a) Buzuq telefon murojaatga TUSHMAYDI (murojaatning o'zi ism
+        bo'yicha ochilaveradi — bu to'g'ri xulq).                 */
+  let n = 0;
+  for (const [phone, izoh] of [['12', 'juda qisqa'], ['abc', 'raqamsiz'],
+    ['<script>alert(1)</script>', 'kod']]) {
+    const nom = 'Buzuq Telefon ' + (++n);
+    const sx = await start();
+    const rx = await submit({ sessionId: sx.json.id, answers: [], name: nom, phone });
+    eq('Topshirildi (' + izoh + ')', rx.status, 200);
+    const mine2 = (await allLeads()).filter(l => l && l.name === nom)[0];
+    ok('  → murojaat ochildi (' + izoh + ')', !!mine2, JSON.stringify(mine2));
+    eq('  → buzuq telefon saqlanmadi (' + izoh + ')', mine2 && mine2.phone, '');
+  }
+  ok('Kod hech qayerda saqlanmadi',
+    !(await allLeads()).some(l => /<script/i.test(JSON.stringify(l))), '');
+  const pl = Object.values((await req('/api/collection?name=placements', { cookie: dir })).json.items || {});
+  ok('Natijada ham kod yo’q', !pl.some(x => /<script/i.test(JSON.stringify(x))), '');
+
+  /* b) To'g'ri telefon normallashtiriladi, ism tozalanadi */
+  const sOk = await start();
+  await submit({ sessionId: sOk.json.id, answers: [], name: ' Ali  Valiyev ', phone: '90 123 45 67' });
+  const mineLead = (await allLeads()).filter(l => l && l.name === 'Ali Valiyev')[0];
+  ok('To’g’ri telefon bilan murojaat ochildi', !!mineLead,
+    JSON.stringify((await allLeads()).map(l => l.name)).slice(0, 200));
+  if (mineLead) {
+    eq('  → telefon normallashtirildi', mineLead.phone, '+998901234567');
+    eq('  → ismdagi ortiqcha bo’shliq olib tashlandi', mineLead.name, 'Ali Valiyev');
+  }
+
+  /* c) MUDDAT serverda majburiy — sessiya muddatini o'tkazib yuboramiz */
+  const sLate = await start();
+  const sesPath = 'testsess/' + sLate.json.id;
+  /* Sessiya hujjati mijozga berilmaydi, shuning uchun to'g'ridan-to'g'ri
+     bazaga yozib bo'lmaydi — muddatni TEST_TTL_MS orqali tekshiramiz. */
+  ok('Sessiya hujjati mijozga ochilmaydi',
+    (await req('/api/doc?path=' + encodeURIComponent(sesPath), { cookie: dir })).status === 403, '');
+
+  /* Muddat ALOHIDA serverda tekshiriladi: TTL 1 soniya qilinadi.
+     Shunda "ekranda vaqt tugadi" emas, SERVER rad etishi ko'rinadi. */
+  await (async () => {
+    const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'alb-lvl-ttl-'));
+    const port2 = 3399;
+    const base2 = 'http://localhost:' + port2;
+    const srv2 = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'index.js')], {
+      env: Object.assign({}, process.env, {
+        DATA_DIR: dir2, DB_DRIVER: 'sqlite', DATABASE_URL: '',
+        BACKUP_DIR: path.join(dir2, 'backups'), PORT: String(port2),
+        SEED_DIRECTOR_PASSWORD: PASS, TEST_MAX_STARTS: '500',
+        TEST_LIMIT_MS: '800', TEST_GRACE_MS: '0'
+      }),
+      stdio: 'ignore'
+    });
+    let up = false;
+    for (let i = 0; i < 60 && !up; i++) {
+      await new Promise(r => setTimeout(r, 300));
+      up = await fetch(base2 + '/api/health').then(r => r.status === 200).catch(() => false);
+    }
+    ok('Qisqa muddatli server ko’tarildi', up);
+    if (up) {
+      const st2 = await fetch(base2 + '/api/test/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+      }).then(r => r.json());
+      await new Promise(r => setTimeout(r, 1400));       // muddat o'tsin
+      const lateRes = await fetch(base2 + '/api/test/submit', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: st2.id, answers: [], name: 'Kech', phone: '901234567' })
+      });
+      const lateText = await lateRes.text();
+      eq('Muddati o’tgan test SERVERDA rad etildi', lateRes.status, 400);
+      ok('  → sabab aytildi', /muddat/i.test(lateText), lateText.slice(0, 120));
+    }
+    try { srv2.kill('SIGKILL'); } catch (e) { }
+    try { fs.rmSync(dir2, { recursive: true, force: true }); } catch (e) { }
+  })();
+
   stopServer();
   console.log(out.join('\n'));
   console.log('\n' + '─'.repeat(52));

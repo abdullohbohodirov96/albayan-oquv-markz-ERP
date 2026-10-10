@@ -2052,9 +2052,18 @@ async function handleApi(req, res, url) {
   if (route === 'test/submit' && req.method === 'POST') {
     const ip = clientIp(req);
     const body = await readBody(req);
+    /* Ism va TELEFON serverda tozalanadi: ilgari mijoz nima yozsa
+       o'shandayligicha murojaatga (lead) tushardi — "<script>" ham,
+       "12" ham. Telefon noto'g'ri bo'lsa murojaat ochilmaydi.     */
+    const subName = String(body.name == null ? '' : body.name)
+      .replace(/[\u0000-\u001f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const rawPhone = String(body.phone == null ? '' : body.phone);
+    const digits = A.phoneDigits(rawPhone);
+    /* 9 xonali o'zbek raqami yoki 10–15 xonali xalqaro raqam */
+    const subPhone = (digits.length >= 9 && digits.length <= 15) ? A.normPhone(rawPhone) : '';
     const r = await levels.submit(store, {
       stamp, sessionId: body.sessionId, answers: body.answers,
-      name: body.name, phone: body.phone
+      name: subName, phone: subPhone
     });
     if (!r.ok) {
       return send(res, r.reason === 'ishlatilgan' ? 409 : 400, {
