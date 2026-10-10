@@ -216,6 +216,53 @@ async function dbDoc(path, dirCookie) {
       r.status + ' ' + r.text.slice(0, 120));
   }
 
+  /* ========== 1c. FAYL VA O'QUVCHI HISOBOTI EGALIGI ==========
+     GET /api/file va report/student da egalik umuman tekshirilmasdi:
+     ustoz ID bilan ISTALGAN faylni yuklab ola olardi va BEGONA
+     o'quvchining to'liq o'quv hisobotini ko'rardi.                */
+  section('1c. Ustoz begona fayl va hisobotni ololmaydi');
+  if (fileBId) {
+    const dl = await req('/api/file?id=' + encodeURIComponent(fileBId), { cookie: ustoz });
+    eq('Begona faylni yuklab ololmadi', dl.status, 403);
+  }
+  /* O'z o'quvchisining fayli esa ochilsin */
+  const fileA = await req('/api/file', {
+    method: 'POST', cookie: dir,
+    body: {
+      name: 'ozi.txt', type: 'text/plain', purpose: 'dars', refPath: 'students/pst_a',
+      data: Buffer.from('o’z fayli').toString('base64')
+    }
+  });
+  const fileAId = fileA.json && (fileA.json.file || {}).id;
+  if (fileAId) {
+    const dl = await req('/api/file?id=' + encodeURIComponent(fileAId), { cookie: ustoz });
+    eq('O’z o’quvchisining faylini ochdi', dl.status, 200);
+  }
+  /* Ustoz faylni BEGONA yozuvga bog'lay olmasin */
+  const badRef = await req('/api/file', {
+    method: 'POST', cookie: ustoz,
+    body: {
+      name: 'tiqish.txt', type: 'text/plain', purpose: 'dars', refPath: 'students/pst_b',
+      data: Buffer.from('tiqilgan').toString('base64')
+    }
+  });
+  eq('Begona o’quvchiga fayl bog’lay olmadi', badRef.status, 403);
+  const okRef = await req('/api/file', {
+    method: 'POST', cookie: ustoz,
+    body: {
+      name: 'ozi2.txt', type: 'text/plain', purpose: 'dars', refPath: 'students/pst_a',
+      data: Buffer.from('o’ziniki').toString('base64')
+    }
+  });
+  eq('O’z o’quvchisiga bog’lay oldi', okRef.status, 200);
+
+  const repB = await req('/api/report/student?id=pst_b', { cookie: ustoz });
+  eq('Begona o’quvchi hisoboti berilmadi', repB.status, 403);
+  const repA = await req('/api/report/student?id=pst_a', { cookie: ustoz });
+  eq('O’z o’quvchisi hisoboti berildi', repA.status, 200);
+  const repDir = await req('/api/report/student?id=pst_b', { cookie: dir });
+  eq('Direktorga ikkala hisobot ham ochiq', repDir.status, 200);
+
   /* ================= 2. ISH HAQI TASDIQLASH ================= */
   section('2. Ish haqi: hisoblash va tasdiqlash ajratilgan');
   const PR = 'payroll/2099-01__pstf_a';

@@ -224,12 +224,16 @@ function visibleData(user, all) {
         if (user.role !== 'oqituvchi') return d;
         /* refPath "students/<id>" yoki "groups/<id>" ko'rinishida */
         const ref = String(d.refPath || '').split('/');
-        if (ref[0] === 'students') return myStudentIds[ref[1]] ? d : null;
-        if (ref[0] === 'groups' || ref[0] === 'lessons') {
-          return myGroupIds[String(ref[1] || '').split('__')[0]] ? d : null;
+        const rid = String(ref[1] || '');
+        if (ref[0] === 'students') return myStudentIds[rid] ? d : null;
+        if (ref[0] === 'groups' || ref[0] === 'lessons' || ref[0] === 'lessonlog') {
+          return myGroupIds[rid.split('__')[0]] ? d : null;
         }
+        /* Umumiy o'quv dasturi — guruhga bog'liq emas */
+        if (ref[0] === 'topics' || ref[0] === 'materials' ||
+          ref[0] === 'homework' || ref[0] === 'modules') return d;
         /* Kimga tegishli ekani noma'lum bo'lsa — faqat o'zi yuklagani */
-        return d.byUserId === user.id ? d : null;
+        return d.by === user.id ? d : null;
       }
       case 'chats':
         // "type" mijozdan keladi — unga ishonilmaydi. Umumiy suhbat faqat bitta.

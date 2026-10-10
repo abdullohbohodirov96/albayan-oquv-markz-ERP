@@ -1533,10 +1533,12 @@ async function filterReadDoc(user, p, data) {
     }
     if (col === 'files') {
       const ref = String(data.refPath || '').split('/');
-      if (ref[0] === 'students') { if (!sc.sid[ref[1]]) return false; }
-      else if (ref[0] === 'groups' || ref[0] === 'lessons') {
-        if (!sc.gid[String(ref[1] || '').split('__')[0]]) return false;
-      } else if (data.byUserId !== user.id) return false;
+      const rid = String(ref[1] || '');
+      const open = ['topics', 'materials', 'homework', 'modules'].indexOf(ref[0]) >= 0;
+      if (ref[0] === 'students') { if (!sc.sid[rid]) return false; }
+      else if (ref[0] === 'groups' || ref[0] === 'lessons' || ref[0] === 'lessonlog') {
+        if (!sc.gid[rid.split('__')[0]]) return false;
+      } else if (!open && data.by !== user.id) return false;
     }
   }
   return data;
@@ -2274,6 +2276,31 @@ async function handleApi(req, res, url) {
     const g = await store.get('groups/' + String(gid || ''));
     return !!(g && g.teacherId && g.teacherId === user.staffId);
   }
+  /** O'quvchi shu foydalanuvchiga tegishlimi (ustoz uchun — o'z guruhida) */
+  async function ownsStudent(sid) {
+    if (user.role !== 'oqituvchi') return true;
+    const sc = await teacherScope(user);
+    return !!(sc && sc.sid[String(sid || '')]);
+  }
+  /** Fayl qaysi yozuvga bog'langan va u shu foydalanuvchinikimi */
+  async function ownsRef(refPath) {
+    if (user.role !== 'oqituvchi') return true;
+    const seg = String(refPath || '').split('/');
+    const id = String(seg[1] || '');
+    if (seg[0] === 'students') return ownsStudent(id);
+    if (seg[0] === 'groups') return ownsGroup(id);
+    /* lessons/<guruh>__<oy> va lessonlog/<guruh>__<sana> — ikkalasida
+       ham birinchi qism guruh identifikatori.                       */
+    if (seg[0] === 'lessons' || seg[0] === 'lessonlog') return ownsGroup(id.split('__')[0]);
+    /* Umumiy o'quv dasturi — guruhga bog'liq emas, hammaga ochiq */
+    if (seg[0] === 'topics' || seg[0] === 'materials' ||
+      seg[0] === 'homework' || seg[0] === 'modules') return true;
+    if (seg[0] === 'quizzes') {
+      const q = await store.get('quizzes/' + id);
+      return !q || !q.groupId ? true : ownsGroup(q.groupId);
+    }
+    return false;      // noma'lum bog'lanish — ruxsat berilmaydi
+  }
 
   /* ---- Dastur ---- */
   if (route === 'curriculum' && req.method === 'GET') {
@@ -2306,6 +2333,11 @@ async function handleApi(req, res, url) {
   if (route === 'file' && req.method === 'POST') {
     if (!A.can(user, 'curriculum.edit') && !A.can(user, 'lesson.log')) return nope();
     const body = await readBody(req, BODY_MAX_FILE);
+    /* refPath mijozdan keladi — ustoz faylni O'Z guruhi yoki
+       o'quvchisi bo'lmagan yozuvga bog'lay olmasin.              */
+    if (body.refPath && !await ownsRef(body.refPath)) {
+      return nope('Bu yozuvga fayl bog’lay olmaysiz.');
+    }
     const r = await files.save(store, {
       name: body.name, type: body.type, dataBase64: body.data,
       purpose: body.purpose, refPath: body.refPath,
@@ -2325,6 +2357,12 @@ async function handleApi(req, res, url) {
     if (!A.can(user, 'group.view') && !A.can(user, 'student.view')) return nope();
     const rec = await files.meta(store, String(url.searchParams.get('id') || ''));
     if (!rec) return send(res, 404, { error: 'Fayl topilmadi.' });
+    /* Ilgari egalik umuman tekshirilmasdi: ustoz ID bilan ISTALGAN
+       faylni (boshqa guruhning vazifasi, begona o'quvchi hujjati)
+       yuklab ola olardi.                                           */
+    if (!await ownsRef(rec.refPath) && rec.by !== user.id) {
+      return nope('Bu fayl sizga tegishli emas.');
+    }
     const buf = files.readBody(rec);
     if (!buf) return send(res, 404, { error: 'Fayl topilmadi.' });
     res.writeHead(200, {
@@ -2530,7 +2568,11 @@ async function handleApi(req, res, url) {
   /* ---- Hisobotlar ---- */
   if (route === 'report/student' && req.method === 'GET') {
     if (!A.can(user, 'reports.learning') && !A.can(user, 'student.view')) return nope();
-    const r = await progress.forStudent(store, String(url.searchParams.get('id') || ''), {
+    const sid = String(url.searchParams.get('id') || '');
+    /* Guruh hisobotida tekshiruv bor edi, o'quvchinikida yo'q:
+       ustoz ID bilan BEGONA o'quvchining to'liq hisobotini olardi. */
+    if (!await ownsStudent(sid)) return nope('Bu o’quvchi sizga tegishli emas.');
+    const r = await progress.forStudent(store, sid, {
       from: url.searchParams.get('from'), to: url.searchParams.get('to')
     });
     if (!r) return send(res, 404, { error: 'O’quvchi topilmadi.' });
