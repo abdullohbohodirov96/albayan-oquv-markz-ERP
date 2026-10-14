@@ -188,12 +188,13 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   /* ---------- 4. Kuniga bir IP chegarasi ---------- */
   section('4. Spam chegarasi (bir IP, bir kun)');
   let got429 = false, okCount = 0;
+  const SIP = '10.9.' + (Date.now() % 250) + '.' + (Math.floor(Math.random() * 250) + 1);
   for (let i = 0; i < 25; i++) {
-    const x = await submit({ ism: 'Spam ' + i, tel: '90' + String(1000000 + i).slice(-7) }, '10.9.9.9');
+    const x = await submit({ ism: 'Spam ' + i, tel: '90' + String(1000000 + i).slice(-7) }, SIP);
     if (x.status === 429) { got429 = true; break; }
     if (x.status === 200) okCount++;
   }
-  ok('Bir IP dan kuniga chegara ishladi (429), qabul qilingan: ' + okCount, got429 && okCount <= 20);
+  ok('Bir IP dan kuniga chegara ishladi: 20 ta qabul, keyin 429', got429 && okCount === 20, okCount);
 
   /* ---------- 5. Rasm: fon, logotip, banner ---------- */
   section('5. Rasm: fon, logotip, banner');
@@ -277,6 +278,26 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   const us = await req('/api/bootstrap', { cookie: ustoz });
   eq('O’qituvchiga statistika tushmaydi', colOf(us, 'formstat').filter(s => s.id === FID).length, 0);
 
+  /* ---------- 7b. Parallel yuklama: hisoblagich va chegara yo'qotmasin ---------- */
+  section('7b. Parallel so’rovlar (poyga): hisoblagich va kunlik chegara');
+  const st0 = await statOf();
+  await Promise.all(Array.from({ length: 60 }, (_, i) => ev('view', '', '10.6.' + (i % 30) + '.' + i)));
+  await Promise.all(Array.from({ length: 60 }, (_, i) => ev('reach', 'ism', '10.6.' + (i % 30) + '.' + i)));
+  const st1 = await statOf();
+  eq('60 ta parallel ko’rish → +60 (hech biri yo’qolmadi)', st1.views - st0.views, 60);
+  eq('60 ta parallel "ism"ga yetdi → +60', (st1.fields.ism || 0) - (st0.fields.ism || 0), 60);
+  /* Har yurgizishda yangi IP — kunlik chegara bazada saqlanadi */
+  const PIP = '10.6.' + (Date.now() % 250) + '.' + (Math.floor(Math.random() * 250) + 1);
+  const par = await Promise.all(Array.from({ length: 40 }, (_, i) =>
+    submit({ ism: 'Parallel ' + i, tel: '91' + String(1000000 + i).slice(-7) }, PIP)));
+  const acc = par.filter(x => x.status === 200).length;
+  eq('Bir IP dan 40 ta parallel ariza → roppa-rosa 20 ta qabul', acc, 20);
+  eq('Qolgani 429', par.filter(x => x.status === 429).length, 20);
+  subsNow = await req('/api/bootstrap', { cookie: dir });
+  eq('Bazada ham 20 ta (ko’p ham, kam ham emas)', subsOf(subsNow).filter(s => s.formId === FID && s.ip === PIP).length, 20);
+  const st2 = await statOf();
+  eq('Yuborganlar hisoblagichi +20', st2.submits - st1.submits, 20);
+
   /* ---------- 8. O'chirish / o'chirilgan forma ---------- */
   section('8. Forma holati va o’chirish');
   r = await req('/api/forms/save', { method: 'POST', cookie: dir, body: Object.assign({}, form, { id: FID, slug, active: false }) });
@@ -294,7 +315,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   r = await req('/api/forms/delete', { method: 'POST', cookie: dir, body: { id: FID2 } });
   eq('Ikkinchi forma o’chirildi', r.status, 200);
   subsNow = await req('/api/bootstrap', { cookie: dir });
-  eq('Forma o’chsa ham murojaatlar qoladi', leadsOf(subsNow).filter(l => l.formId === FID).length, 2 + okCount);
+  eq('Forma o’chsa ham murojaatlar qoladi', leadsOf(subsNow).filter(l => l.formId === FID).length, 2 + okCount + 20);
   const stAfter = colOf(subsNow, 'formstat').find(s => s.id === FID);
   ok('Statistika forma bilan o’chdi', !stAfter);
 

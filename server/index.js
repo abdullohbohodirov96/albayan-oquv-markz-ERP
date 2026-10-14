@@ -2380,14 +2380,15 @@ async function handleApi(req, res, url) {
     if (!chk.ok) {
       return send(res, 400, { error: 'To’ldiring: ' + chk.errors.slice(0, 3).join(', ') });
     }
-    /* Bir IP dan kuniga chegara — ro'yxat ko'milib ketmasin */
+    /* Bir IP dan kuniga chegara — ro'yxat ko'milib ketmasin.
+       Tekshiruv va yozish bir IP uchun NAVBAT bilan: parallel 100 ta
+       so'rov bir vaqtda "hali 0 ta" deb o'qib, hammasi o'tib ketmasin. */
     const fip = clientIp(req);
     const today = stamp().slice(0, 10);
+    const result = await forms.serial('fsub:' + fip, async () => {
     const subs = await forms.listCol(store, forms.SUB);
     const fromIp = subs.filter(x => x.ip === fip && String(x.at || '').slice(0, 10) === today).length;
-    if (fromIp >= Number(process.env.FORM_IP_DAY_MAX || 20)) {
-      return send(res, 429, { error: 'Arizangiz qabul qilindi. Shoshilinch bo’lsa, telefon qiling.' });
-    }
+    if (fromIp >= Number(process.env.FORM_IP_DAY_MAX || 20)) return { limit: true };
     /* Murojaat (lead) — CRM ga tushadi */
     const funnels = (await store.list('funnels/')).map(x => x.data).filter(Boolean);
     const funnel = funnels.filter(x => x.isDefault)[0] || funnels[0] || null;
@@ -2414,6 +2415,9 @@ async function handleApi(req, res, url) {
     });
     await forms.recordEvent(store, f.id, 'submit', '', stamp().slice(0, 10));
     await writeAudit(null, 'Forma orqali ariza', f.title, (chk.name || '') + ' ' + (chk.phone || ''));
+    return { ok: true };
+    });
+    if (result.limit) return send(res, 429, { error: 'Arizangiz qabul qilindi. Shoshilinch bo’lsa, telefon qiling.' });
     try { require('./bot').notifyStaff('Yangi ariza (' + f.title + '): ' + (chk.name || '—') + ' ' + (chk.phone || '')); } catch (e) { /* bot o'chiq bo'lsa muhim emas */ }
     return send(res, 200, { ok: true });
   }

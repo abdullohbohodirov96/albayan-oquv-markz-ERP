@@ -126,7 +126,8 @@ function cleanFields(list) {
 }
 
 /** Shaklni saqlash (yaratish yoki yangilash) */
-async function save(store, data, opts) {
+async function save(store, data, opts) { return serial('forms', () => saveNow(store, data, opts)); }
+async function saveNow(store, data, opts) {
   const title = txt(data && data.title, 120);
   if (!title) return { ok: false, reason: 'nom' };
   const id = txt(data && data.id, 40) || rid('frm');
@@ -278,6 +279,24 @@ function checkAnswers(form, answers, A) {
   return { ok: !errs.length, errors: errs, answers: out, name, phone };
 }
 
+/* ---------------- Navbat ----------------
+   Hisoblagich (o'qi → +1 → yoz) va "bir IP dan kuniga N ta" tekshiruvi
+   parallel so'rovlarda poyga qiladi: ikki so'rov bir xil eski qiymatni
+   o'qib, ikkalasi ham yozsa — bittasi yo'qoladi. PostgreSQL da bu aniq
+   ko'rindi (100 ta parallel ko'rish → 2 ta yozilgan). Shuning uchun bir
+   kalit bo'yicha ishlar ketma-ket bajariladi. Server bitta jarayonda
+   ishlaydi (Render — bitta instance), shuning uchun jarayon ichidagi
+   navbat yetarli.                                                   */
+const queues = new Map();
+function serial(key, fn) {
+  const prev = queues.get(key) || Promise.resolve();
+  const p = prev.then(() => fn());
+  const tail = p.catch(() => { });
+  queues.set(key, tail);
+  tail.then(() => { if (queues.get(key) === tail) queues.delete(key); });
+  return p;
+}
+
 /* ---------------- Statistika ---------------- */
 function emptyStat(formId) {
   return { id: formId, views: 0, starts: 0, submits: 0, fields: {}, days: {} };
@@ -286,6 +305,9 @@ function emptyStat(formId) {
     reach (maydonga yetdi), submit (yubordi). Kun bo'yicha ham. */
 async function recordEvent(store, formId, ev, fieldId, day) {
   if (EVENTS.indexOf(ev) < 0 || !validId(formId)) return false;
+  return serial('stat:' + formId, () => recordEventNow(store, formId, ev, fieldId, day));
+}
+async function recordEventNow(store, formId, ev, fieldId, day) {
   const p = STAT + formId;
   const s = Object.assign(emptyStat(formId), (await store.get(p)) || {});
   s.fields = s.fields || {}; s.days = s.days || {};
@@ -473,5 +495,5 @@ function draft(data) {
 module.exports = {
   COL, BG, SUB, STAT, TYPES, TEMPLATES, MAX_FIELDS, IMG, EVENTS, DEFAULT_CC,
   slugify, validSlug, validId, save, saveBg, saveImg, delImg, imgPath, validImage, bySlug,
-  publicView, checkAnswers, phoneOf, recordEvent, emptyStat, page, draft, listCol, rid, txt
+  publicView, checkAnswers, phoneOf, recordEvent, emptyStat, serial, page, draft, listCol, rid, txt
 };
