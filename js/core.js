@@ -194,7 +194,9 @@
     'holidays', 'pauses', 'makeups', 'questions', 'feedback',
     'quizzes', 'quizres', 'asks', 'parents', 'files',
     /* Saytdagi izohlar (markaz tasdiqlaydi) */
-    'reviews'];
+    'reviews',
+    /* Formalar va kelgan arizalar */
+    'forms', 'formsub', 'formstat'];
   var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 

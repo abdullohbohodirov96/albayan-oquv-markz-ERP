@@ -568,7 +568,22 @@
       /* Raqam bosilsa telefon o'zi teradi — qo'lda ko'chirish shart emas */
       { label: 'Telefon', render: function (l) { return UI.phoneLink(l.phone); } },
       { label: 'Kurs', render: function (l) { return Q.courseName(l.courseId); } },
-      { label: 'Manba', key: 'source' },
+      {
+        label: 'Manba', render: function (l) {
+          /* Forma orqali kelgan bo'lsa — javoblari shu yerda ochiladi */
+          if (!l.viaForm) return l.source || '';
+          return h('button', {
+            class: 'btn sm', onclick: function () {
+              UI.modal({
+                title: l.name + ' — forma javoblari',
+                body: [A.formAnswersBlock ? A.formAnswersBlock(l) : null,
+                  h('p', { class: 'small muted' }, 'Manba: ' + (l.source || ''))].filter(Boolean),
+                actions: [{ label: 'Yopish' }]
+              });
+            }
+          }, [UI.icon('task'), l.formTitle || 'Forma']);
+        }
+      },
       { label: 'Mas’ul', render: function (l) { return Q.staffName(l.ownerStaffId); } },
       {
         label: 'Keyingi aloqa', render: function (l) {

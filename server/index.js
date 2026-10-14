@@ -22,6 +22,7 @@ const quiz = require('./quiz');
 const progress = require('./progress');
 const seo = require('./seo');
 const parents = require('./parents');
+const forms = require('./forms');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
 function backupReadSafe(name) {
@@ -1778,7 +1779,9 @@ const COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students
   'holidays', 'pauses', 'makeups', 'questions', 'feedback',
   'quizzes', 'quizres', 'asks', 'parents', 'files',
   /* Saytdagi izohlar — markaz tasdiqlaydi */
-  'reviews'];
+  'reviews',
+  /* Formalar va kelgan arizalar */
+  'forms', 'formsub', 'formstat'];
 
 async function apiBootstrap(user) {
   const all = await store.all();
@@ -2332,6 +2335,89 @@ async function handleApi(req, res, url) {
 
      Yuboruvchining IP si va yuborilgan vaqti ichkarida saqlanadi (spam
      bo'lsa topish uchun), lekin /api/public ga CHIQMAYDI.               */
+  /* ---------- FORMALAR (ochiq) ----------
+     /api/form?slug=…      — shakl ta'rifi (ichki maydonlarsiz)
+     /api/form/submit      — ariza yuborish → murojaat (lead) ochiladi
+     /api/form-bg?id=…     — fon rasmi (faqat faol shakl uchun)    */
+  if (route === 'form' && req.method === 'GET') {
+    const f = await forms.bySlug(store, String(url.searchParams.get('slug') || ''));
+    if (!f || f.active === false) return send(res, 404, { error: 'Forma topilmadi.' });
+    return send(res, 200, { form: forms.publicView(f) });
+  }
+  if (route === 'form-bg' && req.method === 'GET') {
+    const id = String(url.searchParams.get('id') || '');
+    const kind = String(url.searchParams.get('kind') || 'bg');
+    if (!forms.validId(id) || !forms.IMG[kind]) return send(res, 404, 'Topilmadi');
+    const f = await store.get(forms.COL + id);
+    const bg = f && f.active !== false ? await store.get(forms.imgPath(id, kind)) : null;
+    const m = bg && /^data:(image\/[a-z]+);base64,(.+)$/.exec(bg.data || '');
+    if (!m) return send(res, 404, 'Topilmadi');
+    const buf = Buffer.from(m[2], 'base64');
+    res.writeHead(200, Object.assign({}, securityHeaders(req), {
+      'Content-Type': m[1], 'Content-Length': buf.length,
+      'Cache-Control': 'public, max-age=86400'
+    }));
+    return res.end(buf);
+  }
+  /* Statistika: sahifa ochildi / yozishni boshladi / maydonga yetdi.
+     Shaxsiy ma'lumot yozilmaydi — faqat sanoq.                        */
+  if (route === 'form/event' && req.method === 'POST') {
+    if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov.' });
+    const body = await readBody(req, 4000);
+    const f = await forms.bySlug(store, String(body.slug || ''));
+    if (!f || f.active === false) return send(res, 404, { error: 'Forma topilmadi.' });
+    const ev = String(body.ev || '');
+    if (ev === 'submit' || forms.EVENTS.indexOf(ev) < 0) return send(res, 400, { error: 'Noto’g’ri voqea.' });
+    await forms.recordEvent(store, f.id, ev, String(body.field || ''), stamp().slice(0, 10));
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'form/submit' && req.method === 'POST') {
+    if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov. Birozdan keyin urinib ko’ring.' });
+    const body = await readBody(req);
+    const f = await forms.bySlug(store, String(body.slug || ''));
+    if (!f || f.active === false) return send(res, 404, { error: 'Forma topilmadi.' });
+    const chk = forms.checkAnswers(f, body.answers, A);
+    if (!chk.ok) {
+      return send(res, 400, { error: 'To’ldiring: ' + chk.errors.slice(0, 3).join(', ') });
+    }
+    /* Bir IP dan kuniga chegara — ro'yxat ko'milib ketmasin */
+    const fip = clientIp(req);
+    const today = stamp().slice(0, 10);
+    const subs = await forms.listCol(store, forms.SUB);
+    const fromIp = subs.filter(x => x.ip === fip && String(x.at || '').slice(0, 10) === today).length;
+    if (fromIp >= Number(process.env.FORM_IP_DAY_MAX || 20)) {
+      return send(res, 429, { error: 'Arizangiz qabul qilindi. Shoshilinch bo’lsa, telefon qiling.' });
+    }
+    /* Murojaat (lead) — CRM ga tushadi */
+    const funnels = (await store.list('funnels/')).map(x => x.data).filter(Boolean);
+    const funnel = funnels.filter(x => x.isDefault)[0] || funnels[0] || null;
+    const stages = funnel ? A.funnelStages(funnel) : [];
+    const lid = 'led_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+    const sid = forms.rid('fs');
+    const lines = (f.fields || []).map(q => {
+      const v = chk.answers[q.id];
+      const t = Array.isArray(v) ? v.join(', ') : v;
+      return t ? q.label + ': ' + t : '';
+    }).filter(Boolean);
+    await store.set('leads/' + lid, {
+      id: lid, funnelId: funnel ? funnel.id : '', name: chk.name || 'Forma: ' + f.title,
+      phone: chk.phone || '', courseId: f.courseId || '',
+      source: 'Forma: ' + f.title, ownerStaffId: '',
+      stage: stages[0] ? stages[0].id : 'yangi',
+      note: lines.join(' · ').slice(0, 1500),
+      formId: f.id, formTitle: f.title, formAnswers: chk.answers, formSubId: sid,
+      nextContact: A.today(), ip: fip, createdAt: stamp(), viaForm: true
+    });
+    await store.set(forms.SUB + sid, {
+      id: sid, formId: f.id, formTitle: f.title, answers: chk.answers,
+      name: chk.name, phone: chk.phone, leadId: lid, ip: fip, at: stamp()
+    });
+    await forms.recordEvent(store, f.id, 'submit', '', stamp().slice(0, 10));
+    await writeAudit(null, 'Forma orqali ariza', f.title, (chk.name || '') + ' ' + (chk.phone || ''));
+    try { require('./bot').notifyStaff('Yangi ariza (' + f.title + '): ' + (chk.name || '—') + ' ' + (chk.phone || '')); } catch (e) { /* bot o'chiq bo'lsa muhim emas */ }
+    return send(res, 200, { ok: true });
+  }
+
   if (route === 'review' && req.method === 'POST') {
     if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov. Birozdan keyin urinib ko’ring.' });
     const body = await readBody(req);
@@ -2796,6 +2882,67 @@ async function handleApi(req, res, url) {
   }
 
   /* ---- Ota-ona hisobi ---- */
+  /* ---------- FORMALAR (xodim) ---------- */
+  if (route === 'forms/save' && req.method === 'POST') {
+    if (!A.can(user, 'lead.edit')) return nope();
+    const body = await readBody(req);
+    const r = await forms.save(store, body, { byUserId: user.id, stamp });
+    if (!r.ok) return send(res, 400, { error: 'Forma nomini yozing.' });
+    await writeAudit(user, 'Forma saqlandi', r.rec.title, '/f/' + r.rec.slug);
+    return send(res, 200, { ok: true, form: r.rec });
+  }
+  if (route === 'forms/bg' && req.method === 'POST') {
+    if (!A.can(user, 'lead.edit')) return nope();
+    const body = await readBody(req, BODY_MAX_FILE);
+    const kind = String(body.kind || 'bg');
+    const r = await forms.saveImg(store, String(body.id || ''), kind, body.data);
+    if (!r.ok) {
+      return send(res, r.reason === 'topilmadi' ? 404 : 400, {
+        error: r.reason === 'turi' ? 'Faqat JPEG, PNG yoki WebP rasm.'
+          : r.reason === 'kattaligi' ? 'Rasm juda katta (' + (kind === 'logo' ? '300' : '700') + ' KB gacha).' : 'Forma topilmadi.'
+      });
+    }
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'forms/img-del' && req.method === 'POST') {
+    if (!A.can(user, 'lead.edit')) return nope();
+    const body = await readBody(req);
+    const r = await forms.delImg(store, String(body.id || ''), String(body.kind || ''));
+    if (!r.ok) return send(res, 404, { error: 'Forma topilmadi.' });
+    return send(res, 200, { ok: true });
+  }
+  /* Namuna: saqlanmagan shaklni ko'rish (yuborish ishlamaydi) */
+  if (route === 'forms/preview' && req.method === 'POST') {
+    if (!A.can(user, 'lead.edit')) return nope();
+    const body = await readBody(req, BODY_MAX_FILE);
+    const d = forms.draft(body);
+    const inline = {};
+    ['bg', 'logo', 'banner'].forEach(k => {
+      const v = body.inline && body.inline[k];
+      if (typeof v === 'string' && v && !forms.validImage(v, k)) inline[k] = v;
+    });
+    const settings = (await store.get('meta/settings')) || {};
+    const html = forms.page(d, settings, { preview: true, inline, bgv: Date.now(), logov: Date.now(), bannerv: Date.now() });
+    return send(res, 200, html, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }, req);
+  }
+  if (route === 'forms/delete' && req.method === 'POST') {
+    if (!A.can(user, 'lead.edit')) return nope();
+    const body = await readBody(req);
+    const id = String(body.id || '');
+    const f = await store.get(forms.COL + id);
+    if (!f) return send(res, 404, { error: 'Forma topilmadi.' });
+    if (store.del) {
+      await store.del(forms.COL + id);
+      for (const k of Object.keys(forms.IMG)) await store.del(forms.imgPath(id, k)).catch(() => { });
+      await store.del(forms.STAT + id).catch(() => { });
+    }
+    await writeAudit(user, 'Forma o’chirildi', f.title, '');
+    return send(res, 200, { ok: true });
+  }
+  if (route === 'forms/templates' && req.method === 'GET') {
+    return send(res, 200, { templates: forms.TEMPLATES, types: forms.TYPES });
+  }
+
   if (route === 'parent' && req.method === 'POST') {
     if (!A.can(user, 'parent.manage')) return nope();
     const body = await readBody(req);
@@ -3538,6 +3685,17 @@ const server = http.createServer(async (req, res) => {
         'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache',
         'X-Content-Type-Options': 'nosniff', ETag: etag
       }, Buffer.from(page, 'utf8'));
+    }
+    /* Forma sahifasi: /f/<slug> — kirishsiz, har kimga */
+    if (req.method === 'GET' && /^\/f\/[a-z0-9-]{2,40}\/?$/.test(url.pathname)) {
+      const slug = url.pathname.split('/')[2];
+      const f = await forms.bySlug(store, slug);
+      if (!f || f.active === false) return send(res, 404, 'Forma topilmadi', { 'Content-Type': 'text/plain; charset=utf-8' }, req);
+      const settings = (await store.get('meta/settings')) || {};
+      const html = forms.page(f, settings, { bgv: f.bgAt || 0, logov: f.logoAt || 0, bannerv: f.bannerAt || 0 });
+      return sendMaybeZip(req, res, 200, {
+        'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache'
+      }, Buffer.from(html, 'utf8'));
     }
     if (req.method === 'GET' && url.pathname === '/robots.txt') {
       return send(res, 200, seo.robots(req.headers.host || 'localhost'),

@@ -23,6 +23,7 @@ function writePermFor(docPath) {
     courses: 'group.edit',
     rooms: 'group.edit',
     leads: 'lead.edit',
+    /* Formalar faqat /api/forms/* orqali — tozalash serverda */
     /* Saytdagi izohlar: markaz tasdiqlaydi yoki o'chiradi */
     reviews: 'settings.edit',
     funnels: 'settings.edit',
@@ -60,6 +61,7 @@ function writePermFor(docPath) {
   if (col === 'lessons') return 'attendance.mark';
   if (col === 'botstate' || col === 'botin') return '__server__';  // faqat bot yozadi
   if (col === 'staffsess' || col === 'kabsess' || col === 'linktokens') return '__server__';
+  if (col === 'forms' || col === 'formbg' || col === 'formsub' || col === 'formstat') return '__server__';
   return map[col] || '__server__';
 }
 
@@ -70,6 +72,7 @@ function readBlocked(docPath, user) {
   /* Sessiya va bir martalik tokenlar — hech kimga ko'rinmaydi */
   if (col === 'staffsess' || col === 'kabsess' || col === 'linktokens') return true;
   if (col === 'photos') return true;               // rasm faqat /api/photo orqali beriladi
+  if (col === 'formbg') return true;               // fon rasmi faqat /api/form-bg orqali
   /* Daraja testi: savollar ichida TO'G'RI JAVOB bor — hech kimga berilmaydi.
      Boshlangan test sessiyasi ham (savol ro'yxati) mijozga chiqmaydi.       */
   if (col === 'testq' || col === 'testsess') return true;
@@ -156,6 +159,9 @@ function visibleData(user, all) {
       case 'groups': case 'courses': case 'rooms': case 'memberships':
         return A.can(user, 'group.view') || A.can(user, 'student.view');
       case 'leads': case 'funnels': return A.can(user, 'nav.leads');
+      /* Formalar va kelgan arizalar — murojaatlar bilan ishlaydiganlarga.
+         Fon rasmi (formbg) ro'yxatga tushmaydi — og'ir, /api/form-bg beradi. */
+      case 'forms': case 'formsub': case 'formstat': return A.can(user, 'nav.leads');
       /* Saytdagi izohlar — sozlamani boshqaradiganlarga (tasdiqlash uchun) */
       case 'reviews': return A.can(user, 'settings.edit');
       /* Daraja testi natijalari — murojaatlar bilan ishlaydiganlarga.

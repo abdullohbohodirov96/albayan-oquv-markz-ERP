@@ -133,6 +133,7 @@
   var NAV = [
     { id: 'dashboard', label: 'Bosh sahifa', icon: 'home', perm: 'nav.dashboard' },
     { id: 'leads', label: 'Murojaatlar', icon: 'phone', perm: 'nav.leads' },
+    { id: 'forms', label: 'Formalar', icon: 'task', perm: 'nav.leads' },
     { id: 'students', label: 'O’quvchilar', icon: 'users', perm: 'nav.students' },
     { id: 'groups', label: 'Guruhlar', icon: 'layers', perm: 'nav.groups' },
     { id: 'schedule', label: 'Jadval', icon: 'calendar', perm: 'nav.schedule' },

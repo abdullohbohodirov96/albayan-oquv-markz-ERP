@@ -267,6 +267,30 @@ kabineti.
 
 ---
 
+## 4-a2. Formalar — o'zingiz tuzadigan ariza shakllari
+
+Menyu → **Formalar** (Murojaatlar huquqi bo'lganlarga). Cheksiz forma tuzish mumkin:
+
+- **Savollar**: qisqa/uzun matn, telefon, ro'yxatdan tanlash, bitta variant, bir nechta
+  variant, raqam, sana. Har biri "Majburiy" bo'lishi mumkin. Ko'pi bilan 30 ta savol.
+- **Telefon** maydoni har doim bor va majburiy: sahifada `+998` turadi, odam faqat 9 ta
+  raqamni yozadi (`90 123 45 67`); `+998` bilan yozsa ham qabul qilinadi. Boshqa davlat
+  kodi savol sozlamasida almashtiriladi.
+- **Fon**: 10 ta tayyor shablon (CSS, rasm yuklanmaydi — sahifa darhol ochiladi) yoki
+  o'z rasmingiz (≤ 700 KB). **Logotip** (≤ 300 KB) sarlavha tepasida, **banner** (≤ 700 KB)
+  kartaning yuqorisida.
+- **Kontaktlar va ma'lumot** bo'limi: Sozlamalardagi telefon, manzil, ish vaqti, Telegram,
+  Instagram — plus formaning o'z qo'shimcha matni. Formada o'chirib qo'yish mumkin.
+- **Namunani ko'rish** — saqlamasdan telefonda qanday ko'rinishini ko'rsatadi.
+- **Havola**: `https://sayt/f/<slug>` — Instagram bio yoki Telegramga qo'yiladi.
+- Har yuborilgan ariza **Murojaat** ochadi (manba "Forma: …", javoblar murojaat ichida)
+  va formaning "Arizalar" jadvaliga tushadi (Excel'ga chiqarish bor).
+- **Statistika**: ko'rildi → boshladi → yubordi, har savolgacha nechta odam yetgani,
+  oxirgi 14 kun. Shaxsiy ma'lumot saqlanmaydi — faqat sanoq.
+- Himoya: bir IP dan daqiqasiga 60 so'rov, kuniga 20 ariza (`FORM_IP_DAY_MAX`);
+  variantlar ro'yxatdan tashqari qabul qilinmaydi; HTML qochiriladi; rasm faqat
+  JPEG/PNG/WebP; o'chirilgan forma havolasi va rasmlari 404.
+
 ## 4-b. O'quvchi kabineti — shaxsiy kod
 
 Har bir o'quvchiga **4 xonali shaxsiy kod** beriladi (masalan `4077`). Kod
@@ -451,6 +475,7 @@ node tests/i18n-audit.js        # tarjima qamrovi
 # Server ishlab turganda (alohida baza bilan):
 node tests/security-test.js  <port> <parol>    # maxfiy fayllar, huquqlar, pul
 node tests/perm-test.js      <port> <parol>    # yozuv kimga tegishli va holat o'zgarishi
+node tests/forma-test.js     <port> <parol>    # formalar: tuzish, ochiq sahifa, +998, rasm, statistika
 node tests/chat-test.js      <port> <parol>    # suhbat maxfiyligi va xabar yuborish
 node tests/chat-ui-test.js   <port> <parol>    # suhbat brauzer tomoni
 node tests/kabinet-test.js   <port> <parol>    # shaxsiy kod, ma'lumot va himoya
