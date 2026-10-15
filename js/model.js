@@ -81,7 +81,11 @@
       key: 'groups', label: 'Guruhlar va kurslar', perms: [
         { id: 'nav.groups', label: 'Bo’limni ko’rish' },
         { id: 'group.view', label: 'Guruhni ko’rish' },
-        { id: 'group.edit', label: 'Ochish va tahrirlash' }
+        { id: 'group.edit', label: 'Ochish va tahrirlash' },
+        /* Guruhni butunlay o'chirish — qaytarib bo'lmaydi. Tahrirlashdan
+           ALOHIDA huquq: standartda faqat direktorda, boshqaga rahbar
+           o'zi beradi.                                                 */
+        { id: 'group.delete', label: 'Guruhni butunlay o’chirish (qaytarib bo’lmaydi)' }
       ]
     },
     {

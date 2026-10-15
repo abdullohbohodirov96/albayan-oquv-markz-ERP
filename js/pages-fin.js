@@ -8,12 +8,12 @@
   var METHODS = [
     { value: 'naqd', label: 'Naqd' },
     { value: 'karta', label: 'Karta' },
-    { value: 'bank', label: 'Bank o’tkazmasi' }
+    { value: 'terminal', label: 'Terminal' }
   ];
-  function methodLabel(m) {
-    var x = METHODS.filter(function (o) { return o.value === m; })[0];
-    return x ? x.label : m;
-  }
+  /* Eski yozuvlarda "bank" usuli uchraydi — u hamon to'g'ri ko'rinsin
+     (faqat yangi to'lovlar "Terminal" bilan yoziladi).               */
+  var METHOD_LABELS = { naqd: 'Naqd', karta: 'Karta', terminal: 'Terminal', bank: 'Bank o’tkazmasi', avans: 'Avansdan' };
+  function methodLabel(m) { return METHOD_LABELS[m] || m; }
 
   /* ================= TO'LOV QABUL QILISH ================= */
   A.paymentForm = function (studentId, App) {
@@ -606,7 +606,7 @@
       UI.tile({ label: 'Qabul qilingan', value: A.som(income), hint: 'so’m', cls: 'money' }),
       UI.tile({ label: 'Qaytarilgan', value: A.som(refunds), hint: 'so’m', cls: refunds > 0 ? 'alert' : '' }),
       UI.tile({ label: 'Naqd', value: A.som(byMethod.naqd || 0), hint: 'so’m' }),
-      UI.tile({ label: 'Karta + bank', value: A.som((byMethod.karta || 0) + (byMethod.bank || 0)), hint: 'so’m' })
+      UI.tile({ label: 'Karta + terminal', value: A.som((byMethod.karta || 0) + (byMethod.terminal || 0) + (byMethod.bank || 0)), hint: 'so’m' })
     ]);
     view.appendChild(tiles);
 

@@ -255,6 +255,46 @@ const A = globalThis.A;
     ok('B hali ham joyida', !!(await get('students/' + ID('sb'))));
   }
 
+  /* =============== 7b. Guruhni butunlay o’chirish =============== */
+  section('7b. Guruhni o’chirish (faqat admin, hisobli guruh himoyalangan)');
+  ok('“group.delete” huquqi ro’yxatda bor', A.allPermIds().indexOf('group.delete') >= 0);
+  /* O'qituvchida bu huquq yo'q — rad etiladi */
+  if (tLogin.cookie) {
+    const tDel = await api('/api/groups/purge', {
+      method: 'POST', body: { groupId: ID('g') }, cookie: tLogin.cookie
+    });
+    eq('O’qituvchi guruhni o’chira olmadi', tDel.status, 403);
+    ok('Guruh joyida qoldi', !!(await get('groups/' + ID('g'))));
+  }
+  /* Hisobi bor guruh (ID('g')) — o'chirilmaydi, arxivlash tavsiya qilinadi */
+  const blk = await api('/api/groups/purge', { method: 'POST', body: { groupId: ID('g') } });
+  eq('Hisobli guruh so’rovi 200 (lekin bloklangan)', blk.status, 200);
+  ok('Hisobli guruh o’chirilmadi (bloklandi)', !!(blk.json && blk.json.blocked) && blk.json.reason === 'invoices',
+    JSON.stringify(blk.json));
+  ok('Guruh hamon joyida', !!(await get('groups/' + ID('g'))));
+  ok('A’zoliklar hamon joyida', !!(await get('memberships/' + ID('mb'))));
+
+  /* Hisobsiz (yangi/bo'sh) guruh — to'liq o'chadi, o'quvchi qoladi */
+  await put('groups/' + ID('g2'), {
+    id: ID('g2'), code: 'OO' + String(Date.now() % 90 + 9), name: 'Bo’sh guruh ' + R,
+    courseId: ID('c'), teacherId: ID('t'), days: [2, 4], startTime: '11:00', endTime: '12:30',
+    startDate: A.monthStart(YM), fee: 500000, feeHistory: [{ fee: 500000, from: YM }],
+    limit: 20, status: 'rejalashtirilgan'
+  });
+  await put('memberships/' + ID('mg2'), {
+    id: ID('mg2'), studentId: ID('sb'), groupId: ID('g2'),
+    joinedAt: A.monthStart(YM), leftAt: null, status: 'faol', discount: null
+  });
+  const gdry = await api('/api/groups/purge', { method: 'POST', body: { groupId: ID('g2'), dryRun: true } });
+  ok('Oldindan ko’rish: o’chadigan yozuvlar sanaldi', gdry.json && gdry.json.ok && gdry.json.dryRun && gdry.json.docs >= 2,
+    JSON.stringify(gdry.json && { docs: gdry.json.docs, counts: gdry.json.counts }));
+  ok('Oldindan ko’rishda guruh o’chmadi', !!(await get('groups/' + ID('g2'))));
+  const gdel = await api('/api/groups/purge', { method: 'POST', body: { groupId: ID('g2') } });
+  ok('Bo’sh guruh o’chdi', gdel.json && gdel.json.ok && !gdel.json.blocked, JSON.stringify(gdel.json));
+  ok('Guruh yozuvi yo’q', !(await get('groups/' + ID('g2'))));
+  ok('Guruh a’zoligi ham o’chdi', !(await get('memberships/' + ID('mg2'))));
+  ok('O’quvchi kartasi esa qoldi (faqat guruhdan chiqdi)', !!(await get('students/' + ID('sb'))));
+
   /* =============== 8. Tozalash =============== */
   section('8. Sinov ma’lumotlari tozalandi');
   for (const p of [

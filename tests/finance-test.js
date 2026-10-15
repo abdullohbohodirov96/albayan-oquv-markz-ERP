@@ -91,6 +91,15 @@ const ID = n => R + '_' + n;
   }, dir);
   ok('Ikki o’quvchi va ikki hisob tayyor', true);
 
+  /* ================= 1b. Terminal to'lov usuli ================= */
+  section('1b. Terminal to’lov usuli qabul qilinadi (naqdga almashmaydi)');
+  await put('students/' + ID('s_term'), { id: ID('s_term'), firstName: 'Term', lastName: 'Inal', status: 'faol' }, dir);
+  const term = await pay({ id: ID('p_term'), studentId: ID('s_term'), amount: 50000, date: '2026-09-05', method: 'terminal' }, dir);
+  eq('Terminal to’lov qabul qilindi', term.status, 200);
+  const tItems = (((await req('/api/collection?name=payments', { cookie: dir })).json) || {}).items || {};
+  ok('Usul "terminal" bo’lib saqlandi', !!tItems[ID('p_term')] && tItems[ID('p_term')].method === 'terminal',
+    JSON.stringify(tItems[ID('p_term')] && tItems[ID('p_term')].method));
+
   /* ================= 1. Takroriy ajratma ================= */
   section('1. Bitta so’rovda takroriy ajratma hisobdan oshirmaydi');
   const dbl = await pay({

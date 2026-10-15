@@ -881,7 +881,7 @@ async function createPaymentServer(body, user) {
   const ym = date.slice(0, 7);
   const rec = {
     id, type, studentId: student.id, amount, date, month: ym,
-    method: ['naqd', 'karta', 'bank'].indexOf(body.method) >= 0 ? body.method : 'naqd',
+    method: ['naqd', 'karta', 'terminal', 'bank'].indexOf(body.method) >= 0 ? body.method : 'naqd',
     note: String(body.note || '').slice(0, 300),
     allocations,
     receiptNo: await nextReceiptNo(ym),
@@ -1154,6 +1154,75 @@ async function purgeStudents(ids, user, dryRun) {
     Object.keys(counts).map(k => k + ' ' + counts[k]).join(', '));
 
   for (const u of toUpdate) await store.set(u.path, u.data);
+  for (const p of toDelete) await store.del(p);
+
+  return Object.assign({ ok: true }, summary);
+}
+
+/* ---------------- Guruhni butunlay o'chirish ----------------
+   FAQAT 'group.delete' huquqi bilan (standartda direktor). Qaytarib
+   bo'lmaydi, shuning uchun tahrirlashdan alohida.
+
+   XAVFSIZLIK: guruhda OYLIK HISOBLAR (invoices) bo'lsa — o'chirmaymiz.
+   To'lovlar (payments) hisoblarga biriktirilgan; hisobni o'chirsak,
+   to'lovning taqsimoti buzilib, tushum hisoboti noto'g'ri bo'lardi.
+   Bunday guruhni ARXIVLASH kerak (holati "yakunlangan"). Hisobi yo'q
+   (yangi/rejalashtirilgan/bo'sh) guruh esa to'liq o'chadi: guruh,
+   a'zoliklar, darslar/davomat va o'quv yozuvlari.                     */
+async function purgeGroups(ids, user, dryRun) {
+  const want = {};
+  ids.forEach(x => { want[x] = true; });
+
+  const all = await store.all();
+  const names = [];
+  const toDelete = [];
+  const counts = {};
+  const bump = k => { counts[k] = (counts[k] || 0) + 1; };
+  let invoices = 0;          // moliyaviy tarix — borligi o'chirishni to'sadi
+
+  all.forEach(r => {
+    const col = String(r.path).split('/')[0];
+    const d = r.data;
+    if (col === 'groups' && d && want[String(d.id || '')]) {
+      names.push(String(d.name || d.code || d.id));
+    }
+  });
+
+  all.forEach(r => {
+    const path = String(r.path);
+    const seg = path.split('/');
+    const col = seg[0];
+    const d = r.data;
+    if (!d) return;
+
+    /* Guruhning o'zi */
+    if (col === 'groups' && want[String(d.id || '')]) { toDelete.push(path); bump('groups'); return; }
+
+    /* Darslar/davomat: kalit "<guruh>__<oy>" ko'rinishida */
+    if (col === 'lessons') {
+      const gid = String(seg[1] || '').split('__')[0];
+      if (want[gid]) { toDelete.push(path); bump('lessons'); }
+      return;
+    }
+
+    /* Ichida shu guruh raqami turgan yozuvlar */
+    if (d.groupId && want[String(d.groupId)]) {
+      if (col === 'invoices') { invoices++; return; }   // moliyaviy — tegilmaydi
+      if (col === 'payments') { invoices++; return; }   // ehtiyot uchun (odatda groupId yo'q)
+      toDelete.push(path); bump(col); return;
+    }
+  });
+
+  const summary = { groups: ids.length, names: names.slice(0, 50), docs: toDelete.length, counts, invoices };
+
+  /* Moliyaviy tarix bo'lsa — hard delete yo'q, arxivlash tavsiya qilinadi */
+  if (invoices > 0) {
+    return Object.assign({ ok: false, blocked: true, reason: 'invoices' }, summary);
+  }
+  if (dryRun) return Object.assign({ ok: true, dryRun: true }, summary);
+
+  await writeAudit(user, 'Guruh butunlay o’chirildi', names.join(', ').slice(0, 120),
+    toDelete.length + ' ta yozuv: ' + (Object.keys(counts).map(k => k + ' ' + counts[k]).join(', ') || '—'));
   for (const p of toDelete) await store.del(p);
 
   return Object.assign({ ok: true }, summary);
@@ -3191,6 +3260,22 @@ async function handleApi(req, res, url) {
     /* Oldindan ko'rish: hech narsa o'chirilmaydi, faqat sanaladi */
     const dryRun = body.dryRun === true;
     const r = await withLock('purge', () => purgeStudents(ids, user, dryRun));
+    return send(res, 200, r);
+  }
+
+  if (route === 'groups/purge' && req.method === 'POST') {
+    /* Guruhni butunlay o'chirish — qaytarib bo'lmaydi, shuning uchun
+       tahrirlashdan ALOHIDA huquq. Standartda faqat direktorda.    */
+    if (!A.can(user, 'group.delete')) {
+      return send(res, 403, { error: 'Sizda guruhni butunlay o’chirish huquqi yo’q.' });
+    }
+    const body = await readBody(req);
+    const ids = (Array.isArray(body.ids) ? body.ids : [body.groupId])
+      .map(x => String(x || '')).filter(x => /^[A-Za-z0-9_\-.]+$/.test(x));
+    if (!ids.length) return send(res, 400, { error: 'Guruh tanlanmagan.' });
+    if (ids.length > 100) return send(res, 400, { error: 'Bir yo’la 100 tadan ko’p emas.' });
+    const dryRun = body.dryRun === true;
+    const r = await withLock('purge', () => purgeGroups(ids, user, dryRun));
     return send(res, 200, r);
   }
 

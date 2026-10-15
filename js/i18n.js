@@ -486,6 +486,9 @@
     'Naqd': ['Наличные', 'Cash', 'نقداً'],
     'Karta': ['Карта', 'Card', 'بطاقة'],
     'Bank o’tkazmasi': ['Банковский перевод', 'Bank transfer', 'تحويل بنكي'],
+    'Terminal': ['Терминал', 'Terminal', 'طرفية'],
+    'Hech biri tanlanmagan': ['Ничего не выбрано', 'Nothing selected', 'لم يُحدد شيء'],
+    'Belgilashni olib tashlash': ['Снять выделение', 'Clear selection', 'إلغاء التحديد'],
     'Usul': ['Способ', 'Method', 'الطريقة'],
     'Chek': ['Чек', 'Receipt', 'الإيصال'],
     'Qarz': ['Долг', 'Debt', 'الدين'],
@@ -634,6 +637,7 @@
     'Vazifa yo’q': ['Задач нет', 'No tasks', 'لا توجد مهام'],
     'Hisoblangan (jami)': ['Начислено (всего)', 'Charged (total)', 'المحتسب (الإجمالي)'],
     'Karta + bank': ['Карта + банк', 'Card + bank', 'بطاقة + بنك'],
+    'Karta + terminal': ['Карта + терминал', 'Card + terminal', 'بطاقة + طرفية'],
     'To’langan xarajatlar': ['Оплаченные расходы', 'Paid expenses', 'المصروفات المدفوعة'],
     'Ish haqi hisoblanmagan.': ['Зарплата не начислена.', 'Payroll not calculated.', 'لم تُحتسب الرواتب.'],
     'Umumiy suhbat': ['Общий чат', 'General chat', 'المحادثة العامة'],
@@ -1580,6 +1584,8 @@
 
   /* Ichida o'zgaruvchi bo'lgan iboralar uchun bo'lak tarjimalari */
   var FRAG = {
+    'Hammasini belgilash': ['Выбрать все', 'Select all', 'تحديد الكل'],
+    ' ta tanlandi': [' выбрано', ' selected', ' محدد'],
     ' ta ariza': [' заявок', ' submissions', ' طلبات'],
     'Xavf ostida (': ['В зоне риска (', 'At risk (', 'في خطر ('],
     ' javobsiz)': [' пропущ.)', ' missed)', ' فائتة)'],

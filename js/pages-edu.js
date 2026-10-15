@@ -209,7 +209,10 @@
           class: 'btn', onclick: function () { addStudentToGroup(g, App); }
         }, [UI.icon('plus'), 'O’quvchi qo’shish']) : null,
         App.can('group.edit') ? h('button', { class: 'btn', onclick: function () { groupForm(g, App); } },
-          [UI.icon('edit'), 'Tahrirlash']) : null
+          [UI.icon('edit'), 'Tahrirlash']) : null,
+        App.can('group.delete') ? h('button', {
+          class: 'btn danger', onclick: function () { A.purgeGroups([g.id], App); }
+        }, [UI.icon('trash'), 'O’chirish']) : null
       ]));
 
     view.appendChild(tgGroupCard(g, App));
@@ -366,6 +369,101 @@
   };
 
   /* ---------- Guruh shakli ---------- */
+  /* Guruhni butunlay o'chirish (faqat 'group.delete'). Oldin server
+     sanaydi (dryRun) — nima o'chishini ko'rsatadi; oylik hisobi bo'lsa
+     o'chirishga ruxsat bermaydi, arxivlash tavsiya qiladi.            */
+  var GLABELS = {
+    groups: 'guruh', memberships: 'o’quvchi a’zoligi', lessons: 'oylik davomat jurnali',
+    lessonlog: 'dars yozuvi', makeups: 'qo’shimcha dars', quizzes: 'dars testi',
+    questions: 'savol', feedback: 'fikr', pauses: 'to’xtatish yozuvi',
+    grouplinks: 'Telegram guruh bog’lanishi', asks: 'savol'
+  };
+  A.purgeGroups = function (ids, App, onDone) {
+    App.guard('group.delete');
+    var list = (ids || []).filter(Boolean);
+    if (!list.length) { UI.toast('Guruh tanlanmagan.', 'warn'); return; }
+    var box = h('div', {}, [h('p', { class: 'muted' }, 'Hisoblanmoqda…')]);
+    var wordF = null, errBox = null, ready = false, blocked = false;
+
+    UI.modal({
+      title: list.length === 1 ? 'Guruhni butunlay o’chirish' : list.length + ' ta guruhni o’chirish',
+      body: box,
+      actions: [
+        { label: 'Bekor qilish' },
+        {
+          label: 'O’chirish', cls: 'danger', onClick: function (close, btn) {
+            if (!ready || blocked) return;
+            var w = String(wordF.input.value || '').trim().toUpperCase();
+            if (w !== 'O’CHIRAMAN' && w !== "O'CHIRAMAN") {
+              errBox.hidden = false;
+              errBox.textContent = 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing.';
+              return;
+            }
+            UI.busy(btn, async function () {
+              try {
+                var r = await D.api('POST', 'api/groups/purge', { ids: list });
+                if (r && r.blocked) {
+                  errBox.hidden = false;
+                  errBox.textContent = 'Bu guruhda oylik hisoblar bor — o’chirib bo’lmaydi. Uni arxivlang (holatini “Yakunlangan” qiling).';
+                  return;
+                }
+                await D.loadBootstrap();
+                close();
+                UI.toast('Guruh o’chirildi.', 'ok');
+                if (onDone) onDone(); else App.go('groups');
+              } catch (e) {
+                errBox.hidden = false;
+                errBox.textContent = e.message || 'O’chirilmadi.';
+              }
+            });
+          }
+        }
+      ]
+    });
+
+    (async function () {
+      try {
+        var p = await D.api('POST', 'api/groups/purge', { ids: list, dryRun: true });
+        UI.clear(box);
+        box.appendChild(h('p', { style: 'margin:0 0 8px' },
+          h('b', {}, (p.names || []).join(', ') || list.length + ' ta guruh')));
+
+        /* Oylik hisobi bor — o'chirishga yo'l yo'q */
+        if (p.blocked) {
+          blocked = true;
+          box.appendChild(h('div', { class: 'banner warn', style: 'margin:0' }, h('div', {}, [
+            h('b', {}, 'Bu guruhni o’chirib bo’lmaydi. '),
+            'Unda ' + p.invoices + ' ta oylik hisob (to’lov tarixi) bor. ' +
+            'Tarix yo’qolmasligi uchun guruhni O’CHIRISH o’rniga ARXIVLANG: ' +
+            'tahrirlab, holatini “Yakunlangan” qiling.'
+          ])));
+          return;
+        }
+
+        var rows = Object.keys(p.counts || {}).map(function (k) {
+          return h('li', {}, (GLABELS[k] || k) + ': ' + p.counts[k]);
+        });
+        box.appendChild(h('p', { class: 'small muted', style: 'margin:0 0 10px' },
+          'Quyidagilar butunlay o’chadi va QAYTARIB BO’LMAYDI:'));
+        box.appendChild(h('ul', { class: 'small', style: 'margin:0 0 12px' },
+          rows.length ? rows : [h('li', {}, 'faqat guruh yozuvi')]));
+        if ((p.counts || {}).memberships) {
+          box.appendChild(h('p', { class: 'small', style: 'margin:0 0 12px' },
+            (p.counts.memberships) + ' ta o’quvchi shu guruhdan chiqariladi (o’quvchi kartasi o’chmaydi).'));
+        }
+        wordF = UI.field({ label: 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing', placeholder: 'O’CHIRAMAN' });
+        errBox = h('div', { class: 'err-msg', hidden: true });
+        box.appendChild(wordF.wrap);
+        box.appendChild(errBox);
+        ready = true;
+        wordF.input.focus();
+      } catch (e) {
+        UI.clear(box);
+        box.appendChild(h('p', { class: 'err-msg' }, e.message || 'Hisoblab bo’lmadi.'));
+      }
+    })();
+  };
+
   function groupForm(group, App) {
     App.guard('group.edit');
     var isNew = !group;

@@ -933,31 +933,58 @@
        Xato import qilingan o'nlab o'quvchini bittalab o'chirish
        uzoq. Katakcha faqat O'CHIRISH huquqi bo'lganda chiqadi —
        boshqalarga ro'yxat avvalgidek ko'rinadi.                 */
+    var canDelete = App.can('student.delete');
     var picked = {};
     var bulkBar = h('div', { class: 'bulk-bar', hidden: true });
     function refreshBulk() {
+      if (!canDelete) { bulkBar.hidden = true; return; }
+      var ids = list.map(function (s) { return s.id; });
       var n = Object.keys(picked).length;
-      bulkBar.hidden = !n;
+      /* "Hammasini belgilash" — filtrda ko'rinayotgan BARCHA o'quvchini
+         bir bosishda tanlaydi (ro'yxat 100 tadan oshsa, ko'rinmaganlari
+         ham tanlanadi). Shuning uchun katakchani bittalab bosish shart
+         emas.                                                          */
+      var allOn = ids.length > 0 && ids.every(function (id) { return picked[id]; });
+      /* Ko'rinayotgan katakchalarni picked bilan moslaymiz (qayta
+         chizmasdan — aks holda yangi closure picked ni bo'shatib
+         yuborardi).                                                 */
+      function syncBoxes() {
+        var boxes = view.querySelectorAll('input[data-sid]');
+        for (var i = 0; i < boxes.length; i++) {
+          boxes[i].checked = !!picked[boxes[i].getAttribute('data-sid')];
+        }
+      }
+      bulkBar.hidden = false;
       UI.clear(bulkBar);
-      if (!n) return;
-      bulkBar.appendChild(h('b', {}, n + ' ta tanlandi'));
       bulkBar.appendChild(h('button', {
         class: 'btn sm', type: 'button',
-        onclick: function () { picked = {}; App.render(); }
-      }, 'Bekor qilish'));
-      bulkBar.appendChild(h('button', {
-        class: 'btn sm danger', type: 'button',
         onclick: function () {
-          A.purgeStudents(Object.keys(picked), App, function () { picked = {}; App.render(); });
+          if (allOn) picked = {};
+          else ids.forEach(function (id) { picked[id] = true; });
+          syncBoxes();
+          refreshBulk();
         }
-      }, 'Butunlay o’chirish'));
+      }, allOn ? 'Belgilashni olib tashlash' : ('Hammasini belgilash (' + ids.length + ' ta)')));
+      bulkBar.appendChild(h('b', {}, n ? (n + ' ta tanlandi') : 'Hech biri tanlanmagan'));
+      if (n) {
+        bulkBar.appendChild(h('button', {
+          class: 'btn sm', type: 'button',
+          onclick: function () { picked = {}; syncBoxes(); refreshBulk(); }
+        }, 'Bekor qilish'));
+        bulkBar.appendChild(h('button', {
+          class: 'btn sm danger', type: 'button',
+          onclick: function () {
+            A.purgeStudents(Object.keys(picked), App, function () { picked = {}; App.render(); });
+          }
+        }, 'Butunlay o’chirish'));
+      }
     }
 
     var cols = [];
-    if (App.can('student.delete')) {
+    if (canDelete) {
       cols.push({
         label: '', render: function (s) {
-          var cb = h('input', { type: 'checkbox', 'aria-label': 'Tanlash' });
+          var cb = h('input', { type: 'checkbox', 'aria-label': 'Tanlash', 'data-sid': s.id });
           cb.checked = !!picked[s.id];
           cb.addEventListener('click', function (e) { e.stopPropagation(); });
           cb.addEventListener('change', function () {
@@ -1483,7 +1510,7 @@
           },
           {
             label: 'Usul', render: function (p) {
-              return ({ naqd: 'Naqd', karta: 'Karta', bank: 'Bank o’tkazmasi', avans: 'Avansdan' })[p.method] || p.method;
+              return ({ naqd: 'Naqd', karta: 'Karta', terminal: 'Terminal', bank: 'Bank o’tkazmasi', avans: 'Avansdan' })[p.method] || p.method;
             }
           },
           {
