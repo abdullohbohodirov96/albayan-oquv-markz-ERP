@@ -2138,8 +2138,14 @@ legend{font-size:12px;font-weight:700;color:var(--muted);padding:0 6px}
 .perm-grid{display:flex;flex-direction:column;gap:2px}
 .perm-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;flex-wrap:wrap}
 .perm-row:nth-child(odd){background:var(--surface-2)}
-.perm-row .pname{flex:1;min-width:150px;font-weight:600;font-size:13.5px}
-.perm-row .popts{display:flex;gap:6px;flex-wrap:wrap}
+.perm-row .pname{flex:1 1 140px;min-width:120px;font-weight:600;font-size:13.5px}
+.perm-row .popts{display:flex;gap:6px;flex-wrap:nowrap;flex:none}
+/* Pill va "Ruxsat bor/yo'q" matni/qalinligi belgilashda o'zgaradi; agar
+   kengligi suzuvchi bo'lsa, qator qayta o'ralib balandligi o'zgaradi va
+   ekran sakraydi. Shuning uchun ikkalasiga ham ANIQ kenglik beramiz —
+   matn qanday bo'lsa ham qator bir xil qoladi.                        */
+.perm-row>.pill{width:96px;justify-content:center;flex:none;white-space:nowrap;overflow:hidden}
+.perm-row .popts label{width:120px;justify-content:center;white-space:nowrap}
 .perm-row .popts label{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;border:1px solid var(--line-strong);
   border-radius:8px;padding:6px 10px;cursor:pointer;min-height:38px;background:var(--surface)}
 .perm-row .popts label:has(input:checked){background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:700}

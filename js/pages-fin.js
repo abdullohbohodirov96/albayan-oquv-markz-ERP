@@ -2723,26 +2723,43 @@
       if (Object.prototype.hasOwnProperty.call(perms, pid)) return perms[pid];
       return A.roleHas(f.get('role').input.value, pid);
     }
+    /* Qatorlar BIR MARTA chiziladi, keyin faqat yangilanadi. Ilgari har
+       belgilashda butun ro'yxat qayta chizilardi: bosilgan katak yo'qolib,
+       oyna tepaga sakrab ketardi — odam qayerda ekanini yo'qotardi.      */
+    var permRows = {};
+    function refreshPerms() {
+      Object.keys(permRows).forEach(function (pid) {
+        var r = permRows[pid];
+        var on = effective(pid);
+        var custom = Object.prototype.hasOwnProperty.call(perms, pid);
+        r.cb.checked = !!on;
+        r.txt.textContent = on ? 'Ruxsat bor' : 'Ruxsat yo’q';
+        r.pill.lastChild.textContent = custom ? 'Alohida' : 'Rol bo’yicha';
+        r.pill.className = 'pill ' + (custom ? 'info' : 'mute');
+      });
+    }
     function paintPerms() {
+      if (Object.keys(permRows).length) return refreshPerms();
       UI.clear(permBox);
       A.PERM_GROUPS.forEach(function (grp) {
         permBox.appendChild(h('div', { class: 'perm-row', style: 'background:var(--brand-soft);font-weight:700' },
           h('div', { class: 'pname' }, grp.label)));
         grp.perms.forEach(function (p) {
-          var on = effective(p.id);
-          var custom = Object.prototype.hasOwnProperty.call(perms, p.id);
-          var cb = h('input', { type: 'checkbox', checked: on ? true : null });
+          var cb = h('input', { type: 'checkbox' });
+          var txt = h('span', {}, '');
+          var pill = UI.pill('', 'mute');
           cb.addEventListener('change', function () {
             perms[p.id] = cb.checked;
-            paintPerms();
+            refreshPerms();
           });
+          permRows[p.id] = { cb: cb, txt: txt, pill: pill };
           permBox.appendChild(h('div', { class: 'perm-row' }, [
-            h('div', { class: 'pname' }, p.label),
-            custom ? UI.pill('Alohida', 'info') : UI.pill('Rol bo’yicha', 'mute'),
-            h('div', { class: 'popts' }, h('label', {}, [cb, h('span', {}, on ? 'Ruxsat bor' : 'Ruxsat yo’q')]))
+            h('div', { class: 'pname' }, p.label), pill,
+            h('div', { class: 'popts' }, h('label', {}, [cb, txt]))
           ]));
         });
       });
+      refreshPerms();
     }
     paintPerms();
     f.get('role').input.addEventListener('change', paintPerms);
