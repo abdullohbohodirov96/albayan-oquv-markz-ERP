@@ -71,6 +71,26 @@ function section(t) { out.push('\n' + t); }
   ok('Keshda /api/ javoblari yo’q', apiCached.length === 0, apiCached.join(', '));
   ok('CSS keshlandi', cacheKeys.some(u => /app\.css$/.test(u)));
 
+  section('3b. Forma havolasi SW orqali ham FORMA ni ochadi (ERP ni emas)');
+  /* Ilgari SW har qanday sahifa so'rovini keshdagi index.html bilan
+     javoblardi: ERP ochilgan telefonda /f/<slug> forma o'rniga ERP ochilardi. */
+  const formRes = await page.evaluate(async () => {
+    const r = await fetch('api/forms/save', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'PWA sinov formasi', slug: 'pwa-sinov' }) });
+    return r.ok ? (await r.json()).form : null;
+  });
+  ok('Forma tuzildi', !!formRes);
+  if (formRes) {
+    const fp = await ctx.newPage();
+    await fp.goto(BASE + '/f/' + formRes.slug);
+    await fp.waitForTimeout(800);
+    const isForm = await fp.evaluate(() => !!document.getElementById('f') && !document.getElementById('app'));
+    const viaSw = await fp.evaluate(() => !!navigator.serviceWorker.controller);
+    ok('SW boshqaruvida ham /f/… forma sahifasi (ERP emas)', isForm, 'sw=' + viaSw + ' title=' + await fp.title());
+    await fp.close();
+    await page.evaluate(async id => { await fetch('api/forms/delete', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); }, formRes.id);
+  }
+
   section('4. Internet uzilganda halol xabar');
   await ctx.setOffline(true);
   await page.waitForTimeout(600);

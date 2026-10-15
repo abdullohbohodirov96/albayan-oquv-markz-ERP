@@ -96,6 +96,13 @@ self.addEventListener('fetch', event => {
   const isHtml = req.mode === 'navigate' ||
     (req.headers.get('accept') || '').indexOf('text/html') >= 0;
 
+  // Ilova FAQAT "/" (va /index.html) da. Boshqa sahifalar — forma (/f/…),
+  // robots, sitemap — serverning o'zi beradi. Ilgari HAR QANDAY sahifa
+  // so'rovi keshdagi index.html bilan javoblanardi: ERP ochilgan telefonda
+  // forma havolasi forma o'rniga ERP ni ochardi.
+  const isAppPage = url.pathname === '/' || url.pathname === '/index.html';
+  if (isHtml && !isAppPage) return;             // tarmoqdan, keshsiz
+
   // 3) HTML — shu versiya keshidan (JS/CSS bilan bir xil to'plamdan).
   //    Yangi chiqarilish brauzerga sw.js orqali yetadi: u o'zgargani uchun
   //    yangi ishchi o'rnatilgach ochiq sahifa avtomatik qayta yuklanadi.
