@@ -367,6 +367,8 @@ async function flushQueue(now) {
  * Bot o'chiq bo'lsa yoki ID berilmagan bo'lsa — hech narsa qilinmaydi.
  */
 async function notifyStaff(text) {
+  /* Faqat sinov uchun: xodimga xabar yo'li yiqilganda server yiqilmasligi tekshiriladi */
+  if (process.env.NODE_ENV === 'test' && process.env.ALB_TEST_FAULT === 'notify') throw new Error('sinov: bot xatosi');
   if (!store) return { queued: 0, off: true };
   const s = (await store.get('meta/settings')) || {};
   const raw = (s.bot && (s.bot.staffChats || s.bot.adminChatId)) || '';

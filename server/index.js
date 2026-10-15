@@ -2418,7 +2418,9 @@ async function handleApi(req, res, url) {
     return { ok: true };
     });
     if (result.limit) return send(res, 429, { error: 'Arizangiz qabul qilindi. Shoshilinch bo’lsa, telefon qiling.' });
-    try { require('./bot').notifyStaff('Yangi ariza (' + f.title + '): ' + (chk.name || '—') + ' ' + (chk.phone || '')); } catch (e) { /* bot o'chiq bo'lsa muhim emas */ }
+    /* Asinxron: xato bo'lsa ham so'rovga va serverga ta'sir qilmasin
+       (ushlanmagan rad Node 22 da butun jarayonni o'chiradi).        */
+    Promise.resolve().then(() => require('./bot').notifyStaff('Yangi ariza (' + f.title + '): ' + (chk.name || '—') + ' ' + (chk.phone || ''))).catch(() => { });
     return send(res, 200, { ok: true });
   }
 
@@ -2527,7 +2529,7 @@ async function handleApi(req, res, url) {
       (course ? '\nKurs: ' + course.name : '') +
       (note ? '\nIzoh: ' + note : '');
     notifyDirectors(text).catch(() => { });
-    try { require('./bot').notifyStaff(text); } catch (e) { /* bot o'chiq bo'lsa muhim emas */ }
+    Promise.resolve().then(() => require('./bot').notifyStaff(text)).catch(() => { });
 
     return send(res, 200, { ok: true, id });
   }
@@ -3663,6 +3665,14 @@ function safeHost(raw) {
 
    Yechim: Host avval tozalanadi. Yaroqsiz bo'lsa — 400, server esa
    ishlashda davom etadi.                                            */
+/* Oxirgi to'siq: biror joyda ushlanmay qolgan asinxron xato (masalan
+   bazaga ulanish bir lahza uzilganda) Node 22 da JARAYONNI O'CHIRADI —
+   hamma ochiq so'rovlar yiqiladi. Bu yerda faqat yozib qo'yamiz; server
+   ishlashda davom etadi. Haqiqiy dasturiy xato esa logda ko'rinadi.    */
+process.on('unhandledRejection', e => {
+  console.error('Ushlanmagan asinxron xato:', e && e.stack || e);
+});
+
 const server = http.createServer(async (req, res) => {
   let url;
   try {
