@@ -292,7 +292,7 @@
       { label: 'Yo’nalish', render: function (c) { return c.dir === 'in' ? '📥 Kiruvchi' : '📤 Chiquvchi'; } },
       { label: 'Raqam', render: function (c) { return UI.phoneLink(c.phone); } },
       { label: 'Kim', render: function (c) {
-        if (c.studentId && D.one('students', c.studentId)) return h('a', { href: '#', onclick: function (e) { e.preventDefault(); App.go('student', { id: c.studentId }); } }, [UI.icon('users'), ' ' + Q.studentName(c.studentId)]);
+        if (c.studentId && D.one('students', c.studentId)) return h('button', { class: 'btn sm', onclick: function () { App.go('student', { id: c.studentId }); } }, [UI.icon('users'), Q.studentName(c.studentId)]);
         if (c.leadId && D.one('leads', c.leadId)) return h('button', { class: 'btn sm', onclick: function () { A.leadForm && A.leadForm(D.one('leads', c.leadId), App); } }, [UI.icon('phone'), (c.newLead ? 'Yangi murojaat' : 'Murojaat')]);
         return h('span', { class: 'muted' }, c.name || 'Notanish');
       } },

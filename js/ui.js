@@ -754,7 +754,7 @@
       return tr;
     }
 
-    return h('div', {}, [wrap, more]);
+    return h('div', { class: 'tbl-box' }, [wrap, more]);
   }
 
   function empty(o) {

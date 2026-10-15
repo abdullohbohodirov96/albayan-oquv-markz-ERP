@@ -184,9 +184,13 @@ a{color:var(--brand);text-decoration:none}
 .card>.card-body{padding:16px}
 .card>.card-body.tight{padding:0}
 .grid{display:grid;gap:14px}
-.cols-4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
-.cols-3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
-.cols-2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+/* Grid katakchasi ichidagi uzun matn kolonkani "min-content" gacha
+   kengaytirib yubormasin — telefonda sahifa yon tomonga surilardi. */
+.grid>*,.tiles>*,.grid2>*{min-width:0}
+.tabs{min-width:0;max-width:100%}
+.cols-4{grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))}
+.cols-3{grid-template-columns:repeat(auto-fit,minmax(min(250px,100%),1fr))}
+.cols-2{grid-template-columns:repeat(auto-fit,minmax(min(290px,100%),1fr))}
 
 /* ---------- Ko'rsatkich plitkalari ---------- */
 .tiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(186px,1fr));margin-bottom:16px}
@@ -195,7 +199,9 @@ a{color:var(--brand);text-decoration:none}
   transition:border-color .12s,transform .08s}
 .tile:hover{border-color:var(--brand);transform:translateY(-1px)}
 .tile .lbl{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.01em}
-.tile .val{font-family:var(--display);font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.tile .val{font-family:var(--display);font-size:25px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15;
+  min-width:0;overflow-wrap:anywhere;word-break:break-word}
+.tile{min-width:0;overflow:hidden}
 .tile .hint{font-size:11.5px;color:var(--muted)}
 .tile.alert{border-color:color-mix(in srgb,var(--bad) 40%,var(--line))}
 .tile.alert .val{color:var(--bad)}
@@ -2505,3 +2511,29 @@ button.cur-title:hover b{text-decoration:underline}
 @keyframes cp-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes cp-ring{0%,100%{transform:rotate(0)}25%{transform:rotate(-14deg)}75%{transform:rotate(14deg)}}
 @media(prefers-reduced-motion:reduce){.call-pop,.call-pop.ringing .cp-ico{animation:none}}
+
+/* ---------- Zich karta (.tight) ichida jadval bo'lmagan narsalar ----------
+   .tight faqat jadval chetga yopishsin degan edi; lekin qatorlar, banner,
+   matn, tugmalar ham shu kartaga tushganda karta chetiga yopishib
+   "tashqariga chiqib ketgandek" ko'rinardi (o'qituvchi davomat kartasi,
+   qo'ng'iroqlar, statistika...). Endi jadvaldan boshqa hamma narsa o'z
+   joyini (16px) oladi, jadval esa avvalgidek chetgacha turadi.          */
+.card>.card-body.tight>:not(.tbl-wrap):not(.tbl-box):not(table):not(.empty){margin-left:16px;margin-right:16px}
+.card>.card-body.tight>:not(.tbl-wrap):not(.tbl-box):not(table):not(.empty):first-child{margin-top:14px}
+.card>.card-body.tight>:not(.tbl-wrap):not(.tbl-box):not(table):not(.empty):last-child{margin-bottom:14px}
+.card>.card-body.tight>:not(.tbl-wrap):not(.tbl-box):not(table):not(.empty)+:not(.tbl-wrap):not(.tbl-box):not(table){margin-top:10px}
+.card>.card-body.tight>.tbl-wrap+:not(.tbl-wrap):not(table),.card>.card-body.tight>.tbl-box+:not(.tbl-wrap):not(table){margin-top:12px}
+.card>.card-body.tight>.tbl-box>.tbl-more{padding:12px 16px}
+.card>.card-body.tight>.empty{padding:24px 16px}
+@media(max-width:600px){
+  .card>.card-body.tight>:not(.tbl-wrap):not(.tbl-box):not(table):not(.empty){margin-left:12px;margin-right:12px}
+}
+
+/* ---------- Sahifa bloklari orasidagi bo'shliq (bir xil ritm) ----------
+   Karta, plitkalar, banner, tugmalar qatori yonma-yon qo'yilganda
+   har joyda qo'lda margin yozilmagan — ba'zilari bir-biriga yopishib
+   qolgan edi (o'qituvchi bosh sahifasi: karta → plitkalar).           */
+.view>.card+.card,.view>.card+.tiles,.view>.tiles+.card,.view>.card+.banner,.view>.banner+.card,
+.view>.card+.rowflex,.view>.rowflex+.card,.view>.card+.grid2,.view>.grid2+.card,.view>.card+.cards,
+.view>.cards+.card,.view>.card+.filters,.view>.filters+.card,.view>.card+.kanban-wrap,.view>.tiles+.tiles,
+.view>.card+.att-list,.view>.card+p{margin-top:14px}
