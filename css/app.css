@@ -2543,3 +2543,11 @@ button.cur-title:hover b{text-decoration:underline}
 .view>.card+.rowflex,.view>.rowflex+.card,.view>.card+.grid2,.view>.grid2+.card,.view>.card+.cards,
 .view>.cards+.card,.view>.card+.filters,.view>.filters+.card,.view>.card+.kanban-wrap,.view>.tiles+.tiles,
 .view>.card+.att-list,.view>.card+p{margin-top:14px}
+
+/* Murojaat oynasida forma javoblari bloki */
+.lead-ans{border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:4px 14px;margin:0}
+.lead-ans>summary{cursor:pointer;font-weight:700;padding:10px 0;list-style:none;display:flex;justify-content:space-between;align-items:center}
+.lead-ans>summary::-webkit-details-marker{display:none}
+.lead-ans>summary::after{content:"▾";color:var(--muted)}.lead-ans[open]>summary::after{content:"▴"}
+.lead-ans .form-ans{padding:0 0 10px}
+.lead-ans dl.kv{margin:0}

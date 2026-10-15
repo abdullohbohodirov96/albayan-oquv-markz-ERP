@@ -2463,17 +2463,15 @@ async function handleApi(req, res, url) {
     for (const q of (f.fields || [])) {
       if (q.type === 'referral' && chk.answers[q.id]) { refCode = chk.answers[q.id]; refStudent = await tel.studentByRefCode(store, refCode); if (refStudent) break; }
     }
-    const lines = (f.fields || []).map(q => {
-      const v = chk.answers[q.id];
-      const t = Array.isArray(v) ? v.join(', ') : v;
-      return t ? q.label + ': ' + t : '';
-    }).filter(Boolean);
+    /* Forma javoblari STRUKTURA sifatida formAnswers da saqlanadi va
+       murojaat kartasida chiroyli ro'yxat bo'lib ko'rinadi — endi ular
+       Izoh (note) ga tiqilmaydi, Izoh administrator uchun bo'sh qoladi. */
     await store.set('leads/' + lid, {
       id: lid, funnelId: funnel ? funnel.id : '', name: chk.name || 'Forma: ' + f.title,
       phone: chk.phone || '', courseId: f.courseId || '',
       source: 'Forma: ' + f.title, ownerStaffId: '',
       stage: stages[0] ? stages[0].id : 'yangi',
-      note: lines.join(' · ').slice(0, 1500),
+      note: '',
       formId: f.id, formTitle: f.title, formAnswers: chk.answers, formSubId: sid,
       refCode, referrerStudentId: refStudent ? refStudent.id : '',
       nextContact: A.today(), ip: fip, createdAt: stamp(), viaForm: true
@@ -3077,7 +3075,8 @@ async function handleApi(req, res, url) {
     return send(res, 200, { ok: true });
   }
   if (route === 'forms/templates' && req.method === 'GET') {
-    return send(res, 200, { templates: forms.TEMPLATES, types: forms.TYPES });
+    const settings = (await store.get('meta/settings')) || {};
+    return send(res, 200, { templates: forms.TEMPLATES, types: forms.TYPES, contacts: forms.defaultContacts(settings) });
   }
 
   if (route === 'parent' && req.method === 'POST') {

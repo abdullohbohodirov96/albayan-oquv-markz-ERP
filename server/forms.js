@@ -153,6 +153,7 @@ async function saveNow(store, data, opts) {
     courseId: txt(data && data.courseId, 60),
     /* Kontaktlar bo'limi (telefon, manzil, Telegram) va qo'shimcha ma'lumot */
     contact: !(data && data.contact === false),
+    contacts: cleanContacts(data && data.contacts),
     info: txt(data && data.info, 1000),
     /* Rasm belgilari faqat saveImg/delImg orqali o'zgaradi */
     logo: !!(old && old.logo), logoAt: (old && old.logoAt) || 0,
@@ -220,7 +221,8 @@ function publicView(f) {
     bg: f.bg === 'rasm' ? 'rasm' : (tpl ? tpl.id : TEMPLATES[0].id),
     bgCss: f.bg === 'rasm' ? '' : (tpl || TEMPLATES[0]).css,
     ink: f.bg === 'rasm' ? '#fff' : (tpl || TEMPLATES[0]).ink,
-    logo: !!f.logo, banner: !!f.banner, contact: f.contact !== false, info: f.info || ''
+    logo: !!f.logo, banner: !!f.banner, contact: f.contact !== false,
+    contacts: Array.isArray(f.contacts) ? f.contacts : null, info: f.info || ''
   };
 }
 
@@ -357,26 +359,57 @@ function fieldHtml(f) {
   return '<div class="fld"><label>' + esc(f.label) + req + '</label>' + ctl + hint + '</div>';
 }
 
-/** Kontaktlar va ma'lumot bo'limi — markaz sozlamalaridan */
+/** Markaz sozlamalaridan sukutdagi kontaktlar ro'yxati (markaz tahrirlashi mumkin) */
+function defaultContacts(settings) {
+  const s = settings || {};
+  const out = [];
+  const phone = txt(s.phone || seo.DEFAULT_PHONE, 40);
+  if (phone) out.push({ on: true, icon: '📞', label: 'Telefon', value: phone, link: 'tel:' + phone.replace(/[^\d+]/g, '') });
+  const addr = txt(s.address || seo.DEFAULT_ADDRESS, 160);
+  if (addr) out.push({ on: true, icon: '📍', label: 'Manzil', value: addr, link: '' });
+  if (seo.hours(s.workStart, s.workEnd)) out.push({ on: true, icon: '🕘', label: 'Ish vaqti', value: s.workStart + ' – ' + s.workEnd + ', dushanba–shanba', link: '' });
+  const tg = seo.telegram(s.tgQabul || s.telegram || s.tgChannel || (s.bot && s.bot.username));
+  if (tg) out.push({ on: true, icon: '✈️', label: 'Telegram', value: 'Telegram orqali yozish', link: tg });
+  const igRaw = String(s.instagram || '').trim();
+  const ig = igRaw ? seo.instagram(/^https?:/i.test(igRaw) ? igRaw : 'https://www.instagram.com/' + igRaw.replace(/^@/, '') + '/') : '';
+  if (ig) out.push({ on: true, icon: '📷', label: 'Instagram', value: 'Instagram', link: ig });
+  return out;
+}
+/** Markaz tahrirlagan kontaktlar ro'yxatini tozalash. Qaytgan qiymat:
+    massiv (tahrirlangan) yoki null (sukutdagi — sozlamalardan).        */
+function cleanContacts(list) {
+  if (!Array.isArray(list)) return null;
+  const out = list.slice(0, 15).map(c => {
+    if (!c || typeof c !== 'object') return null;
+    const label = txt(c.label, 40);
+    const value = txt(c.value, 200);
+    if (!label && !value) return null;
+    let link = txt(c.link, 300);
+    if (link && !/^(tel:|mailto:|https:\/\/)/i.test(link)) link = '';
+    return { on: c.on !== false, icon: txt(c.icon, 4) || '•', label, value, link };
+  }).filter(Boolean);
+  return out.length ? out : null;
+}
+
+/** Kontaktlar va ma'lumot bo'limi — markaz tahrirlagan ro'yxat yoki sozlamalardan */
 function contactHtml(v, settings) {
   if (!v.contact && !v.info) return '';
-  const s = settings || {};
   const rows = [];
   if (v.info) rows.push('<p class="info-t">' + esc(v.info) + '</p>');
   if (v.contact) {
-    const phone = txt(s.phone || seo.DEFAULT_PHONE, 40);
-    const tel = phone.replace(/[^\d+]/g, '');
-    if (phone) rows.push('<div class="ct"><span>📞</span><a href="tel:' + esc(tel) + '">' + esc(phone) + '</a></div>');
-    const addr = txt(s.address || seo.DEFAULT_ADDRESS, 200);
-    if (addr) rows.push('<div class="ct"><span>📍</span><span>' + esc(addr) + '</span></div>');
-    if (seo.hours(s.workStart, s.workEnd)) {
-      rows.push('<div class="ct"><span>🕘</span><span>Ish vaqti: ' + esc(s.workStart) + ' – ' + esc(s.workEnd) + ', dushanba–shanba</span></div>');
-    }
-    const tg = seo.telegram(s.tgQabul || s.telegram || s.tgChannel || (s.bot && s.bot.username));
-    if (tg) rows.push('<div class="ct"><span>✈️</span><a href="' + esc(tg) + '" target="_blank" rel="noopener">Telegram orqali yozish</a></div>');
-    const igRaw = String(s.instagram || '').trim();
-    const ig = igRaw ? seo.instagram(/^https?:/i.test(igRaw) ? igRaw : 'https://www.instagram.com/' + igRaw.replace(/^@/, '') + '/') : '';
-    if (ig) rows.push('<div class="ct"><span>📷</span><a href="' + esc(ig) + '" target="_blank" rel="noopener">Instagram</a></div>');
+    const list = (Array.isArray(v.contacts) && v.contacts.length) ? v.contacts : defaultContacts(settings);
+    list.forEach(c => {
+      if (!c || c.on === false) return;
+      const val = esc(c.value || c.label || '');
+      if (!val) return;
+      const icon = esc(c.icon || '•');
+      if (c.link && /^(tel:|mailto:|https:\/\/)/i.test(c.link)) {
+        const ext = /^tel:|^mailto:/.test(c.link) ? '' : ' target="_blank" rel="noopener"';
+        rows.push('<div class="ct"><span>' + icon + '</span><a href="' + esc(c.link) + '"' + ext + '>' + val + '</a></div>');
+      } else {
+        rows.push('<div class="ct"><span>' + icon + '</span><span>' + val + '</span></div>');
+      }
+    });
   }
   if (!rows.length) return '';
   return '<details class="info" id="info"><summary>Kontaktlar va ma’lumot</summary><div class="info-b">' + rows.join('') + '</div></details>';
@@ -489,7 +522,7 @@ function draft(data) {
     button: txt(data && data.button, 40) || 'Yuborish',
     bg: bgTpl || (data && data.bg === 'rasm' ? 'rasm' : TEMPLATES[0].id),
     fields: cleanFields(data && data.fields),
-    contact: !(data && data.contact === false), info: txt(data && data.info, 1000),
+    contact: !(data && data.contact === false), contacts: cleanContacts(data && data.contacts), info: txt(data && data.info, 1000),
     logo: !!(data && data.logo), banner: !!(data && data.banner), active: true
   };
 }
@@ -497,5 +530,5 @@ function draft(data) {
 module.exports = {
   COL, BG, SUB, STAT, TYPES, TEMPLATES, MAX_FIELDS, IMG, EVENTS, DEFAULT_CC,
   slugify, validSlug, validId, save, saveBg, saveImg, delImg, imgPath, validImage, bySlug,
-  publicView, checkAnswers, phoneOf, recordEvent, emptyStat, serial, page, draft, listCol, rid, txt
+  publicView, checkAnswers, phoneOf, recordEvent, emptyStat, serial, page, draft, defaultContacts, cleanContacts, listCol, rid, txt
 };

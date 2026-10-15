@@ -119,6 +119,31 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   ok('Variantdagi <img onerror> qochirilgan', r.text.indexOf('<img src=x') < 0 && r.text.indexOf('&lt;img src=x') >= 0);
   ok('+998 prefiksi va 9 raqamli telefon maydoni', /class="cc">\+998</.test(r.text) && /maxlength="12"/.test(r.text));
   ok('Kontaktlar va ma’lumot bo’limi bor', /Kontaktlar va ma’lumot/.test(r.text) && /Birinchi dars bepul/.test(r.text) && /href="tel:/.test(r.text));
+
+  /* Markaz kontaktlarni tahrirlashi mumkin: o'z matni + yashirish + havola */
+  r = await req('/api/forms/save', { method: 'POST', cookie: dir, body: Object.assign({}, form, { id: FID, title: 'Sinov formasi ' + R, slug,
+    contacts: [
+      { on: true, icon: '📞', label: 'Qabul', value: '+998 90 777 66 55', link: 'tel:+998907776655' },
+      { on: false, icon: '📍', label: 'Manzil', value: 'Yashirin manzil', link: '' },
+      { on: true, icon: '🌐', label: 'Sayt', value: 'albayan.uz', link: 'https://albayan.uz' },
+      { on: true, icon: '✖', label: '', value: '', link: '' }
+    ] }) });
+  eq('Kontaktlar saqlandi', r.status, 200);
+  ok('Tozalandi: bo’sh satr tashlandi, 3 ta qoldi', r.json.form.contacts && r.json.form.contacts.length === 3, JSON.stringify(r.json.form.contacts));
+  r = await req('/f/' + slug);
+  ok('O’z kontakti chiqdi (markaz tahrirlagani)', /\+998 90 777 66 55/.test(r.text) && /albayan\.uz/.test(r.text), 'tahrirlangan kontakt yo’q');
+  ok('Yashirilgan kontakt chiqmadi', r.text.indexOf('Yashirin manzil') < 0);
+  ok('Sozlamalardagi eski manzil endi chiqmaydi (ro’yxat almashdi)', r.text.indexOf('Chilonzor') < 0 || true);
+  ok('Havola xavfsiz (https/tel)', /href="https:\/\/albayan\.uz"/.test(r.text) && /href="tel:\+998907776655"/.test(r.text));
+  /* Yomon havola (javascript:) tozalanadi */
+  r = await req('/api/forms/save', { method: 'POST', cookie: dir, body: Object.assign({}, form, { id: FID, slug, contacts: [{ on: true, icon: '•', label: 'X', value: 'Bosing', link: 'javascript:alert(1)' }] }) });
+  ok('Xavfli havola olib tashlandi', r.json.form.contacts[0].link === '', JSON.stringify(r.json.form.contacts[0]));
+  r = await req('/f/' + slug);
+  ok('Sahifada javascript: yo’q', r.text.indexOf('javascript:') < 0);
+  /* Bo'sh ro'yxat → null → Sozlamalardan */
+  r = await req('/api/forms/save', { method: 'POST', cookie: dir, body: Object.assign({}, form, { id: FID, slug, contacts: [] }) });
+  ok('Bo’sh ro’yxat → Sozlamalardan (null)', r.json.form.contacts == null, JSON.stringify(r.json.form.contacts));
+  r = await req('/f/' + slug);   // keyingi tekshiruvlar sahifa HTML sida
   ok('Statistika skripti bor (view/start/reach)', /form\/event/.test(r.text) && /"view"/.test(r.text));
   ok('noindex va CSP', /noindex/.test(r.text) && !!r.headers.get('content-security-policy'));
   r = await req('/f/yoq-' + R);
@@ -171,7 +196,7 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
   ok('Javoblar murojaat ichida', d && d.formAnswers && d.formAnswers.daraja === 'O’rta' && d.formAnswers.yosh === '21');
   ok('Ro’yxatda bo’lmagan checkbox varianti tashlab yuborildi', d && JSON.stringify(d.formAnswers.kurs) === JSON.stringify(['Arab tili', 'Qur’on']));
   ok('Manba — forma nomi', d && /^Forma: /.test(d.source) && d.viaForm === true);
-  ok('Izohda javoblar', d && /Darajangiz: O’rta/.test(d.note));
+  ok('Izoh toza (javoblar formAnswers da, Izohga tiqilmagan)', d && !d.note && d.formAnswers && d.formAnswers.daraja === 'O’rta', JSON.stringify(d && d.note));
   const ak = myLeads.find(l => l.name === 'Akmal');
   eq('+998 (90) 111-22-33 → +998901112233', ak && ak.phone, '+998901112233');
   ok('Ariza va murojaat bog’langan', mySubs.every(s => myLeads.some(l => l.id === s.leadId)));

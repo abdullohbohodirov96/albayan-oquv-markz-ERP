@@ -756,7 +756,10 @@
 
     var m = UI.modal({
       title: isNew ? 'Yangi murojaat' : 'Murojaat: ' + lead.name,
-      body: [callBox, f.node, dupBox],
+      body: [callBox, (lead.formAnswers && A.formAnswersBlock) ? h('details', { class: 'lead-ans', open: true }, [
+        h('summary', {}, 'Forma javoblari' + (lead.formTitle ? ' — ' + lead.formTitle : '')),
+        A.formAnswersBlock(lead)
+      ]) : null, f.node, dupBox].filter(Boolean),
       actions: [
         !isNew && App.can('lead.edit') ? {
           label: 'O’chirish', cls: 'danger', onClick: async function (c) {

@@ -14,6 +14,7 @@
   };
   var TYPES = Object.keys(TYPE_LABEL);
   var TEMPLATES = null;
+  var CONTACTS_DEF = null;
 
   function formUrl(f) {
     return location.origin + '/f/' + f.slug;
@@ -72,8 +73,8 @@
   }
   async function loadTemplates() {
     if (TEMPLATES) return TEMPLATES;
-    try { TEMPLATES = (await D.api('GET', 'api/forms/templates')).templates || []; }
-    catch (e) { TEMPLATES = []; }
+    try { var r = await D.api('GET', 'api/forms/templates'); TEMPLATES = r.templates || []; CONTACTS_DEF = r.contacts || []; }
+    catch (e) { TEMPLATES = []; CONTACTS_DEF = []; }
     return TEMPLATES;
   }
 
@@ -192,7 +193,49 @@
     var fInfo = UI.field({ label: 'Qo’shimcha ma’lumot (kontaktlar bo’limida chiqadi)', type: 'textarea', rows: 2, value: f.info || '',
       placeholder: 'Masalan: darslar dushanba–shanba, 1-dars bepul.' });
     var fContact = UI.field({ label: 'Kontaktlar va ma’lumot bo’limi', type: 'select', value: f.contact === false ? 'off' : 'on',
-      options: [{ value: 'on', label: 'Ko’rsatilsin — telefon, manzil, Telegram (Sozlamalardan)' }, { value: 'off', label: 'Ko’rsatilmasin' }] });
+      options: [{ value: 'on', label: 'Ko’rsatilsin' }, { value: 'off', label: 'Ko’rsatilmasin' }] });
+
+    /* --- Kontaktlarni tanlab/tahrirlash ---
+       Har bir kontakt satrini ko'rsatish/yashirish, matnini o'zgartirish,
+       o'chirish va yangi qo'shish mumkin. Bo'sh qoldirilsa — Sozlamalardan. */
+    var contactsBox = h('div', { class: 'qlist' });
+    var contactList = Array.isArray(f.contacts) ? JSON.parse(JSON.stringify(f.contacts)) : null;
+    function paintContacts() {
+      UI.clear(contactsBox);
+      if (!contactList) {
+        contactList = (CONTACTS_DEF ? JSON.parse(JSON.stringify(CONTACTS_DEF)) : []);
+      }
+      contactList.forEach(function (c, i) {
+        var chk = h('input', { type: 'checkbox', checked: c.on !== false, onchange: function (e) { c.on = e.target.checked; } });
+        var fi = UI.field({ label: 'Belgi', value: c.icon || '' });
+        fi.input.addEventListener('input', function () { c.icon = fi.input.value; });
+        var fl = UI.field({ label: 'Nomi', value: c.label || '' });
+        fl.input.addEventListener('input', function () { c.label = fl.input.value; });
+        var fv = UI.field({ label: 'Matn (ko’rinadigan)', value: c.value || '' });
+        fv.input.addEventListener('input', function () { c.value = fv.input.value; });
+        var fh = UI.field({ label: 'Havola (ixtiyoriy: tel:… yoki https://…)', value: c.link || '' });
+        fh.input.addEventListener('input', function () { c.link = fh.input.value; });
+        fi.wrap.style.maxWidth = '92px';
+        contactsBox.appendChild(h('div', { class: 'qrow' }, [
+          h('div', { class: 'qhead' }, [
+            h('label', { class: 'chk' }, [chk, h('span', {}, 'Ko’rsatilsin')]),
+            h('button', { type: 'button', class: 'btn sm danger', onclick: function () { contactList.splice(i, 1); paintContacts(); } }, 'O’chirish')
+          ]),
+          h('div', { class: 'rowflex', style: 'gap:8px;flex-wrap:wrap' }, [fi.wrap, fl.wrap]),
+          fv.wrap, fh.wrap
+        ]));
+      });
+      contactsBox.appendChild(h('div', { class: 'rowflex', style: 'gap:8px;flex-wrap:wrap' }, [
+        h('button', { type: 'button', class: 'btn', onclick: function () {
+          if (contactList.length >= 15) { UI.toast('Ko’pi bilan 15 ta.', 'bad'); return; }
+          contactList.push({ on: true, icon: '•', label: '', value: '', link: '' }); paintContacts();
+        } }, [UI.icon('plus'), 'Kontakt qo’shish']),
+        h('button', { type: 'button', class: 'btn sm', onclick: function () {
+          contactList = (CONTACTS_DEF ? JSON.parse(JSON.stringify(CONTACTS_DEF)) : []); paintContacts();
+        } }, 'Sozlamalardan qayta olish')
+      ]));
+    }
+    loadTemplates().then(paintContacts);
     var fTitle = UI.field({ label: 'Forma nomi', value: f.title, required: true, placeholder: 'Arab tili kursiga yozilish' });
     var fSlug = UI.field({ label: 'Havola (lotin harf, chiziqcha)', value: f.slug || '', placeholder: 'arab-tili', help: 'Bo’sh qoldirsangiz nomdan o’zi tuziladi' });
     var fIntro = UI.field({ label: 'Kirish matni', type: 'textarea', value: f.intro || '', rows: 2 });
@@ -335,7 +378,7 @@
         id: f.id, title: fTitle.input.value.trim(), slug: fSlug.input.value.trim(), intro: fIntro.input.value,
         thanks: fThanks.input.value, button: fButton.input.value, bg: f.bg,
         courseId: fCourse.input.value, active: fActive.input.value === 'on', fields: f.fields,
-        contact: fContact.input.value === 'on', info: fInfo.input.value,
+        contact: fContact.input.value === 'on', info: fInfo.input.value, contacts: contactList,
         logo: !!(f.logo && !removed.logo), banner: !!(f.banner && !removed.banner)
       };
     }
@@ -358,6 +401,7 @@
         h('div', { class: 'field full' }, [h('label', {}, 'Fon'), bgBox, bgFile]),
         h('div', { class: 'grid2' }, [logoPick, bannerPick]),
         h('div', { class: 'grid2' }, [fContact.wrap, fInfo.wrap]),
+        h('div', { class: 'field full' }, [h('label', {}, 'Kontaktlar (tanlab tahrirlang — bo’sh qoldirsangiz Sozlamalardan olinadi)'), contactsBox]),
         h('div', { class: 'field full' }, [h('label', {}, 'Savollar'), fieldsBox]),
         err
       ].filter(Boolean),
