@@ -2848,6 +2848,8 @@
     hidePreRender();
     document.getElementById('auth').hidden = true;
     document.getElementById('boot').hidden = true;
+    /* Telefoniya: jonli qo'ng'iroq oynasi uchun oqimga ulanamiz */
+    try { if (A.telLive) A.telLive.start(App); } catch (e) { /* telefoniya shart emas */ }
     document.getElementById('app').hidden = false;
     document.getElementById('me-name').textContent = user.name;
     document.getElementById('me-role').textContent = A.ROLES[user.role] || user.role;
@@ -2868,6 +2870,7 @@
   }
 
   function logout() {
+    try { if (A.telLive) A.telLive.stop(); } catch (e) { }
     try { sessionStorage.removeItem('albyana_session'); } catch (e) { }
     if (D.mode === 'server') { D.serverLogout(); }
     App.user = null;

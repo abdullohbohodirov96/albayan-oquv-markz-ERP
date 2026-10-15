@@ -139,6 +139,31 @@ const colOf = (b, c) => Object.values((b && b.col && b.col[c]) || {});
   b = await boot(dir);
   eq('O’chirilganda yozuv yaratilmadi', colOf(b, 'calls').filter(c => c.callId === 'off-' + R).length, 0);
 
+  /* ================= 2b. Jonli oqim (SSE) ================= */
+  section('2b. Jonli oqim: qo’ng’iroq ochiq brauzerga darhol boradi');
+  await req('/api/tel/config', { method: 'POST', cookie: dir, body: { enabled: true, provider: 'onlinepbx', exts: { usr_admin: '101' } } });
+  const streamOf = cookie => new Promise(resolve => {
+    const chunks = [];
+    const rq = http.get(API + '/api/tel/stream', { headers: { Cookie: cookie } }, res => {
+      res.on('data', d => { chunks.push(String(d)); if (chunks.join('').indexOf('event: call') >= 0) { rq.destroy(); resolve({ status: res.status || res.statusCode, text: chunks.join('') }); } });
+      res.on('end', () => resolve({ status: res.statusCode, text: chunks.join('') }));
+      if (res.statusCode !== 200) { res.resume(); setTimeout(() => { rq.destroy(); resolve({ status: res.statusCode, text: chunks.join('') }); }, 300); }
+    });
+    rq.on('error', () => resolve({ status: 0, text: '' }));
+    setTimeout(() => { rq.destroy(); resolve({ status: 200, text: chunks.join(''), timeout: true }); }, 4000);
+  });
+  const t403 = await streamOf(ustoz);
+  eq('O’qituvchi oqimga ulanolmaydi (403)', t403.status, 403);
+  const PH4 = '+99894' + String(1000000 + Math.floor(Math.random() * 8999999));
+  const pr = streamOf(dir);
+  await new Promise(x => setTimeout(x, 400));
+  await hook({ event: 'call_start', direction: 'inbound', caller_id_number: PH4.slice(1), destination_number: '101', uuid: 'sse-' + R });
+  const got = await pr;
+  ok('Direktor oqimida qo’ng’iroq voqeasi keldi (event: call, raqam, leadId)', got.status === 200 && /event: hello/.test(got.text) && /event: call/.test(got.text) && got.text.indexOf(PH4) >= 0 && /"leadId":"led_/.test(got.text), got.text.slice(0, 200));
+  ok('Oqimda sir yo’q', got.text.indexOf(TOKEN) < 0);
+  b = await boot(dir);
+  for (const l of colOf(b, 'leads').filter(l => l.phone === PH4)) await del('leads/' + l.id, dir);
+
   /* ================= 3. ERP dan qo'ng'iroq (soxta PBX) ================= */
   section('3. ERP dan qo’ng’iroq — soxta PBX');
   const seen = [];
@@ -177,8 +202,11 @@ const colOf = (b, c) => Object.values((b && b.col && b.col[c]) || {});
 
   /* ================= 4. Tavsiya bonusi ================= */
   section('4. Tavsiya bonusi: kod → murojaat → o’quvchi → to’lov → bonus');
+  /* Eski (telefoniya yoqilgan paytdagi) sozlama bilan saqlash — telefoniya
+     bo'limi serverda saqlanib qoladi: u faqat /api/tel/config orqali o'zgaradi */
   await put('meta/settings', Object.assign({}, b.settings, { referral: { enabled: true, amount: 100000, text: 'Do‘st olib kel' } }), dir);
   b = await boot(dir);
+  ok('Eski sozlama saqlansa ham telefoniya holati o’zgarmadi (o’chiq qoldi)', b.settings.tel && b.settings.tel.enabled === false, JSON.stringify(b.settings.tel));
   const s1 = colOf(b, 'students').find(s => s.id === ID('s'));
   ok('O’quvchida tavsiya kodi bor (server bergan, 5 belgi)', s1 && /^[A-Z0-9]{5}$/.test(s1.refCode || ''), s1 && s1.refCode);
   const CODE = s1.refCode;

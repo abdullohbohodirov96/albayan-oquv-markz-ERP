@@ -1085,6 +1085,13 @@
   function phoneLink(p) {
     var href = telHref(p);
     if (!href) return h('span', { class: 'muted' }, '—');
+    /* IP-telefoniya ulangan bo'lsa — raqam bosilishi bilan ERP o'zi qo'ng'iroq qiladi */
+    if (A.erpCallEnabled && A.erpCallEnabled()) {
+      return h('a', {
+        class: 'tel-link mono erp', href: '#', title: 'Bosing — ERP orqali qo’ng’iroq qilinadi',
+        onclick: function (e) { e.preventDefault(); e.stopPropagation(); A.erpCall(p); }
+      }, [icon('phone'), h('span', {}, String(p))]);
+    }
     return h('a', {
       class: 'tel-link mono', href: href,
       title: 'Qo’ng’iroq qilish',
@@ -1100,15 +1107,20 @@
     if (!href) return null;
     var sz = opts.small ? ' sm' : '';
     var stop = function (e) { e.stopPropagation(); };
+    var erp = A.erpCallEnabled && A.erpCallEnabled();
     var kids = [
-      h('a', {
+      erp ? h('button', {
+        type: 'button', class: 'btn' + sz + ' call-btn erp-call', title: 'ERP orqali qo’ng’iroq — telefoningiz jiringlaydi',
+        onclick: function (e) { stop(e); A.erpCall(p, e.currentTarget); }
+      }, [icon('phone'), opts.small ? null : h('span', {}, 'Qo’ng’iroq')].filter(Boolean))
+      : h('a', {
         class: 'btn' + sz + ' call-btn', href: href, onclick: stop,
         title: 'Qo’ng’iroq qilish'
       }, [icon('phone'), opts.small ? null : h('span', {}, 'Qo’ng’iroq')].filter(Boolean))
     ];
-    /* IP-telefoniya ulangan bo'lsa — ERP orqali qo'ng'iroq (PBX ga buyruq) */
-    if (A.erpCallBtn && !opts.noErp) { var erp = A.erpCallBtn(p, { small: !!opts.small }); if (erp) kids.unshift(erp); }
     if (!opts.small) {
+      /* Telefoniya bo'lsa ham oddiy telefondan qo'ng'iroq imkoni qolsin */
+      if (erp) kids.push(h('a', { class: 'btn', href: href, onclick: stop, title: 'Oddiy telefondan' }, [icon('phone'), h('span', {}, 'Telefondan')]));
       kids.push(h('a', {
         class: 'btn', href: smsHref(p), onclick: stop, title: 'SMS yozish'
       }, [icon('chat'), h('span', {}, 'SMS')]));

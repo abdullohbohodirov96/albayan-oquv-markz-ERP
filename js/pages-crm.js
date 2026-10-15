@@ -110,25 +110,159 @@
   }
   function fmtDur(s) { s = Number(s) || 0; return s ? Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2) : '—'; }
 
-  /** ERP orqali qo'ng'iroq (PBX ga buyruq). Yoqilmagan bo'lsa null. */
-  A.erpCallBtn = function (phone, opts) {
+  /** ERP orqali qo'ng'iroq yoqilganmi (telefoniya + shu xodimda ext) */
+  A.erpCallEnabled = function () {
     var t = (D.settings && D.settings.tel) || {};
     var me = A.App && A.App.user;
-    if (!t.enabled || !me || !(t.exts && t.exts[me.id]) || !phone) return null;
+    return !!(t.enabled && me && t.exts && t.exts[me.id]);
+  };
+  /** Raqamni bosish → darhol PBX ga buyruq: xodim telefoni jiringlaydi, keyin mijozga ulanadi */
+  A.erpCall = async function (phone, btn) {
+    if (!phone) return;
+    var run = async function () {
+      try {
+        UI.toast('Ulanmoqda… ' + phone, 'info');
+        await D.api('POST', 'api/tel/call', { phone: phone });
+        UI.toast('Qo’ng’iroq buyurildi — telefoningiz jiringlaydi.', 'ok');
+      } catch (x) { UI.toast(x.message || 'Qo’ng’iroq qilinmadi.', 'bad'); }
+    };
+    if (btn && UI.busy) return UI.busy(btn, run);
+    return run();
+  };
+  /** Alohida tugma (ro'yxatlarda) — yoqilmagan bo'lsa null */
+  A.erpCallBtn = function (phone, opts) {
+    if (!A.erpCallEnabled() || !phone) return null;
     opts = opts || {};
     return h('button', {
-      type: 'button', class: 'btn' + (opts.small ? ' sm' : '') + ' erp-call', title: 'ERP orqali qo’ng’iroq (ichki raqam ' + t.exts[me.id] + ')',
-      onclick: function (e) {
-        e.stopPropagation();
-        var b = e.currentTarget;
-        UI.busy(b, async function () {
-          try {
-            await D.api('POST', 'api/tel/call', { phone: phone });
-            UI.toast('Qo’ng’iroq buyurildi — telefoningiz jiringlaydi.', 'ok');
-          } catch (x) { UI.toast(x.message || 'Qo’ng’iroq qilinmadi.', 'bad'); }
-        });
-      }
-    }, [UI.icon('phone'), opts.small ? null : h('span', {}, 'ERP’dan')].filter(Boolean));
+      type: 'button', class: 'btn' + (opts.small ? ' sm' : '') + ' erp-call', title: 'ERP orqali qo’ng’iroq',
+      onclick: function (e) { e.stopPropagation(); A.erpCall(phone, e.currentTarget); }
+    }, [UI.icon('phone'), opts.small ? null : h('span', {}, 'Qo’ng’iroq')].filter(Boolean));
+  };
+
+  /* ======================= JONLI QO'NG'IROQ OYNASI ======================= */
+  /* Server (SSE) qo'ng'iroq voqeasini yuboradi → shu yerda oyna chiqadi:
+     kim qo'ng'iroq qilyapti, ma'lumoti, "Ochish / Tahrirlash / Vazifa".    */
+  var live = { es: null, pops: {}, box: null, timer: null };
+  function popBox() {
+    if (!live.box || !document.body.contains(live.box)) {
+      live.box = h('div', { class: 'call-pops', 'aria-live': 'polite' });
+      document.body.appendChild(live.box);
+    }
+    return live.box;
+  }
+  function callTitle(c) {
+    return c.dir === 'in' ? (c.status === 'ringing' ? 'Kiruvchi qo’ng’iroq' : (c.status === 'answered' ? 'Qo’ng’iroq (javob berildi)' : 'Javobsiz qo’ng’iroq')) : 'Chiquvchi qo’ng’iroq';
+  }
+  function studentInfo(s, App) {
+    var bal = A.balanceOf(s.id, A.Fin.everyInvoice(), A.Fin.everyPayment());
+    var over = A.overdueOf(s.id, A.Fin.everyInvoice(), A.Fin.everyPayment(), A.today());
+    var mems = Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; });
+    var risk = riskOf(s, A.today());
+    var rows = [
+      ['Holat', s.status === 'faol' ? 'Faol' : (s.status === 'toxtatgan' ? 'To’xtatgan' : 'Arxiv')],
+      ['Guruh', mems.length ? mems.map(function (m) { var g = D.one('groups', m.groupId); return Q.groupName(m.groupId) + (g && g.teacherId ? ' · ' + Q.staffName(g.teacherId) : ''); }).join('; ') : '—'],
+      ['Qarz', over > 0 ? h('b', { style: 'color:var(--bad)' }, A.som(over) + ' so’m (muddati o’tgan)') : (bal.debt > 0 ? A.som(bal.debt) + ' so’m' : (bal.advance > 0 ? 'Avans ' + A.som(bal.advance) : 'Qarz yo’q'))],
+      ['Oxirgi kelgan', risk.lastSeen ? A.dateLabel(risk.lastSeen) : '—'],
+      s.parentName ? ['Ota-ona', s.parentName + (s.parentPhone ? ' · ' + s.parentPhone : '')] : null,
+      s.note ? ['Izoh', s.note] : null
+    ].filter(Boolean);
+    return rows;
+  }
+  function leadInfo(l) {
+    var fn = D.one('funnels', l.funnelId) || A.DEFAULT_FUNNELS.filter(function (x) { return x.id === (l.funnelId || 'fnl_asosiy'); })[0];
+    return [
+      ['Holat', A.stageOf(fn, l.stage).label],
+      l.courseId ? ['Kurs', Q.courseName(l.courseId)] : null,
+      ['Manba', l.source || '—'],
+      l.ownerStaffId ? ['Mas’ul', Q.staffName(l.ownerStaffId)] : null,
+      l.nextContact ? ['Keyingi aloqa', A.dateLabel(l.nextContact)] : null,
+      l.note ? ['Izoh', l.note] : null
+    ].filter(Boolean);
+  }
+  A.callPop = function (c, App) {
+    App = App || A.App;
+    var box = popBox();
+    var old = live.pops[c.id];
+    if (old && old.node) old.node.remove();
+    var s = c.studentId ? D.one('students', c.studentId) : null;
+    var l = !s && c.leadId ? D.one('leads', c.leadId) : null;
+    var who = s ? Q.studentName(s.id) : (l ? l.name : 'Notanish raqam');
+    var kind = s ? UI.pill('O’quvchi', 'ok') : (l ? UI.pill(c.newLead ? 'Yangi murojaat' : 'Murojaat', 'info') : UI.pill('Notanish', 'mute'));
+    var rows = s ? studentInfo(s, App) : (l ? leadInfo(l) : [['Ma’lumot', 'Bu raqam bazada yo’q.']]);
+    var dl = h('dl', { class: 'kv' }, rows.map(function (r) { return [h('dt', {}, r[0]), h('dd', {}, r[1])]; }).flat());
+    var stPill = c.status === 'ringing' ? UI.pill('Jiringlayapti', 'warn') : callStatusPill(c);
+    var node = h('div', { class: 'call-pop' + (c.status === 'ringing' ? ' ringing' : ''), 'data-call': c.id, role: 'status' }, [
+      h('div', { class: 'cp-head' }, [
+        h('span', { class: 'cp-ico' }, '📞'),
+        h('div', { class: 'cp-title' }, [h('b', {}, callTitle(c)), h('div', { class: 'small muted' }, (c.ext ? 'Ichki raqam ' + c.ext + ' · ' : '') + c.at)]),
+        stPill,
+        h('button', { type: 'button', class: 'x-btn', 'aria-label': 'Yopish', onclick: function () { closePop(c.id); } }, '×')
+      ]),
+      h('div', { class: 'cp-who' }, [h('b', {}, who), ' ', kind]),
+      h('div', { class: 'cp-phone mono' }, c.phone),
+      dl,
+      h('div', { class: 'cp-actions rowflex' }, [
+        s ? h('button', { class: 'btn sm primary', onclick: function () { App.go('student', { id: s.id }); closePop(c.id); } }, 'Kartani ochish') : null,
+        s && App.can('student.edit') ? h('button', { class: 'btn sm', onclick: function () { A.studentForm(s, App); } }, 'Tahrirlash') : null,
+        l && App.can('lead.edit') ? h('button', { class: 'btn sm primary', onclick: function () { A.leadForm(l, App); } }, 'Ochish / tahrirlash') : null,
+        !s && !l && App.can('lead.edit') ? h('button', { class: 'btn sm primary', onclick: function () {
+          A.leadForm({ name: '', phone: c.phone, stage: 'yangi', source: 'Qo‘ng‘iroq', createdAt: A.nowStamp(), nextContact: A.today(), funnelId: (A.sortBy(D.all('funnels'), 'order')[0] || A.DEFAULT_FUNNELS[0]).id }, App);
+        } }, 'Murojaat qo’shish') : null,
+        App.can('nav.tasks') ? h('button', { class: 'btn sm', onclick: function (e) {
+          UI.busy(e.currentTarget, async function () {
+            var me = App.user;
+            var rec = { id: A.uid('tsk'), title: 'Qo’ng’iroq: ' + who + ' ' + c.phone, status: 'yangi', due: A.today(), assigneeId: me.id, createdById: me.id,
+              createdAt: A.nowStamp(), studentId: s ? s.id : '', leadId: l ? l.id : '', callId: c.id };
+            await D.save('tasks', rec, { action: 'Vazifa qo’shildi', entity: rec.title, details: 'qo’ng’iroq' });
+            UI.toast('Vazifa qo’shildi.', 'ok');
+          });
+        } }, 'Vazifa') : null,
+        c.status === 'missed' ? A.erpCallBtn(c.phone, { small: true }) : null,
+        c.record ? h('a', { class: 'btn sm', href: c.record, target: '_blank', rel: 'noopener' }, '▶ Yozuv') : null
+      ].filter(Boolean))
+    ]);
+    box.prepend(node);
+    live.pops[c.id] = { node: node, call: c, at: Date.now() };
+    /* Ko'pi bilan 3 ta oyna; tugagan qo'ng'iroq 40 soniyadan keyin o'zi yopiladi */
+    var keys = Object.keys(live.pops);
+    while (keys.length > 3) closePop(keys.shift());
+    if (live.pops[c.id] && c.status !== 'ringing') {
+      live.pops[c.id].timer = setTimeout(function () { closePop(c.id); }, 40000);
+    }
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted' && c.dir === 'in' && c.status === 'ringing') {
+      try { new Notification(who + ' qo’ng’iroq qilyapti', { body: c.phone, tag: 'alb-call-' + c.id }); } catch (e) { /* bildirishnoma shart emas */ }
+    }
+    return node;
+  };
+  function closePop(id) {
+    var p = live.pops[id]; if (!p) return;
+    if (p.timer) clearTimeout(p.timer);
+    if (p.node) p.node.remove();
+    delete live.pops[id];
+  }
+  A.closeCallPop = closePop;
+
+  /** Jonli oqim: kirgandan keyin ulanadi, chiqqanda uziladi */
+  A.telLive = {
+    start: function (App) {
+      App = App || A.App;
+      this.stop();
+      var t = (D.settings && D.settings.tel) || {};
+      if (!t.enabled || !App || !App.user || !App.can('nav.leads') || typeof EventSource === 'undefined') return false;
+      var es = new EventSource('api/tel/stream');
+      live.es = es;
+      es.addEventListener('call', async function (ev) {
+        var c; try { c = JSON.parse(ev.data); } catch (e) { return; }
+        if (!c || c.dir !== 'in') return;
+        /* Server murojaat/vazifa ochgan bo'lishi mumkin — yangilab olamiz */
+        try { await D.loadBootstrap(); } catch (e) { /* oynani baribir ko'rsatamiz */ }
+        A.callPop(c, App);
+        if (App.route && App.route.name === 'leads') App.render();
+      });
+      return true;
+    },
+    stop: function () { if (live.es) { try { live.es.close(); } catch (e) { } live.es = null; } },
+    connected: function () { return !!live.es && live.es.readyState !== 2; }
   };
 
   A.callsCard = function (App, opts) {
@@ -531,7 +665,7 @@
         h('div', { class: 'rowflex', style: 'gap:8px;flex-wrap:wrap' }, [
           h('button', { class: 'btn primary', type: 'button', onclick: function (e) {
             UI.busy(e.currentTarget, async function () {
-              try { await D.api('POST', 'api/tel/config', values()); await D.loadBootstrap(); await load(); UI.toast('Saqlandi.', 'ok'); }
+              try { await D.api('POST', 'api/tel/config', values()); await D.loadBootstrap(); await load(); A.telLive.start(App); UI.toast('Saqlandi.', 'ok'); }
               catch (x) { UI.toast(x.message, 'bad'); }
             });
           } }, 'Saqlash'),
@@ -542,8 +676,11 @@
               catch (x) { UI.toast(x.message, 'bad'); }
             });
           } }, 'Sinov qo’ng’irog’i'),
-          h('button', { class: 'btn', type: 'button', onclick: function () { App.go('leads', { view: 'calls' }); } }, 'Qo’ng’iroqlar ro’yxati')
-        ])
+          h('button', { class: 'btn', type: 'button', onclick: function () { App.go('leads', { view: 'calls' }); } }, 'Qo’ng’iroqlar ro’yxati'),
+          typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? h('button', { class: 'btn', type: 'button', onclick: function (e) {
+            Notification.requestPermission().then(function (p) { UI.toast(p === 'granted' ? 'Brauzer bildirishnomasi yoqildi.' : 'Ruxsat berilmadi.', p === 'granted' ? 'ok' : 'bad'); if (p === 'granted') e.target.remove(); });
+          } }, 'Brauzer bildirishnomasini yoqish') : null
+        ].filter(Boolean))
       ]));
       function values() {
         var ex = {};

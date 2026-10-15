@@ -273,6 +273,23 @@ function readBody(req, max) {
   return pr;
 }
 
+/* ---------------- Jonli oqim (SSE): qo'ng'iroq → ochiq brauzerlar ----------------
+   Kimdir markazga qo'ng'iroq qilsa, PBX webhook keladi va shu yerdan
+   hamma ochiq ERP oynasiga darhol yetkaziladi — sahifani yangilamasdan
+   "kim qo'ng'iroq qilyapti" oynasi chiqadi. Faqat nav.leads bo'lganlarga. */
+const liveClients = new Set();
+function liveBroadcast(kind, data) {
+  const msg = 'event: ' + kind + '\ndata: ' + JSON.stringify(data).replace(/\n/g, ' ') + '\n\n';
+  for (const c of liveClients) {
+    try { c.res.write(msg); } catch (e) { liveClients.delete(c); }
+  }
+}
+setInterval(() => {
+  for (const c of liveClients) {
+    try { c.res.write(': ping\n\n'); } catch (e) { liveClients.delete(c); }
+  }
+}, 25000).unref();
+
 /* ---------------- So'rov cheklovi (webhook uchun) ---------------- */
 const intakeHits = new Map();
 function intakeAllowed(req) {
@@ -1526,6 +1543,15 @@ async function guardWrite(user, p, method, next) {
     return { data };
   }
 
+  /* --- Sozlamalar: telefoniya bo'limi faqat /api/tel/config orqali.
+     Boshqa brauzerda ochiq turgan eski sozlama saqlansa ham telefoniya
+     o'chib yoki ichki raqamlar yo'qolib qolmasin.                     --- */
+  if (p === 'meta/settings' && method === 'PUT') {
+    const data = Object.assign({}, next);
+    if (old && old.tel) data.tel = old.tel; else delete data.tel;
+    return { data };
+  }
+
   /* --- Guruh: kod va Telegram bog'lanishini server boshqaradi --- */
   if (col === 'groups' && method === 'PUT') {
     const data = Object.assign({}, next);
@@ -2373,6 +2399,7 @@ async function handleApi(req, res, url) {
     if (!body || typeof body !== 'object') return send(res, 400, { error: 'Ma’lumot noto’g’ri.' });
     const r = await tel.handleEvent(store, body, { A, settings, stamp, today: stamp().slice(0, 10), writeAudit });
     if (!r.ok) return send(res, 400, { error: 'Raqam topilmadi.' });
+    liveBroadcast('call', r.call);
     return send(res, 200, { ok: true, id: r.call.id, status: r.call.status, leadId: r.call.leadId || '', taskId: r.call.taskId || '' });
   }
   if (route === 'form' && req.method === 'GET') {
@@ -2657,6 +2684,19 @@ async function handleApi(req, res, url) {
   if (!user) return send(res, 401, { error: 'Kirish talab qilinadi.' });
 
   if (route === 'me') return send(res, 200, { user: safeUser(user) });
+  /* Jonli oqim: qo'ng'iroqlar (faqat murojaatlar bilan ishlaydiganlarga) */
+  if (route === 'tel/stream' && req.method === 'GET') {
+    if (!A.can(user, 'nav.leads')) return send(res, 403, { error: 'Ruxsat yo’q.' });
+    res.writeHead(200, Object.assign({}, securityHeaders(req), {
+      'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive', 'X-Accel-Buffering': 'no'
+    }));
+    res.write('event: hello\ndata: {"ok":true}\n\n');
+    const client = { res, userId: user.id };
+    liveClients.add(client);
+    req.on('close', () => liveClients.delete(client));
+    return;
+  }
   if (route === 'bootstrap') return send(res, 200, await apiBootstrap(user));
 
   /* ================= O'QUV QISMI (xodimlar tomoni) ================= */
@@ -2960,6 +3000,7 @@ async function handleApi(req, res, url) {
     const settings = (await store.get('meta/settings')) || {};
     const r = await tel.handleEvent(store, { event: 'call_end', direction: 'inbound', caller_id_number: '+998900000000', destination_number: '100', billsec: 0, hangup_cause: 'NO_ANSWER', uuid: 'test-' + Date.now() },
       { A, settings: Object.assign({}, settings, { tel: Object.assign({}, settings.tel, { enabled: true }) }), stamp, today: stamp().slice(0, 10), writeAudit });
+    if (r.ok) liveBroadcast('call', r.call);
     return send(res, 200, r);
   }
   /* ---------- TAVSIYA BONUSI ---------- */
