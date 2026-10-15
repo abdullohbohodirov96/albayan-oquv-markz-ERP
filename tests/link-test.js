@@ -184,6 +184,16 @@ const GROUP = -100777;     // Telegram guruhi
   const s1r2 = await store.get('students/s1');
   ok('Kod bilan qayta bog’lanmadi', !(s1r2.telegram && s1r2.telegram.id), JSON.stringify(s1r2.telegram));
 
+  /* Ammo administrator bir martalik HAVOLA bersa — qayta ulanadi
+     (bekor qulfi faqat kodni to'sadi, token esa qulfni ochadi). */
+  if (link) {
+    const reNew = await link.create(store, { studentId: 's1', byUserId: 'usr_admin', stamp });
+    await B.onMessage({ chat: { id: OWNER, type: 'private' }, from: { id: OWNER }, text: '/start ' + reNew.token });
+    const s1r3 = await store.get('students/s1');
+    ok('Havola (token) bilan qayta ulandi', !!(s1r3.telegram && s1r3.telegram.id === String(OWNER)), JSON.stringify(s1r3.telegram));
+    ok('Qayta ulangach bekor qulfi ochildi', !s1r3.relinkLock, JSON.stringify(s1r3.relinkLock));
+  }
+
   /* ================= 5. Xavfsiz yuborish ================= */
   section('5. Shaxsiy xabar guruh suhbatiga yuborilmaydi');
   await store.set('students/s4', {

@@ -174,6 +174,61 @@
     return '';
   }
 
+  /* ---------- Qatorlardan yozuv tuzish (brauzersiz ham sinaladi) ---------- */
+  function recordsFrom(kind, rows, map) {
+    var out = [];
+    (rows || []).forEach(function (r) {
+      function g(field) {
+        var idx = map[field];
+        if (idx == null) return '';
+        return String(r[idx] == null ? '' : r[idx]).trim();
+      }
+      var rec = {};
+      if (kind === 'students') {
+        var ln = g('lastName'), fn = g('firstName');
+        if (!ln && !fn) {
+          var full = g('fullName');
+          if (full) {
+            var parts = full.split(/\s+/);
+            ln = parts[0] || '';
+            fn = parts.slice(1).join(' ') || '';
+          }
+        }
+        rec.lastName = ln;
+        rec.firstName = fn;
+        rec.phone = A.normPhone(g('phone'));
+        rec.parentName = g('parentName');
+        rec.parentPhone = A.normPhone(g('parentPhone')) || rec.phone;
+        rec.birthDate = cellDate(g('birthDate'));
+        /* Tayyor shaxsiy kod — faylda bo'lsa o'shasi olinadi va o'zgarmaydi.
+           Kod 5 xonali (eski kodlar 4 xonali) — kesib qisqartirmaymiz.
+           Ilgari .slice(0,4) edi: 5 xonali kod 4 xonaga kesilib, noto'g'ri
+           (yoki umuman band) kod bilan yozilardi.                         */
+        rec.code = String(g('code') || '').replace(/\D/g, '').slice(0, 5);
+        /* To'lov sanasi/kuni — xom holicha olinadi, doImport ichida
+           sana sifatida tahlil qilinadi. Ilgari bular umuman olinmasdi
+           (undefined bo'lib qolardi) — shuning uchun to'lov sanasi
+           import paytida tushib qolardi.                                 */
+        rec.payDate = g('payDate');
+        rec.payDay = g('payDay');
+        rec.group = g('group');
+        rec.note = g('note');
+        if (!rec.lastName && !rec.firstName && !rec.phone) return;
+      } else {
+        var nm = g('fullName');
+        rec.name = nm;
+        rec.phone = A.normPhone(g('phone'));
+        rec.course = g('course');
+        rec.source = g('source') || 'Import';
+        rec.note = g('note');
+        rec.nextContact = cellDate(g('nextContact'));
+        if (!rec.name && !rec.phone) return;
+      }
+      out.push(rec);
+    });
+    return out;
+  }
+
   /* ---------- Import oynasi ---------- */
   var TARGETS = {
     students: [
@@ -185,6 +240,8 @@
       { id: 'parentPhone', label: 'Ota-ona telefoni' },
       { id: 'birthDate', label: 'Tug’ilgan sana' },
       { id: 'code', label: 'Shaxsiy kod (5 raqam)' },
+      { id: 'payDate', label: 'To’lov sanasi (dars boshlangan sana)' },
+      { id: 'payDay', label: 'To’lov kuni (har oyning 1–28)' },
       { id: 'group', label: 'Guruh (kod yoki nom)' },
       { id: 'note', label: 'Izoh' }
     ],
@@ -273,48 +330,7 @@
     }
 
     function buildRecords() {
-      var out = [];
-      state.rows.forEach(function (r) {
-        function g(field) {
-          var idx = state.map[field];
-          if (idx == null) return '';
-          return String(r[idx] == null ? '' : r[idx]).trim();
-        }
-        var rec = {};
-        if (kind === 'students') {
-          var ln = g('lastName'), fn = g('firstName');
-          if (!ln && !fn) {
-            var full = g('fullName');
-            if (full) {
-              var parts = full.split(/\s+/);
-              ln = parts[0] || '';
-              fn = parts.slice(1).join(' ') || '';
-            }
-          }
-          rec.lastName = ln;
-          rec.firstName = fn;
-          rec.phone = A.normPhone(g('phone'));
-          rec.parentName = g('parentName');
-          rec.parentPhone = A.normPhone(g('parentPhone')) || rec.phone;
-          rec.birthDate = cellDate(g('birthDate'));
-          /* Tayyor shaxsiy kod — faylda bo'lsa o'shasi olinadi va o'zgarmaydi */
-          rec.code = String(g('code') || '').replace(/\D/g, '').slice(0, 4);
-          rec.group = g('group');
-          rec.note = g('note');
-          if (!rec.lastName && !rec.firstName && !rec.phone) return;
-        } else {
-          var nm = g('fullName');
-          rec.name = nm;
-          rec.phone = A.normPhone(g('phone'));
-          rec.course = g('course');
-          rec.source = g('source') || 'Import';
-          rec.note = g('note');
-          rec.nextContact = cellDate(g('nextContact'));
-          if (!rec.name && !rec.phone) return;
-        }
-        out.push(rec);
-      });
-      return out;
+      return recordsFrom(kind, state.rows, state.map);
     }
 
     function paintPreview() {
@@ -328,7 +344,9 @@
         'Ko’rib chiqish (' + recs.length + ' ta yozuv, dastlabki 5 tasi)'));
       var cols = kind === 'students'
         ? [{ label: 'Familiya', key: 'lastName' }, { label: 'Ism', key: 'firstName' },
-        { label: 'Telefon', key: 'phone' }, { label: 'Ota-ona', key: 'parentName' },
+        { label: 'Telefon', key: 'phone' },
+        { label: 'Kod', render: function (r) { return r.code || '—'; } },
+        { label: 'To’lov sanasi', render: function (r) { return cellDate(r.payDate) || (dayNumber(r.payDay) ? ('har oyning ' + dayNumber(r.payDay) + '-si') : '—'); } },
         { label: 'Guruh', key: 'group' }]
         : [{ label: 'Ism', key: 'name' }, { label: 'Telefon', key: 'phone' },
         { label: 'Kurs', key: 'course' }, { label: 'Manba', key: 'source' }];
@@ -540,9 +558,10 @@
 
   A.importHelpers = {
     analyse: analyse, guessField: guessField, parseCsvText: parseCsvText,
-    cellDate: cellDate, norm: norm,
-    /* Sinov uchun ochiq: import mantig'i (guruh yaratish ham shu
-       yerda) brauzersiz tekshirilsin.                            */
+    cellDate: cellDate, dayNumber: dayNumber, norm: norm,
+    /* Sinov uchun ochiq: import mantig'i (ustunlardan yozuv tuzish va
+       guruh yaratish) brauzersiz tekshirilsin.                      */
+    recordsFrom: recordsFrom,
     doImport: doImport
   };
 })(typeof window !== 'undefined' ? window : globalThis);

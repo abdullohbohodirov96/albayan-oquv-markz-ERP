@@ -111,6 +111,7 @@ async function attach(store, opts) {
      guruhga bog'lab bo'lmaydi — aks holda ism, qarz va davomat guruhdagi
      hammaga ko'rinardi.                                                    */
   if (chatId.charAt(0) === '-') return { ok: false, reason: 'guruh' };
+  const via = String((opts && opts.via) || 'token');
   return withLock('student:' + studentId, async () => {
     const st = await store.get('students/' + studentId);
     if (!st) return { ok: false, reason: 'topilmadi' };
@@ -118,7 +119,16 @@ async function attach(store, opts) {
     if (cur && cur !== chatId && !(opts && opts.force)) {
       return { ok: false, reason: 'band', current: cur };
     }
+    /* Bog'lanish ataylab BEKOR qilingan bo'lsa (relinkLock), shaxsiy kod
+       bilan o'z-o'zidan qayta ulanib bo'lmaydi: aks holda "bekor qilish"
+       ma'nosiz bo'lardi — uzilgan (masalan o'g'irlangan) suhbat kodni
+       qayta yozib tiklanib olardi. Qayta ulash uchun administrator bir
+       martalik HAVOLA (token) beradi — token/force esa qulfni ochadi. */
+    if (via === 'kod' && st.relinkLock) {
+      return { ok: false, reason: 'bekor' };
+    }
     const from = (opts && opts.from) || {};
+    if (via !== 'kod' || (opts && opts.force)) delete st.relinkLock;
     st.telegram = {
       id: chatId,
       tgUserId: String(from.id || chatId),      // barqaror identifikator
@@ -145,6 +155,9 @@ async function revoke(store, opts) {
     if (!st) return { ok: false, reason: 'topilmadi' };
     const chatId = st.telegram && st.telegram.id ? String(st.telegram.id) : '';
     delete st.telegram;
+    /* Kod bilan o'z-o'zidan qayta ulanishni to'sib qo'yamiz —
+       faqat administrator bergan bir martalik havola qaytara oladi. */
+    st.relinkLock = true;
     await store.set('students/' + studentId, st);
     if (chatId) {
       try { await store.set('botstate/' + chatId, { chatId, step: 'start' }); } catch (e) { }

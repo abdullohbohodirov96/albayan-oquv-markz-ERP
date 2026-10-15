@@ -529,6 +529,11 @@ async function handleLinkFlow(chatId, text, from, st) {
           await sendMessage(chatId,
             'Bu o’quvchi allaqachon boshqa Telegram hisobiga bog’langan.\n' +
             'O’zingiznikiga ulash uchun markaz administratoridan <b>bir martalik havola</b> so’rang.');
+        } else if (at.reason === 'bekor') {
+          await sendMessage(chatId,
+            'Bu hisobning bog’lanishi bekor qilingan. Xavfsizlik uchun uni faqat ' +
+            'shaxsiy kod bilan qayta ulab bo’lmaydi.\n' +
+            'Qayta ulash uchun markaz administratoridan <b>bir martalik havola</b> so’rang.');
         } else if (at.reason === 'guruh') {
           await sendMessage(chatId, 'Bu guruh suhbati — shaxsiy hisobni bu yerda bog’lab bo’lmaydi. Botga shaxsiy yozing.');
         } else {

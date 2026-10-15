@@ -3523,9 +3523,13 @@ async function handleApi(req, res, url) {
          2) avval ZAXIRA nusxa olinadi — olinmasa, tozalanmaydi;
          3) «O'CHIRAMAN» deb yozilishi shart.
 
-       NIMA QOLADI: kirish hisoblari (users), xodimlar (staff) va
-       markaz sozlamasi. Aks holda tozalagandan keyin tizimga
-       kirib ham bo'lmasdi.                                      */
+       NIMA QOLADI: kirish hisoblari (users), xodimlar (staff),
+       markaz sozlamasi (meta) VA markaz yasagan FORMALAR (forms,
+       formbg — logo/banner/fon rasmlari bilan). Aks holda tozalagandan
+       keyin tizimga kirib ham bo'lmasdi, hamda qiyinchilik bilan
+       yasalgan formalar ham yo'qolib ketardi. Formadagi SINOV
+       to'ldirishlari (formsub) va statistikasi (formstat) esa
+       tozalanadi — ular demo ma'lumot.                          */
     if (route === 'backup/reset' && req.method === 'POST') {
       if (!user || user.role !== 'direktor') {
         return send(res, 403, { error: 'Bazani faqat direktor tozalay oladi.' });
@@ -3534,8 +3538,12 @@ async function handleApi(req, res, url) {
       if (String(body.confirm || '') !== 'O’CHIRAMAN' && String(body.confirm || '') !== "O'CHIRAMAN") {
         return send(res, 400, { error: 'Tasdiqlash uchun «O’CHIRAMAN» deb yozing.' });
       }
-      /* Saqlanadigan to'plamlar — ularsiz tizimga kirib bo'lmaydi */
-      const KEEP = ['users', 'staff', 'meta'];
+      /* Saqlanadigan to'plamlar — ularsiz tizimga kirib bo'lmaydi,
+         yoki markaz qayta yasashga majbur bo'ladi:
+           users/staff/meta — kirish va sozlama;
+           forms/formbg      — markaz yasagan formalar va rasmlari.
+         formsub/formstat SAQLANMAYDI — ular sinov to'ldirishlari. */
+      const KEEP = ['users', 'staff', 'meta', 'forms', 'formbg'];
       let saved = null;
       try {
         saved = await withLock('backup', () => backup.makeBackup(store, 'tozalashdan oldin'));
