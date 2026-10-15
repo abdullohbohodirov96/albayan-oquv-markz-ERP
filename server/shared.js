@@ -62,6 +62,7 @@ function writePermFor(docPath) {
   if (col === 'botstate' || col === 'botin') return '__server__';  // faqat bot yozadi
   if (col === 'staffsess' || col === 'kabsess' || col === 'linktokens') return '__server__';
   if (col === 'forms' || col === 'formbg' || col === 'formsub' || col === 'formstat') return '__server__';
+  if (col === 'calls' || col === 'referrals') return '__server__';
   return map[col] || '__server__';
 }
 
@@ -162,6 +163,8 @@ function visibleData(user, all) {
       /* Formalar va kelgan arizalar — murojaatlar bilan ishlaydiganlarga.
          Fon rasmi (formbg) ro'yxatga tushmaydi — og'ir, /api/form-bg beradi. */
       case 'forms': case 'formsub': case 'formstat': return A.can(user, 'nav.leads');
+      case 'calls': return A.can(user, 'nav.leads');
+      case 'referrals': return A.can(user, 'nav.students') || A.can(user, 'nav.finance');
       /* Saytdagi izohlar — sozlamani boshqaradiganlarga (tasdiqlash uchun) */
       case 'reviews': return A.can(user, 'settings.edit');
       /* Daraja testi natijalari — murojaatlar bilan ishlaydiganlarga.

@@ -10,7 +10,7 @@
   var TYPE_LABEL = {
     text: 'Qisqa matn', textarea: 'Uzun matn', phone: 'Telefon',
     select: 'Ro’yxatdan tanlash', radio: 'Bitta variant', checkbox: 'Bir nechta variant',
-    number: 'Raqam', date: 'Sana'
+    number: 'Raqam', date: 'Sana', referral: 'Tavsiya kodi (do‘sti bergan)'
   };
   var TYPES = Object.keys(TYPE_LABEL);
   var TEMPLATES = null;

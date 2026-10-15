@@ -476,6 +476,7 @@ node tests/i18n-audit.js        # tarjima qamrovi
 node tests/security-test.js  <port> <parol>    # maxfiy fayllar, huquqlar, pul
 node tests/perm-test.js      <port> <parol>    # yozuv kimga tegishli va holat o'zgarishi
 node tests/forma-test.js     <port> <parol>    # formalar: tuzish, ochiq sahifa, +998, rasm, statistika
+node tests/crm-test.js       <port> <parol>    # telefoniya webhook/qo'ng'iroq, tavsiya bonusi, ketish sababi
 node tests/yiqilmaslik-test.js               # ichki asinxron xato serverni o'chirmasligi (o'zi server ko'taradi)
 node tests/chat-test.js      <port> <parol>    # suhbat maxfiyligi va xabar yuborish
 node tests/chat-ui-test.js   <port> <parol>    # suhbat brauzer tomoni

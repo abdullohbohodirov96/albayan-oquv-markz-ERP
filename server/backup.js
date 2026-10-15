@@ -106,6 +106,11 @@ function readForDownload(name) {
     });
     dump.tokenOlibTashlandi = true;
   }
+  /* Telefoniya sirlari (API kalit, webhook tokeni) ham chiqmaydi */
+  if (docs && docs['meta/telsecret']) { delete docs['meta/telsecret']; dump.tokenOlibTashlandi = true; }
+  /* Sir olib tashlangan bo'lsa nazorat summasi QAYTA hisoblanadi —
+     aks holda yuklab olingan nusxa "buzilgan" deb tiklanmas edi.   */
+  if (dump && dump.tokenOlibTashlandi && dump.checksum) dump.checksum = checksum(dump);
   return dump;
 }
 

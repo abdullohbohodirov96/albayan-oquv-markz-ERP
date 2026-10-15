@@ -240,6 +240,11 @@ async function summary(store, student) {
       status: student.status || 'faol'
     },
     center: { name: settings.centerName || 'AlBayan Cairo', phone: settings.phone || '' },
+    /* "Do‘stingni olib kel": kod va shart — pul miqdori emas, matn */
+    referral: (settings.referral && settings.referral.enabled === true && student.refCode)
+      ? { code: student.refCode, text: String(settings.referral.text || '').slice(0, 300) ||
+          ('Do‘stingizni olib keling — ' + (Math.round(Number(settings.referral.amount) || 0) ? Math.round(Number(settings.referral.amount)).toLocaleString('ru-RU') + ' so‘m chegirma' : 'bonus') + ' olasiz.') }
+      : null,
     groups: groupList,
     finance: {
       charged: bal.charged, received: bal.received,

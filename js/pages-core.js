@@ -504,6 +504,8 @@
     var stageFilter = route.stage || 'all';
 
     var allLeads = D.all('leads');
+    var viewMode = route.view || (A.leadsViewPref ? A.leadsViewPref() : 'table');
+    if (['table', 'board', 'calls'].indexOf(viewMode) < 0) viewMode = 'table';
     function inFunnel(l) {
       return (l.funnelId || 'fnl_asosiy') === funnel.id;
     }
@@ -531,11 +533,39 @@
       }, [UI.icon('down'), 'Excel'])
     ]));
 
+    // Ko'rinish: jadval / doska (kanban) / qo'ng'iroqlar
+    var missedToday = D.all('calls').filter(function (c) { return c.status === 'missed' && c.dir === 'in' && String(c.at || '').slice(0, 10) === today; }).length;
+    view.appendChild(h('div', { class: 'seg view-seg', style: 'margin-bottom:10px' }, [
+      { id: 'table', label: 'Jadval', icon: 'list' }, { id: 'board', label: 'Doska', icon: 'layers' },
+      { id: 'calls', label: 'Qo’ng’iroqlar' + (missedToday ? ' (' + missedToday + ' javobsiz)' : ''), icon: 'phone' }
+    ].map(function (v) {
+      return h('button', { type: 'button', 'aria-pressed': viewMode === v.id ? 'true' : 'false', onclick: function () {
+        if (v.id !== 'calls' && A.setLeadsViewPref) A.setLeadsViewPref(v.id);
+        App.go('leads', { funnelId: funnel.id, view: v.id });
+      } }, v.label);
+    })));
+    if (viewMode === 'calls') {
+      view.appendChild(A.callsCard(App, { filter: route.cf || 'all', onFilter: function (id) { App.go('leads', { funnelId: funnel.id, view: 'calls', cf: id }); } }));
+      return;
+    }
+
     // Voronkalar
     view.appendChild(UI.tabs(funnels.map(function (f) {
       var n = allLeads.filter(function (l) { return (l.funnelId || 'fnl_asosiy') === f.id; }).length;
       return { id: f.id, label: f.name + ' (' + n + ')' };
-    }), funnel.id, function (id) { App.go('leads', { funnelId: id }); }));
+    }), funnel.id, function (id) { App.go('leads', { funnelId: id, view: viewMode }); }));
+
+    if (viewMode === 'board') {
+      var boardLeads = allLeads.filter(inFunnel);
+      if (!boardLeads.length) {
+        view.appendChild(UI.card(null, UI.empty({ title: 'Murojaat yo’q', text: 'Yangi murojaat qo’shing — u doskada "Yangi" ustunida paydo bo’ladi.',
+          action: App.can('lead.edit') ? { label: 'Murojaat qo’shish', onClick: function () { leadForm(null, App, funnel.id); } } : null })));
+        return;
+      }
+      view.appendChild(h('p', { class: 'small muted', style: 'margin:0 0 8px' }, 'Kartani sudrab boshqa ustunga tashlang — holat o’zgaradi. Telefonda ◀ ▶ tugmalari.'));
+      view.appendChild(A.leadsKanban(boardLeads, funnel, App));
+      return;
+    }
 
     var counts = {};
     stages.forEach(function (s) {
@@ -547,7 +577,7 @@
         .map(function (s) {
           return h('button', {
             type: 'button', 'aria-pressed': stageFilter === s.id ? 'true' : 'false',
-            onclick: function () { App.go('leads', { funnelId: funnel.id, stage: s.id }); }
+            onclick: function () { App.go('leads', { funnelId: funnel.id, stage: s.id, view: 'table' }); }
           }, s.label);
         })),
       route.due ? h('button', { class: 'btn sm', onclick: function () { App.go('leads', { funnelId: funnel.id }); } }, 'Filtrni olib tashlash') : null
@@ -671,8 +701,24 @@
         name: 'stage', label: 'Holat', type: 'select', value: lead.stage,
         options: A.funnelStages(curFunnel).map(function (s) { return { value: s.id, label: s.label }; })
       },
+      { name: 'refCode', label: 'Tavsiya kodi (do’sti aytgan bo’lsa)', value: lead.refCode || '', placeholder: 'ABCDE',
+        help: lead.referrerStudentId && D.one('students', lead.referrerStudentId) ? 'Tavsiya qildi: ' + Q.studentName(lead.referrerStudentId) : '' },
       { name: 'note', label: 'Izoh', type: 'textarea', value: lead.note, full: true }
     ]);
+    /* Tavsiya kodi yozilsa — kimniki ekanini darrov ko'rsatamiz */
+    var refIn = f.get('refCode').input;
+    var refHelp = refIn.closest('.field').querySelector('.help') || refIn.closest('.field').appendChild(h('div', { class: 'help' }));
+    var refOwner = lead.referrerStudentId || '';
+    async function checkRef() {
+      var code = refIn.value.trim().toUpperCase();
+      refIn.value = code;
+      if (!code) { refOwner = ''; refHelp.textContent = ''; return; }
+      var st = D.all('students').filter(function (x) { return x.refCode === code; })[0];
+      if (!st) { try { st = (await D.api('GET', 'api/referral/lookup?code=' + encodeURIComponent(code))).student; } catch (e) { st = null; } }
+      if (st) { refOwner = st.id; refHelp.textContent = 'Tavsiya qildi: ' + (st.name || Q.studentName(st.id)); refHelp.style.color = ''; }
+      else { refOwner = ''; refHelp.textContent = 'Bunday kod topilmadi.'; refHelp.style.color = 'var(--bad)'; }
+    }
+    refIn.addEventListener('blur', checkRef);
 
     /* Oyna ochilishi bilan qo'ng'iroq qilish mumkin bo'lsin —
        raqamni qidirib, ko'chirib o'tirish shart emas.                  */
@@ -727,7 +773,9 @@
             if (!f.validate()) return;
             UI.busy(btn, async function () {
               var v = f.values();
-              var rec = Object.assign({}, lead, v, { phone: A.normPhone(v.phone) });
+              await checkRef();
+              if (v.refCode && !refOwner) { UI.toast('Tavsiya kodi topilmadi — tekshiring yoki bo’sh qoldiring.', 'bad'); return; }
+              var rec = Object.assign({}, lead, v, { phone: A.normPhone(v.phone), refCode: v.refCode ? v.refCode.trim().toUpperCase() : '', referrerStudentId: refOwner || '' });
               if (isNew) { rec.id = A.uid('led'); rec.createdAt = A.nowStamp(); }
               await D.save('leads', rec);
               var fn = funnels.filter(function (x) { return x.id === rec.funnelId; })[0];
@@ -742,6 +790,8 @@
     void m;
   }
 
+  A.leadForm = leadForm;
+
   async function convertLead(lead, App) {
     // murojaatni o'quvchiga aylantirish
     App.guard('student.edit');
@@ -751,6 +801,7 @@
       phone: lead.phone,
       parentName: '', parentPhone: lead.phone,
       note: 'Murojaatdan: ' + (lead.source || '') + (lead.note ? ' · ' + lead.note : ''),
+      referredBy: lead.referrerStudentId || '',
       _fromLead: lead,
       _courseId: lead.courseId
     }, App);
@@ -1243,7 +1294,9 @@
          "qachon to'laydi" deb hisoblab o'tirmasin.              */
       ['Dars boshlagan sana', payLine(s)],
       ['Qo’shilgan', s.createdAt || '—'],
-      ['Izoh', s.note || '—']].forEach(function (r) {
+      ['Tavsiya', A.referralBlock ? A.referralBlock(s) : (s.refCode || '—')],
+      s.status === 'arxiv' && (s.leftReason || s.leftAt) ? ['Ketgan', (s.leftAt ? A.dateLabel(s.leftAt) + ' · ' : '') + (A.LEAVE_REASONS ? (A.LEAVE_REASONS.filter(function (x) { return x[0] === s.leftReason; })[0] || ['', s.leftReason || '—'])[1] : s.leftReason) + (s.leftNote ? ' — ' + s.leftNote : '')] : null,
+      ['Izoh', s.note || '—']].filter(Boolean).forEach(function (r) {
         dl.appendChild(h('dt', {}, r[0]));
         dl.appendChild(h('dd', {}, r[1]));
       });
@@ -1262,17 +1315,20 @@
         App.can('student.edit') ? h('button', {
           class: 'btn danger', onclick: async function () {
             if (s.status === 'arxiv') {
-              s.status = 'faol'; await D.save('students', s); UI.toast('Arxivdan qaytarildi.', 'ok'); App.render(); return;
+              s.status = 'faol'; s.leftAt = null; s.leftReason = ''; s.leftNote = ''; await D.save('students', s); UI.toast('Arxivdan qaytarildi.', 'ok'); App.render(); return;
             }
-            if (await UI.confirm('Arxivlash', 'O’quvchi arxivga o’tadi. Davomat va hisob-kitoblar saqlanib qoladi.', 'Arxivlash', true)) {
+            var why = A.askLeaveReason ? await A.askLeaveReason(Q.studentName(s.id))
+              : (await UI.confirm('Arxivlash', 'O’quvchi arxivga o’tadi. Davomat va hisob-kitoblar saqlanib qoladi.', 'Arxivlash', true) ? { reason: '', note: '' } : null);
+            if (why) {
               s.status = 'arxiv';
+              s.leftAt = A.today(); s.leftReason = why.reason || ''; s.leftNote = why.note || '';
               await D.save('students', s);
               var mems = Q.membershipsOf(s.id).filter(function (m) { return m.status === 'faol'; });
               for (var i = 0; i < mems.length; i++) {
                 mems[i].status = 'chiqgan'; mems[i].leftAt = A.today();
                 await D.save('memberships', mems[i]);
               }
-              await A.Ops.audit(App.user, 'O’quvchi arxivlandi', Q.studentName(s.id), '');
+              await A.Ops.audit(App.user, 'O’quvchi arxivlandi', Q.studentName(s.id), why.reason || '');
               UI.toast('Arxivlandi.', 'ok'); App.render();
             }
           }

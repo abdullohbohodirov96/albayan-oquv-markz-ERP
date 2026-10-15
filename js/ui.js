@@ -1106,6 +1106,8 @@
         title: 'Qo’ng’iroq qilish'
       }, [icon('phone'), opts.small ? null : h('span', {}, 'Qo’ng’iroq')].filter(Boolean))
     ];
+    /* IP-telefoniya ulangan bo'lsa — ERP orqali qo'ng'iroq (PBX ga buyruq) */
+    if (A.erpCallBtn && !opts.noErp) { var erp = A.erpCallBtn(p, { small: !!opts.small }); if (erp) kids.unshift(erp); }
     if (!opts.small) {
       kids.push(h('a', {
         class: 'btn', href: smsHref(p), onclick: stop, title: 'SMS yozish'

@@ -23,6 +23,7 @@ const progress = require('./progress');
 const seo = require('./seo');
 const parents = require('./parents');
 const forms = require('./forms');
+const tel = require('./tel');
 
 /** Zaxira faylini xavfsiz o'qish — nomi noto'g'ri bo'lsa null */
 function backupReadSafe(name) {
@@ -872,6 +873,13 @@ async function createPaymentServer(body, user) {
     fromAdvance: body.fromAdvance === true
   };
   await store.set('payments/' + id, rec);
+  /* Tavsiya bonusi: do'sti BIRINCHI to'lovini qildi → bonus tayyor */
+  if (type !== 'refund') {
+    try {
+      const prev = (await store.list('payments/')).map(x => x.data).filter(x => x && x.studentId === student.id && !x.voided && x.type !== 'refund' && x.id !== id);
+      if (!prev.length) await tel.onFirstPayment(store, student.id, { settings: (await store.get('meta/settings')) || {}, stamp });
+    } catch (e) { console.error('tavsiya bonusi:', e.message); }
+  }
   await writeAudit(user, type === 'refund' ? 'Pul qaytarildi' : 'To’lov qabul qilindi',
     rec.receiptNo, rec.amount + ' so’m');
   return rec;
@@ -1505,6 +1513,16 @@ async function guardWrite(user, p, method, next) {
       }
       data.code = want;
     }
+    /* Tavsiya kodi — server beradi, o'zgarmaydi. "Kim tavsiya qildi"
+       faqat yangi o'quvchida yoki hali bo'sh bo'lsa yoziladi: bonusni
+       keyin boshqa odamga "ko'chirib" bo'lmasin.                      */
+    data.refCode = (old && old.refCode) || await tel.ensureRefCode(store, data);
+    if (old && old.referredBy) data.referredBy = old.referredBy;
+    else if (data.referredBy) {
+      const rb = String(data.referredBy);
+      const ref = /^[A-Za-z0-9_\-]{1,60}$/.test(rb) ? await store.get('students/' + rb) : null;
+      if (!ref || rb === seg[1]) delete data.referredBy;
+    } else delete data.referredBy;
     return { data };
   }
 
@@ -1781,7 +1799,9 @@ const COLLECTIONS = ['users', 'staff', 'teachers', 'courses', 'rooms', 'students
   /* Saytdagi izohlar — markaz tasdiqlaydi */
   'reviews',
   /* Formalar va kelgan arizalar */
-  'forms', 'formsub', 'formstat'];
+  'forms', 'formsub', 'formstat',
+  /* Telefoniya va tavsiya bonusi */
+  'calls', 'referrals'];
 
 async function apiBootstrap(user) {
   const all = await store.all();
@@ -2339,6 +2359,22 @@ async function handleApi(req, res, url) {
      /api/form?slug=…      — shakl ta'rifi (ichki maydonlarsiz)
      /api/form/submit      — ariza yuborish → murojaat (lead) ochiladi
      /api/form-bg?id=…     — fon rasmi (faqat faol shakl uchun)    */
+  /* ---------- TELEFONIYA webhook (PBX dan, kirishsiz, token bilan) ---------- */
+  if (route.indexOf('tel/webhook/') === 0 && req.method === 'POST') {
+    if (!intakeAllowed(req)) return send(res, 429, { error: 'Juda ko’p so’rov.' });
+    const token = route.slice('tel/webhook/'.length).replace(/\/+$/, '');
+    const sec = await tel.getSecret(store);
+    if (!sec.webhookToken || !tel.safeEq(token, sec.webhookToken)) return send(res, 404, { error: 'Topilmadi.' });
+    const settings = (await store.get('meta/settings')) || {};
+    const conf = tel.publicConf(settings);
+    if (!conf.enabled) return send(res, 503, { error: 'Telefoniya o’chirilgan.' });
+    let body;
+    try { body = await readBody(req, 64000); } catch (e) { body = null; }
+    if (!body || typeof body !== 'object') return send(res, 400, { error: 'Ma’lumot noto’g’ri.' });
+    const r = await tel.handleEvent(store, body, { A, settings, stamp, today: stamp().slice(0, 10), writeAudit });
+    if (!r.ok) return send(res, 400, { error: 'Raqam topilmadi.' });
+    return send(res, 200, { ok: true, id: r.call.id, status: r.call.status, leadId: r.call.leadId || '', taskId: r.call.taskId || '' });
+  }
   if (route === 'form' && req.method === 'GET') {
     const f = await forms.bySlug(store, String(url.searchParams.get('slug') || ''));
     if (!f || f.active === false) return send(res, 404, { error: 'Forma topilmadi.' });
@@ -2395,6 +2431,11 @@ async function handleApi(req, res, url) {
     const stages = funnel ? A.funnelStages(funnel) : [];
     const lid = 'led_' + Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
     const sid = forms.rid('fs');
+    /* Tavsiya kodi maydoni bo'lsa — kimniki ekanini topamiz */
+    let refStudent = null, refCode = '';
+    for (const q of (f.fields || [])) {
+      if (q.type === 'referral' && chk.answers[q.id]) { refCode = chk.answers[q.id]; refStudent = await tel.studentByRefCode(store, refCode); if (refStudent) break; }
+    }
     const lines = (f.fields || []).map(q => {
       const v = chk.answers[q.id];
       const t = Array.isArray(v) ? v.join(', ') : v;
@@ -2407,6 +2448,7 @@ async function handleApi(req, res, url) {
       stage: stages[0] ? stages[0].id : 'yangi',
       note: lines.join(' · ').slice(0, 1500),
       formId: f.id, formTitle: f.title, formAnswers: chk.answers, formSubId: sid,
+      refCode, referrerStudentId: refStudent ? refStudent.id : '',
       nextContact: A.today(), ip: fip, createdAt: stamp(), viaForm: true
     });
     await store.set(forms.SUB + sid, {
@@ -2888,6 +2930,54 @@ async function handleApi(req, res, url) {
   }
 
   /* ---- Ota-ona hisobi ---- */
+  /* ---------- TELEFONIYA (xodim) ---------- */
+  if (route === 'tel/config' && req.method === 'GET') {
+    if (!A.can(user, 'settings.edit')) return nope();
+    const settings = (await store.get('meta/settings')) || {};
+    const sec = await tel.getSecret(store);
+    return send(res, 200, { conf: tel.publicConf(settings), webhookToken: sec.webhookToken || '', has: tel.maskOf(sec) });
+  }
+  if (route === 'tel/config' && req.method === 'POST') {
+    if (!A.can(user, 'settings.edit')) return nope();
+    const body = await readBody(req);
+    const settings = (await store.get('meta/settings')) || {};
+    const r = await tel.saveConf(store, body, settings);
+    await writeAudit(user, 'Telefoniya sozlandi', r.conf.provider, r.conf.enabled ? 'yoqilgan' : 'o’chirilgan');
+    return send(res, 200, r);
+  }
+  if (route === 'tel/call' && req.method === 'POST') {
+    if (!A.can(user, 'nav.leads') && !A.can(user, 'nav.students')) return nope();
+    const body = await readBody(req);
+    const settings = (await store.get('meta/settings')) || {};
+    const r = await tel.placeCall(store, settings, user.id, String(body.phone || ''), { stamp });
+    if (!r.ok) return send(res, 400, { error: r.error });
+    await writeAudit(user, 'ERP dan qo‘ng‘iroq', r.call.phone, r.call.name || '');
+    return send(res, 200, { ok: true, call: r.call });
+  }
+  /* Sinov qo'ng'irog'i webhook ko'rinishida — sozlamani tekshirish uchun */
+  if (route === 'tel/test' && req.method === 'POST') {
+    if (!A.can(user, 'settings.edit')) return nope();
+    const settings = (await store.get('meta/settings')) || {};
+    const r = await tel.handleEvent(store, { event: 'call_end', direction: 'inbound', caller_id_number: '+998900000000', destination_number: '100', billsec: 0, hangup_cause: 'NO_ANSWER', uuid: 'test-' + Date.now() },
+      { A, settings: Object.assign({}, settings, { tel: Object.assign({}, settings.tel, { enabled: true }) }), stamp, today: stamp().slice(0, 10), writeAudit });
+    return send(res, 200, r);
+  }
+  /* ---------- TAVSIYA BONUSI ---------- */
+  if (route === 'referral/apply' && req.method === 'POST') {
+    if (!A.can(user, 'invoice.create')) return nope();
+    const body = await readBody(req);
+    const r = await withLock('invoices', () => tel.applyReferral(store, String(body.id || ''), String(body.invoiceId || ''), { stamp, byUserId: user.id }));
+    if (!r.ok) return send(res, 400, { error: r.error });
+    await writeAudit(user, 'Tavsiya bonusi qo‘llandi', r.invoice.id, r.applied + ' so‘m');
+    return send(res, 200, r);
+  }
+  if (route === 'referral/lookup' && req.method === 'GET') {
+    if (!A.can(user, 'lead.edit') && !A.can(user, 'student.edit')) return nope();
+    const st = await tel.studentByRefCode(store, String(url.searchParams.get('code') || ''));
+    if (!st) return send(res, 404, { error: 'Bunday tavsiya kodi yo’q.' });
+    return send(res, 200, { student: { id: st.id, name: ((st.lastName || '') + ' ' + (st.firstName || '')).trim() } });
+  }
+
   /* ---------- FORMALAR (xodim) ---------- */
   if (route === 'forms/save' && req.method === 'POST') {
     if (!A.can(user, 'lead.edit')) return nope();
@@ -3521,6 +3611,11 @@ async function handleApi(req, res, url) {
         }
       }
       await store.set(p, body.data);
+      /* Yangi o'quvchi tavsiya bilan keldi → bonus yozuvi (kutilmoqda) */
+      if (p.indexOf('students/') === 0 && !oldDoc && body.data.referredBy) {
+        const settings = (await store.get('meta/settings')) || {};
+        await tel.openReferral(store, body.data.referredBy, body.data.id || seg[1], { settings, stamp, leadId: String(body.leadId || '') });
+      }
       if (passwordChangedFor) {
         const keep = parseCookies(req).alb_session;     // o'z sessiyasi qolsin
         const mine = sessions.get(keep);

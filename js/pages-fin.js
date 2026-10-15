@@ -1741,10 +1741,15 @@
       { id: 'users', label: 'Foydalanuvchilar' },
       { id: 'cats', label: 'Xarajat kategoriyalari' },
       { id: 'data', label: 'Ma’lumotlar' },
+      { id: 'tel', label: 'Telefoniya va bonus' },
       { id: 'log', label: 'O’zgarishlar tarixi' }
     ], tab, function (id) { App.go('settings', { tab: id }); }));
 
     if (tab === 'funnels') renderFunnels(view, App);
+    if (tab === 'tel') {
+      view.appendChild(A.telSettingsCard(App));
+      view.appendChild(h('div', { style: 'margin-top:14px' }, A.referralSettingsCard(App)));
+    }
 
     if (tab === 'general') {
       var s = D.settings || A.Seed.DEFAULT_SETTINGS;

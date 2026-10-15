@@ -27,7 +27,7 @@ const SUB = 'formsub/';
 const STAT = 'formstat/';
 
 /* Maydon turlari — har biri ochiq sahifada alohida chiziladi */
-const TYPES = ['text', 'textarea', 'phone', 'select', 'radio', 'checkbox', 'number', 'date'];
+const TYPES = ['text', 'textarea', 'phone', 'select', 'radio', 'checkbox', 'number', 'date', 'referral'];
 const MAX_FIELDS = 30;
 const MAX_OPTIONS = 20;
 const DEFAULT_CC = '+998';
@@ -265,6 +265,7 @@ function checkAnswers(form, answers, A) {
     if (f.type === 'select' || f.type === 'radio') {
       if (f.options.indexOf(v) < 0) { errs.push(f.label); continue; }
     }
+    if (f.type === 'referral') { v = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8); if (!v) { out[f.id] = ''; continue; } }
     if (f.type === 'number' && !/^-?\d{1,12}([.,]\d{1,4})?$/.test(v)) { errs.push(f.label); continue; }
     if (f.type === 'date' && !(A && A.isDate(v))) { errs.push(f.label); continue; }
     if (f.type === 'text' && !name && /ism|name|имя|اسم/i.test(f.label)) name = v;
@@ -349,7 +350,8 @@ function fieldHtml(f) {
     ctl = '<div class="tel"><span class="cc">' + esc(cc) + '</span>' +
       '<input type="tel" ' + name + ' required inputmode="numeric" autocomplete="tel-national" data-cc="' + esc(cc) + '"' +
       (cc === DEFAULT_CC ? ' placeholder="90 123 45 67" maxlength="12"' : ' placeholder="Raqam" maxlength="16"') + '></div>';
-  } else if (f.type === 'number') ctl = '<input type="number" ' + name + must + ' inputmode="decimal">';
+  } else if (f.type === 'referral') ctl = '<input type="text" ' + name + must + ' maxlength="8" placeholder="Masalan: K7M2Q" style="text-transform:uppercase" autocomplete="off">';
+  else if (f.type === 'number') ctl = '<input type="number" ' + name + must + ' inputmode="decimal">';
   else if (f.type === 'date') ctl = '<input type="date" ' + name + must + '>';
   else ctl = '<input type="text" ' + name + must + ' autocomplete="' + (/ism|name/i.test(f.label) ? 'name' : 'off') + '">';
   return '<div class="fld"><label>' + esc(f.label) + req + '</label>' + ctl + hint + '</div>';

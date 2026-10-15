@@ -196,7 +196,7 @@
     /* Saytdagi izohlar (markaz tasdiqlaydi) */
     'reviews',
     /* Formalar va kelgan arizalar */
-    'forms', 'formsub', 'formstat'];
+    'forms', 'formsub', 'formstat', 'calls', 'referrals'];
   var AUTH_COLLECTIONS = ['users'];
   var MONTHLY = ['invoices', 'payments', 'expenses', 'payroll', 'audit'];
 

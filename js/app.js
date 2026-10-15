@@ -143,6 +143,7 @@
     { id: 'finance', label: 'Moliya', icon: 'wallet', perm: 'nav.finance' },
     { id: 'staff', label: 'Xodimlar', icon: 'badge', perm: 'nav.staff' },
     { id: 'reports', label: 'Hisobotlar', icon: 'chart', perm: 'nav.reports' },
+    { id: 'retention', label: 'Saqlab qolish', icon: 'users', perm: 'nav.reports' },
     { id: 'progress', label: 'O’quv natijalari', icon: 'chart', perm: 'reports.learning' },
     { id: 'chat', label: 'Suhbat', icon: 'chat', perm: 'nav.chat' },
     { id: 'tasks', label: 'Vazifalar', icon: 'task', perm: 'nav.tasks' },
@@ -582,6 +583,17 @@
 
         h('div', { class: 'small muted', style: 'margin-top:10px' },
           'Savol bo’lsa markazga murojaat qiling' + (d.center.phone ? ': ' + d.center.phone : '.')),
+
+        /* "Do‘stingni olib kel" — tavsiya kodi */
+        d.referral ? h('div', { class: 'card kab-ref' }, [
+          h('b', {}, 'Do‘stingni olib kel'),
+          h('p', { class: 'small', style: 'margin:4px 0 8px' }, d.referral.text),
+          h('div', { class: 'rowflex', style: 'gap:8px;align-items:center;flex-wrap:wrap' }, [
+            h('code', { class: 'mono kab-code', style: 'font-size:20px;letter-spacing:.12em' }, d.referral.code),
+            h('button', { class: 'btn sm', type: 'button', onclick: function () { UI.copy(d.referral.code); UI.toast('Kod nusxalandi', 'ok'); } }, 'Nusxalash')
+          ]),
+          h('div', { class: 'small muted', style: 'margin-top:6px' }, 'Do‘stingiz yozilayotganda shu kodni aytsin.')
+        ]) : null,
 
         /* O'quv bo'limi: vazifa, test, savol-javob */
         learnSection(st.id, true),

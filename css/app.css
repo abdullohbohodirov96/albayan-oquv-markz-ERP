@@ -2465,3 +2465,28 @@ button.cur-title:hover b{text-decoration:underline}
 .day-b{display:flex;gap:2px;align-items:flex-end;height:86px;width:100%;justify-content:center}
 .day-b i{display:block;width:40%;max-width:14px;border-radius:3px 3px 0 0;min-height:2px}.day-b i.v{background:var(--brand)}.day-b i.c{background:var(--ok,#16a34a)}
 .preview-frame{width:100%;height:min(72vh,760px);border:1px solid var(--line);border-radius:12px;background:#fff}
+
+/* Murojaatlar doskasi (kanban) */
+.kanban-wrap{overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+.kanban{display:flex;gap:12px;align-items:flex-start;min-width:max-content}
+.kb-col{width:250px;flex:none;background:var(--surface-2,var(--surface));border:1px solid var(--line);border-radius:var(--r-lg);padding:8px;min-height:160px;transition:border-color .12s,background .12s}
+.kb-col.over{border-color:var(--brand);background:color-mix(in srgb,var(--brand) 8%,var(--surface))}
+.kb-col.won .kb-head b{color:var(--ok,#16a34a)}.kb-col.lost{opacity:.85}
+.kb-head{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:2px 4px 8px;font-size:13px}
+.kb-list{display:flex;flex-direction:column;gap:8px;min-height:60px}
+.kb-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 10px;cursor:grab;box-shadow:var(--shadow);transition:transform .08s,border-color .12s}
+.kb-card:hover{border-color:var(--brand)}.kb-card.dragging{opacity:.5;transform:rotate(1.5deg)}.kb-card.late{border-left:3px solid var(--bad,#dc2626)}
+.kb-name{font-weight:600;font-size:14px;line-height:1.25}.kb-phone{margin-top:2px}.kb-meta{margin-top:3px}.kb-late{color:var(--bad,#dc2626);font-weight:600}
+.kb-move{justify-content:space-between;margin-top:6px}
+@media(max-width:600px){.kb-col{width:220px}}
+.view-seg{flex-wrap:wrap}
+
+/* Saqlab qolish hisoboti */
+.ret-chart{display:flex;gap:8px;align-items:flex-end;height:120px;margin:4px 0 14px}
+.ret-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+.ret-bars{display:flex;gap:3px;align-items:flex-end;height:96px;width:100%;justify-content:center}
+.ret-bars i{display:block;width:34%;max-width:18px;border-radius:3px 3px 0 0;min-height:2px}.ret-bars i.j{background:var(--ok,#16a34a)}.ret-bars i.l{background:var(--bad,#dc2626)}
+.ref-block{display:flex;flex-direction:column;gap:2px}
+.ext-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.kab-ref{margin-top:12px;padding:12px 14px}
+.erp-call{border-color:var(--brand);color:var(--brand)}
