@@ -47,10 +47,12 @@ function lastTo(chatId) {
     bot: { welcome: 'Xush kelibsiz', notify: { davomat: true, tolov: true, qarz: true, elon: true, ulash: true }, remindDays: 3, remindEvery: 7 }
   });
   await store.set('groups/g1', { id: 'g1', code: 'B020', name: 'Arab tili boshlang’ich', days: [1, 3], startTime: '10:00', endTime: '11:30' });
-  await store.set('students/s1', { id: 's1', firstName: 'Ali', lastName: 'Valiyev', phone: '+998901112233' });
-  await store.set('students/s2', { id: 's2', firstName: 'Ali', lastName: 'Valiyev', phone: '+998901112244' });   // BIR XIL ISM
+  await store.set('students/s1', { id: 's1', firstName: 'Ali', lastName: 'Valiyev', phone: '+998901112233', code: '40771' });
+  await store.set('students/s2', { id: 's2', firstName: 'Ali', lastName: 'Valiyev', phone: '+998901112244', code: '40772' });   // BIR XIL ISM
+  await store.set('students/s3', { id: 's3', firstName: 'Dilnoza', lastName: 'Karimova', phone: '+998901115566', code: '55500' });
   await store.set('memberships/m1', { id: 'm1', studentId: 's1', groupId: 'g1', status: 'faol' });
   await store.set('memberships/m2', { id: 'm2', studentId: 's2', groupId: 'g1', status: 'faol' });
+  await store.set('memberships/m3', { id: 'm3', studentId: 's3', groupId: 'g1', status: 'faol' });
 
   const msg = (chatId, text) => B.onMessage({ chat: { id: chatId }, from: { username: 'test' + chatId }, text });
 
@@ -68,15 +70,36 @@ function lastTo(chatId) {
   ok('Administrator uchun so’rov yaratildi', !!req && req.status === 'kutilmoqda');
   ok('O’quvchiga kutish haqida aytildi', /administrator/i.test(lastTo(100)), lastTo(100));
 
-  /* ---------- 2. Bir martalik havola bilan ulash ---------- */
+  /* ---------- 1b. Shaxsiy kod bilan ulash ---------- */
+  section('1b. Shaxsiy kod bilan ulash (markaz shuni tanladi)');
+  await msg(300, '/start');
+  ok('Bot kod so’radi', /kod/i.test(lastTo(300)), lastTo(300).slice(0, 80));
+  await msg(300, '12121');                                 // yo'q kod
+  ok('Yo’q kod — ulanmadi', !(await store.get('students/s3')).telegram);
+  ok('Topilmadi deyiladi', /topilmad/i.test(lastTo(300)), lastTo(300).slice(0, 80));
+  await msg(300, '55 500');                                 // bo'sh joy bilan ham ishlasin
+  const s3 = await store.get('students/s3');
+  ok('To’g’ri kod bilan ULANDI', !!(s3.telegram && s3.telegram.id === '300'), JSON.stringify(s3.telegram));
+  ok('Ulanish "kod" orqali deb yozildi', s3.telegram && s3.telegram.via === 'kod', s3.telegram && s3.telegram.via);
+  ok('Ma’lumot yuborildi', /ulandingiz/i.test(lastTo(300)), lastTo(300).slice(0, 80));
+  /* Boshqa odam o'sha kodni yozsa — band, tortib ololmaydi */
+  await msg(301, '/start');
+  await msg(301, '55500');
+  ok('Band o’quvchini kod bilan tortib bo’lmaydi', (await store.get('students/s3')).telegram.id === '300');
+  ok('Band deb aytiladi', /boshqa|band|havola/i.test(lastTo(301)), lastTo(301).slice(0, 80));
+  /* Brute-force: 5 noto'g'ri urinishdan keyin bloklanadi */
+  for (let i = 0; i < 6; i++) await msg(400 + 0, '1000' + i);
+  ok('Ko’p noto’g’ri urinish — bloklandi', /urinish|daqiqa/i.test(lastTo(400)), lastTo(400).slice(0, 80));
+
+    /* ---------- 2. Bir martalik havola bilan ulash ---------- */
   section('2. Bir martalik havola (token) bilan ulash');
   const link = require('../server/link');
 
   await msg(200, '/start');
-  await msg(200, '4077');                                  // 4 xonali kod — endi bog'lamaydi
-  ok('Kod bilan bog’lanmaydi', !(await store.get('students/s1')).telegram,
+  await msg(200, '99999');                                 // hech kimning kodi emas
+  ok('Noto’g’ri kod bog’lamaydi', !(await store.get('students/s1')).telegram,
     JSON.stringify((await store.get('students/s1')).telegram));
-  ok('Nima qilish kerakligi aytiladi', /havola|administrator/i.test(lastTo(200)), lastTo(200).slice(0, 120));
+  ok('Topilmadi deyiladi', /topilmad/i.test(lastTo(200)), lastTo(200).slice(0, 120));
 
   await msg(200, 'lt000000000000.AAAAAAAAAAAAAAAAAAAAAA');  // soxta havola
   ok('Soxta havola rad etildi', /yaroqsiz|muddati|ishlatilgan/i.test(lastTo(200)), lastTo(200).slice(0, 120));

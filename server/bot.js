@@ -1,7 +1,9 @@
 /* Albayan Telegram bot.
-   Ulash: o'quvchiga administrator bir martalik kod beradi (masalan 7KQ3M2).
-   O'quvchi /start bosib shu kodni yozadi — faqat shunda hisob bog'lanadi.
-   Kodi bo'lmasa, ism va guruh kodini yozadi; ulashni ADMINISTRATOR tasdiqlaydi.
+   Ulash: o'quvchi /start bosib SHAXSIY KODINI yozadi (5 ta raqam) — hisob
+   darhol o'ziga bog'lanadi. Kod boshqa Telegram hisobiga bog'langan bo'lsa,
+   administrator bir martalik havola berib ko'chiradi. Kodi bo'lmasa, ism va
+   guruh kodini yozadi; ulashni ADMINISTRATOR tasdiqlaydi.
+   Taxmin qilishdan himoya: 5 noto'g'ri koddan keyin 15 daqiqa kutiladi.
    Ism bo'yicha avtomatik ulash yo'q — chunki ismlar bir xil bo'lishi mumkin.
 
    Xabarlar: har bir turini alohida yoqish/o'chirish mumkin, takrorlanmaydi,
@@ -497,17 +499,45 @@ async function handleLinkFlow(chatId, text, from, st) {
       await linkWithToken(chatId, text.trim(), from, st);
       return;
     }
-    // 4 xonali shaxsiy kod BOG'LAMAYDI: u maxfiy emas.
+    /* Shaxsiy kod bilan bog'lash: o'quvchi kodini yozsa — ulanadi.
+       Taxmin qilishdan himoya: codeGate (5 noto'g'ri urinish → 15 daqiqa).  */
     const digits = kabinet.normCode(text);
-    /* Yangi kodlar 5 xonali; eski o'quvchilarda 4 xonalisi qolgan
-       bo'lishi mumkin — ikkalasi ham qabul qilinadi.               */
-    if (kabinet.validCode(digits) && /^\s*\d{4,5}\s*$/.test(text)) {
-      codeFail(chatId);
-      await sendMessage(chatId,
-        'Shaxsiy kod bilan bog’lash o’chirilgan — u maxfiy emas.\n\n' +
-        'Markaz administratoridan <b>bir martalik havola</b> so’rang: u yuborgan ' +
-        'havolani bossangiz, hisobingiz shu suhbatga bog’lanadi.\n' +
-        'Kodingiz bo’lmasa, <b>ismim</b> deb yozing — administrator tasdiqlaydi.');
+    /* "40771", "40 771", "40-771" — hammasi qabul qilinadi (faqat raqam,
+       bo'sh joy va chiziqcha). Guruh kodida (B020) harf bor — bu yerga tushmaydi. */
+    if (kabinet.validCode(digits) && /^[\d\s-]{4,10}$/.test(text.trim())) {
+      const gate = codeGate(chatId);
+      if (!gate.ok) {
+        await sendMessage(chatId, 'Juda ko’p urinish bo’ldi. <b>' + gate.wait + ' daqiqa</b> dan keyin qayta urinib ko’ring.');
+        return;
+      }
+      const stu = await kabinet.byCode(store, digits);
+      if (!stu) {
+        codeFail(chatId);
+        const g2 = codeGate(chatId);
+        await sendMessage(chatId,
+          'Bunday kod topilmadi. Kodni tekshirib, qayta yozing.' +
+          (g2.ok ? '' : '\n(Ko’p urinish — ' + g2.wait + ' daqiqa kuting.)') +
+          '\n\nKodingiz bo’lmasa, <b>ismim</b> deb yozing — administrator tasdiqlaydi.');
+        return;
+      }
+      /* Kod to'g'ri — bog'laymiz. Boshqa suhbatga bog'langan bo'lsa,
+         administrator tasdig'isiz tortib olinmaydi.                 */
+      const at = await link.attach(store, { studentId: stu.id, chatId, from, stamp, via: 'kod' });
+      if (!at.ok) {
+        codeOk(chatId);
+        if (at.reason === 'band') {
+          await sendMessage(chatId,
+            'Bu o’quvchi allaqachon boshqa Telegram hisobiga bog’langan.\n' +
+            'O’zingiznikiga ulash uchun markaz administratoridan <b>bir martalik havola</b> so’rang.');
+        } else if (at.reason === 'guruh') {
+          await sendMessage(chatId, 'Bu guruh suhbati — shaxsiy hisobni bu yerda bog’lab bo’lmaydi. Botga shaxsiy yozing.');
+        } else {
+          await sendMessage(chatId, 'Bog’lab bo’lmadi. Birozdan keyin qayta urinib ko’ring yoki administratorga ayting.');
+        }
+        return;
+      }
+      codeOk(chatId);
+      await afterLink(chatId, at.student, st);
       return;
     }
     if (/^ismim/i.test(text.trim())) {
@@ -747,7 +777,7 @@ async function onMessage(msg) {
     if (st.step === 'start') {
       st.step = 'code'; st.codeTries = 0;
       await setState(chatId, st);
-      await sendMessage(chatId, 'Boshlash uchun shaxsiy kodingizni yozing — 4 ta raqam (masalan 4077). ' +
+      await sendMessage(chatId, 'Boshlash uchun shaxsiy kodingizni yozing — 5 ta raqam (masalan 40771). ' +
         'Kodingiz bo’lmasa, "ismim" deb yozing.');
       return;
     }

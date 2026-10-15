@@ -80,11 +80,22 @@ function stamp() { return new Date(Date.now() + 5 * 3600 * 1000).toISOString().s
   await t.onMessage({ chat: { id: 555, type: 'private' }, text: '/start', from: { username: 'abdulloh' } });
   ok('Nima qilish kerakligi aytildi', /kod|havola/i.test(last()), last().slice(0, 140));
 
-  section('   Shaxsiy kod bog’lamaydi (u maxfiy emas)');
-  await t.onMessage({ chat: { id: 555, type: 'private' }, text: String(s1.code), from: {} });
-  ok('Kod rad etildi', /o’chirilgan|havola/i.test(last()), last().slice(0, 140));
+  section('   Noto’g’ri kod bog’lamaydi');
+  await t.onMessage({ chat: { id: 556, type: 'private' }, text: '/start', from: {} });
+  await t.onMessage({ chat: { id: 556, type: 'private' }, text: '00000', from: {} });
+  ok('Noto’g’ri kod — topilmadi', /topilmad/i.test(last()), last().slice(0, 140));
   ok('Hech kimning ismi oshkor bo’lmadi', !/Bahodirov|Karimova/.test(last()));
-  ok('Bog’lanish yaratilmadi', !(await store.get('students/s1')).telegram);
+  ok('Bog’lanish yaratilmadi', !(await store.get('students/s1')).telegram && !(await store.get('students/s2')).telegram);
+
+  section('   Shaxsiy kod bilan ulanadi (markaz shuni tanladi)');
+  await t.onMessage({ chat: { id: 557, type: 'private' }, text: '/start', from: {} });
+  await t.onMessage({ chat: { id: 557, type: 'private' }, text: String(s2.code), from: { id: 557 } });
+  const byCode = await store.get('students/s2');
+  ok('Kod bilan ULANDI', !!(byCode.telegram && byCode.telegram.id === '557'), JSON.stringify(byCode.telegram));
+  ok('Ulanish "kod" orqali', byCode.telegram && byCode.telegram.via === 'kod');
+  await t.onMessage({ chat: { id: 558, type: 'private' }, text: '/start', from: {} });
+  await t.onMessage({ chat: { id: 558, type: 'private' }, text: String(s2.code), from: { id: 558 } });
+  ok('Band — tortib bo’lmaydi', (await store.get('students/s2')).telegram.id === '557', (await store.get('students/s2')).telegram.id);
 
   section('   Bir martalik havola — darhol to’liq ma’lumot');
   const mk1 = await link.create(store, { studentId: 's1', byUserId: 'usr_admin', stamp });

@@ -200,13 +200,19 @@ ni `DATABASE_URL` ga qo'ying, boshqa hech narsa o'zgartirmaysiz.
 
 ### O'quvchi qanday ulanadi
 
-1. **Telegram bot → Sozlamalar → Ulash kodlari** da o'quvchiga bir martalik
-   6 belgili kod berasiz (masalan `7KQ3M2`).
-2. O'quvchi botni ochadi va `/start` bosadi.
-3. Bot kodni so'raydi. O'quvchi kodni yozadi — hisob darhol ulanadi.
-   Kod bir marta ishlaydi va muddati o'tgach yaroqsiz bo'ladi.
+1. O'quvchi botni ochadi va `/start` bosadi.
+2. Bot **shaxsiy kodni** so'raydi. O'quvchi o'z kodini (5 ta raqam, masalan
+   `40771`) yozadi — hisob darhol ulanadi. Kodni o'quvchi kartasida yoki
+   kabinetida ko'rasiz; `40 771` yoki `40-771` kabi yozsa ham ishlaydi.
+3. Kod boshqa Telegram hisobiga bog'langan bo'lsa, uni kod bilan tortib
+   bo'lmaydi — administrator **bir martalik havola** berib ko'chiradi
+   (Telegram bot → Sozlamalar → Ulash havolasi).
 4. Kodi bo'lmasa, `ismim` deb yozadi: bot ism va guruh kodini so'raydi,
    so'rov **Telegram bot → Holat** bo'limiga tushadi — siz tasdiqlaysiz.
+
+Himoya: bitta suhbatdan **5 ta noto'g'ri kod**dan keyin 15 daqiqa kutiladi
+(taxmin qilishdan). Shaxsiy kod maxfiy emas — guruh/kanal suhbatida emas,
+faqat shaxsiy yozishmada ishlaydi; kod oshkor bo'lsa, kartadan yangilang.
 
 **Ism bo'yicha avtomatik ulash yo'q** — bir xil ismli ikki o'quvchi
 chalkashmasligi uchun.
