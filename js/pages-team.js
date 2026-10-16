@@ -33,6 +33,9 @@
 
   /* ================= SUHBAT ================= */
   var chatUnsub = null;
+  /* Yozilayotgan xabar (qoralama) va fokus holati — yangi xabar kelganda
+     sahifa qayta chizilsa ham yozib turgan matningiz O'CHIB KETMAYDI. */
+  var chatDraft = {};
   A.Pages.chat = function (view, route, App) {
     App.guard('nav.chat');
     var me = App.user;
@@ -101,6 +104,9 @@
       type: 'text', id: 'chat-input', placeholder: 'Xabar yozing…',
       autocomplete: 'off', 'aria-label': 'Xabar'
     });
+    /* Qoralamani tiklaymiz — qayta chizilganda yozgan matn joyida qoladi */
+    input.value = chatDraft[active.id] || '';
+    input.addEventListener('input', function () { chatDraft[active.id] = input.value; });
     var form = h('form', {
       class: 'chat-form',
       onsubmit: function (e) {
@@ -109,6 +115,7 @@
         if (!text) return;
         if (!App.can('chat.use')) { UI.toast('Sizda xabar yozish ruxsati yo’q.', 'bad'); return; }
         input.value = '';
+        chatDraft[active.id] = '';
         send(active, me, text, App);
       }
     }, [input, h('button', { class: 'btn primary', type: 'submit' }, 'Yuborish')]);
@@ -121,6 +128,13 @@
 
     view.appendChild(h('section', { class: 'card' }, h('div', { class: 'chat' }, [list, pane])));
     setTimeout(function () { msgs.scrollTop = msgs.scrollHeight; }, 30);
+    /* Yozib turgan bo'lsangiz — qayta chizilgach fokus va kursor tiklanadi,
+       yozishingiz uzilmaydi (yangi xabar kelsa ham).                     */
+    if (A._lastFocusId === 'chat-input' && App.can('chat.use')) {
+      setTimeout(function () {
+        try { input.focus(); var n = input.value.length; input.setSelectionRange(n, n); } catch (e) { }
+      }, 0);
+    }
 
     // o'qilgan deb belgilash — faqat O'ZIMNING belgim, boshqaning xabariga tegilmaydi
     if (unreadCount(active, me.id) > 0) {

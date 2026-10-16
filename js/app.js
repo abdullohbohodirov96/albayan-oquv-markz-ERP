@@ -68,6 +68,9 @@
          App.go o'zi tepaga olib chiqadi.                              */
       var scEl = document.scrollingElement || document.documentElement;
       var prevY = scEl ? scEl.scrollTop : 0;
+      /* Qaysi maydon fokusda ekanini eslab qolamiz — qayta chizilgach
+         sahifa uni tiklashi mumkin (masalan chat yozuv maydoni).      */
+      try { var af = document.activeElement; A._lastFocusId = af && af.id ? af.id : ''; } catch (e) { A._lastFocusId = ''; }
       var view = document.getElementById('view');
       UI.clear(view);
       renderNav();

@@ -88,6 +88,23 @@ function section(t) { out.push('\n' + t); }
   ok('Muallif — kirgan foydalanuvchi',
     serverSide.every(m => !!m.from), JSON.stringify(serverSide.slice(-2)));
 
+  /* 4. Yozib turganda yangi xabar kelsa — qoralama O'CHMAYDI.
+        Ilgari suhbat yangilanganda sahifa qayta chizilib, yozib
+        turgan matn tozalanib ketardi.                              */
+  section('4. Yozayotgan xabar o’chib ketmaydi (yangilanishda)');
+  const draft = 'Yozib turibman ' + Date.now().toString(36);
+  await page.fill('#chat-input', draft);
+  await page.focus('#chat-input');
+  // suhbat yangilanganda sahifa qayta chiziladi (yangi xabar kelgani kabi)
+  await page.evaluate(() => window.A.App.softRender());
+  await page.waitForTimeout(500);
+  const kept = await page.evaluate(() => {
+    const el = document.querySelector('#chat-input');
+    return { val: el ? el.value : '', focused: document.activeElement === el };
+  });
+  ok('Qoralama o’chmadi (saqlanib qoldi)', kept.val === draft, JSON.stringify(kept.val));
+  ok('Fokus ham yozuv maydonida qoldi', kept.focused, JSON.stringify(kept));
+
   await browser.close();
   console.log(out.join('\n'));
   console.log('\n' + '─'.repeat(52));
