@@ -1672,6 +1672,20 @@ async function guardWrite(user, p, method, next) {
     } else {
       delete data.dueDay;
     }
+    /* Bir o'quvchi faqat BITTA faol guruhda bo'ladi. YANGI faol a'zolik
+       yozilayotganda, shu o'quvchining boshqa guruhda faol a'zoligi
+       bo'lsa — rad etiladi. Mavjud a'zolikni tahrirlash (old bor) yoki
+       guruhdan chiqgan/arxiv a'zolik bunga xalaqit bermaydi.           */
+    const activeNew = !data.leftAt && (data.status == null || data.status === 'faol');
+    if (!old && activeNew && data.studentId && data.groupId) {
+      const rows = await store.list('memberships/');
+      const clash = rows.map(x => x.data).some(m =>
+        m && String(m.id) !== String(data.id) && String(m.studentId) === String(data.studentId) &&
+        String(m.groupId) !== String(data.groupId) && m.status === 'faol' && !m.leftAt);
+      if (clash) {
+        return { code: 400, error: 'Bu o’quvchi allaqachon boshqa guruhda. Bir o’quvchi faqat bitta guruhda bo’ladi — avval eski guruhdan chiqaring.' };
+      }
+    }
     return { data };
   }
 
@@ -3501,6 +3515,23 @@ async function handleApi(req, res, url) {
     await store.set('payments/' + p.id, p);
     await writeAudit(user, 'To’lov bekor qilindi', p.receiptNo, reason);
     return send(res, 200, { payment: p });
+  }
+
+  /* To'lov BUTUNLAY o'chiriladi — xato kiritilgan yozuv uchun.
+     Bekor qilishdan farqi: ro'yxatda qolmaydi. Hisob qoldig'i
+     avtomatik qayta hisoblanadi (u to'lovlardan kelib chiqadi).
+     Faqat 'payment.void' huquqi bilan, sabab va tarix bilan.      */
+  if (route === 'payment/delete' && req.method === 'POST') {
+    if (!A.can(user, 'payment.void')) return send(res, 403, { error: 'To’lovni o’chirish uchun alohida ruxsat kerak.' });
+    const body = await readBody(req);
+    const reason = String(body.reason || '').trim();
+    if (reason.length < 3) return send(res, 400, { error: 'Sababni yozing.' });
+    const p = await store.get('payments/' + String(body.id || ''));
+    if (!p) return send(res, 404, { error: 'To’lov topilmadi.' });
+    await withLock('payments', async () => { await store.del('payments/' + p.id); });
+    await writeAudit(user, 'To’lov o’chirildi', p.receiptNo,
+      reason + ' · ' + A.som(p.amount) + ' so’m' + (p.type === 'refund' ? ' (qaytarish)' : ''));
+    return send(res, 200, { ok: true, id: p.id });
   }
 
   if (route === 'invoices/auto' && req.method === 'GET') {

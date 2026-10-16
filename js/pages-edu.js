@@ -805,7 +805,15 @@
     App.guard('student.edit');
     var inGroup = {};
     Q.membersOf(group.id).forEach(function (m) { inGroup[m.studentId] = 1; });
-    var candidates = D.all('students').filter(function (s) { return s.status !== 'arxiv' && !inGroup[s.id]; });
+    /* Bir o'quvchi faqat bitta guruhda bo'ladi: boshqa guruhda faol
+       a'zoligi bor o'quvchi ro'yxatda ko'rsatilmaydi. Ko'chirish uchun
+       avval uni eski guruhdan chiqarish kerak.                        */
+    function inAnyGroup(sid) {
+      return Q.membershipsOf(sid).some(function (m) { return m.status === 'faol' && !m.leftAt; });
+    }
+    var candidates = D.all('students').filter(function (s) {
+      return s.status !== 'arxiv' && !inGroup[s.id] && !inAnyGroup(s.id);
+    });
     candidates = A.sortBy(candidates, function (s) { return s.lastName + ' ' + s.firstName; });
 
     var search = UI.field({ label: 'Qidirish', placeholder: 'Ism yoki telefon' });
@@ -834,7 +842,10 @@
     paint();
     var m = UI.modal({
       title: group.name + ' guruhiga o’quvchi qo’shish',
-      body: [search.wrap, listBox],
+      body: [
+        h('p', { class: 'small muted', style: 'margin:0 0 8px' },
+          'Bir o’quvchi faqat bitta guruhda bo’ladi — ro’yxatda guruhsiz o’quvchilar ko’rinadi.'),
+        search.wrap, listBox],
       actions: [{
         label: 'Yangi o’quvchi yaratish', cls: 'primary',
         onClick: function (c) { c(); A.studentForm({ _groupId: group.id }, App); }
@@ -1484,254 +1495,203 @@
     return box;
   }
 
+  /* ================= DAVOMAT (jadval ko'rinishi) =================
+     Tepada dars kunlari ustun bo'lib turadi (12.10, 14.10 …), chapda
+     o'quvchilar qator-qator. Har hujayrada dumaloq belgi: bosilsa
+     keldi/kelmadi/sababli chiqadi, tanlansa harf bo'lib rangga kiradi
+     (Keldi=K yashil, Kelmadi=K qizil, Sababli=S sariq). Har tanlov
+     DARHOL bazaga yoziladi va faqat o'sha hujayra yangilanadi —
+     shuning uchun ekran tepaga sakramaydi. Xuddi Excel/Sheets kabi. */
   A.Pages.attendance = function (view, route, App) {
     App.guard('attendance.view');
-    /* Eski darslarga davomat qo'yish uchun REJALASHTIRILGAN guruh ham
-       ro'yxatda turadi: guruh bir oy oldin boshlangan bo'lsa, o'tgan
-       oylarni to'ldirish kerak bo'ladi.                               */
     var groups = Q.activeGroups(App.user);
     if (!groups.length) {
       view.appendChild(UI.pageHead('Davomat'));
       view.appendChild(UI.card(null, UI.empty({ title: 'Faol guruh yo’q', text: 'Avval guruh oching va o’quvchi yozing.' })));
       return;
     }
-    /* Hech narsa tanlanmagan bo'lsa — BUGUNGI dars o'zi ochiladi:
-       bugun darsi bor guruh va bugungi sana. Toshkent vaqti bo'yicha. */
     var today = A.today();
     var auto = null;
-    if (!route.groupId && !route.date) {
-      var mine = Q.lessonsOn(today, App.user).filter(function (l) { return l.status !== 'bekor'; });
-      /* Ayni paytda ketayotgan dars birinchi ochiladi; bo'lmasa —
-         eng yaqin kelayotgani; u ham bo'lmasa — oxirgi tugagani.      */
-      mine = A.sortLessons(mine);
-      if (mine.length) auto = { groupId: mine[0].groupId, date: today };
+    if (!route.groupId && !route.date && !route.ym) {
+      var mine = A.sortLessons(Q.lessonsOn(today, App.user).filter(function (l) { return l.status !== 'bekor'; }));
+      if (mine.length) auto = mine[0].groupId;
     }
-
-    var groupId = route.groupId || (auto && auto.groupId) || groups[0].id;
+    var groupId = route.groupId || auto || groups[0].id;
     var g = D.one('groups', groupId) || groups[0];
     if (!A.canSeeGroup(App.user, g)) { view.appendChild(UI.empty({ title: 'Ruxsat yo’q' })); return; }
-    var ym = A.isMonth(route.ym) ? route.ym
-      : (A.isDate(route.date) ? A.ymOf(route.date) : A.thisMonth());
+    var ym = A.isMonth(route.ym) ? route.ym : (A.isDate(route.date) ? A.ymOf(route.date) : A.thisMonth());
+    var canMark = App.can('attendance.mark');
 
-    view.appendChild(UI.pageHead('Davomat', A.dateLabel(today) + ' · bugungi dars o’zi tanlanadi'));
-
-    // Eng tepada — bugungi darslar. Belgilanganini darrov ko'rish uchun.
-    view.appendChild(todayStrip(App, g.id, date0(route)));
-
-    if (!D.lessonsCached(g.id, ym)) {
-      (async function () { await D.loadLessons(g.id, ym); App.render(); })();
-      view.appendChild(loadingBox());
-      return;
-    }
-    var lessons = A.monthLessons(g, ym, D.lessonsCached(g.id, ym)).filter(function (l) { return l.status !== 'bekor'; });
-    var date = (A.isMonth(route.ym) && A.ymOf(route.date || '') !== route.ym)
-      ? null : (route.date || (auto && auto.date));
-    if (!date || !lessons.some(function (l) { return l.date === date; })) {
-      // 1) bugun dars bo'lsa — bugun; 2) bo'lmasa — oxirgi o'tgan dars; 3) oyning birinchi darsi
-      if (lessons.some(function (l) { return l.date === today; })) date = today;
-      else {
-        var past = lessons.filter(function (l) { return l.date <= today; });
-        date = past.length ? past[past.length - 1].date : (lessons[0] ? lessons[0].date : null);
-      }
-    }
+    view.appendChild(UI.pageHead('Davomat', g.name + ' · ' + A.monthLabel(ym) +
+      ' · belgini bosib keldi / kelmadi / sababli tanlang'));
 
     var fg = UI.field({
       label: 'Guruh', type: 'select', value: g.id,
       options: groups.map(function (x) { return { value: x.id, label: x.name }; })
     });
     fg.input.addEventListener('change', function () { App.go('attendance', { groupId: fg.input.value }); });
-    var fd = UI.field({
-      label: 'Dars sanasi', type: 'select', value: date || '',
-      options: lessons.length ? lessons.map(function (l) {
-        var marked = l.attendance && Object.keys(l.attendance).length;
-        return {
-          value: l.date,
-          label: (l.date === today ? 'Bugun · ' : '') + A.dateLabel(l.date) + ' ' + l.start + (marked ? ' ✓' : '')
-        };
-      }) : [{ value: '', label: 'Dars yo’q' }]
-    });
-    fd.input.addEventListener('change', function () { App.go('attendance', { groupId: g.id, date: fd.input.value }); });
-    /* OY TANLAGICH — guruh bir necha oy oldin boshlangan bo'lsa,
-       istalgan o'tgan oyni ochib davomat to'ldirish mumkin.        */
     var fm = UI.field({ label: 'Oy', type: 'month', value: ym });
-    fm.input.addEventListener('change', function () {
-      if (A.isMonth(fm.input.value)) App.go('attendance', { groupId: g.id, ym: fm.input.value });
-    });
-    function goMonth(delta) {
-      App.go('attendance', { groupId: g.id, ym: A.addMonths(ym, delta) });
-    }
+    fm.input.addEventListener('change', function () { if (A.isMonth(fm.input.value)) App.go('attendance', { groupId: g.id, ym: fm.input.value }); });
     view.appendChild(h('div', { class: 'filters' }, [
-      fg.wrap, fm.wrap, fd.wrap,
-      h('button', { class: 'btn sm', onclick: function () { goMonth(-1); } }, '‹ Oldingi oy'),
-      h('button', { class: 'btn sm', onclick: function () { goMonth(1); } }, 'Keyingi oy ›'),
+      fg.wrap, fm.wrap,
+      h('button', { class: 'btn sm', onclick: function () { App.go('attendance', { groupId: g.id, ym: A.addMonths(ym, -1) }); } }, '‹ Oldingi oy'),
+      h('button', { class: 'btn sm', onclick: function () { App.go('attendance', { groupId: g.id, ym: A.addMonths(ym, 1) }); } }, 'Keyingi oy ›'),
       h('button', { class: 'btn sm', onclick: function () { App.go('group', { id: g.id, tab: 'davomat' }); } }, 'Oylik hisobot')
     ]));
 
-    if (!date) {
+    if (!D.lessonsCached(g.id, ym)) {
+      (async function () { await D.loadLessons(g.id, ym); App.render(); })();
+      view.appendChild(loadingBox());
+      return;
+    }
+    var doc = D.lessonsCached(g.id, ym);
+    var lessons = A.monthLessons(g, ym, doc).filter(function (l) { return l.status !== 'bekor'; });
+    if (!lessons.length) {
       view.appendChild(UI.card(null, UI.empty({ title: 'Bu oyda dars yo’q', text: 'Boshqa oyni tanlang yoki guruh jadvalini tekshiring.' })));
       return;
     }
-
-    /* KIM KO'RINADI.
-       Ilgari "guruhga kirgan sanasi darsdan keyin" bo'lgan o'quvchi
-       ro'yxatdan butunlay tushib qolardi. Excel'dan import qilinganda
-       yoki yangi yozilganda bu sana BUGUN bo'lgani uchun, guruh bir oy
-       oldin boshlangan bo'lsa, o'tgan darslarda ro'yxat BO'SH chiqardi —
-       "davomat chiqmayapti" degani shu edi.
-       Endi ular ham ko'rinadi, faqat alohida bo'limda va belgisi bilan. */
-    var allMems = Q.membersOf(g.id).filter(function (m) {
-      return !(m.leftAt && m.leftAt < date);
+    var mStart = A.monthStart(ym), mEnd = A.monthEnd(ym);
+    /* Oyda guruhdan CHIQIB ketganlardan boshqa hamma ko'rinadi. Keyin
+       yozilgan o'quvchi (joinedAt kechroq) ham ro'yxatda qoladi va
+       belgilanadi — import qilingan o'quvchiga o'tgan oy davomatini
+       to'ldirish kerak bo'lsa, ro'yxatdan tushmaydi.                 */
+    var members = Q.membersOf(g.id).filter(function (m) {
+      if (m.leftAt && m.leftAt < mStart) return false;
+      return true;
     });
-    var members = allMems.filter(function (m) { return !(m.joinedAt && m.joinedAt > date); });
-    var later = allMems.filter(function (m) { return m.joinedAt && m.joinedAt > date; });
-    var doc = D.lessonsCached(g.id, ym);
-    var rec = (doc.items && doc.items[date]) || {};
-    var state = {};
-    allMems.forEach(function (m) {
-      state[m.id] = (rec.attendance && rec.attendance[m.id] && rec.attendance[m.id].status) || null;
-    });
-
-    var rowsBox = h('div');
-    function attRow(m, late) {
-      var opts = h('div', { class: 'att-opts' }, Object.keys(A.ATT).map(function (k) {
-        var conf = A.ATT[k];
-        return h('button', {
-          type: 'button', class: conf.cls, 'aria-pressed': state[m.id] === k ? 'true' : 'false',
-          disabled: !App.can('attendance.mark'),
-          onclick: function () { state[m.id] = state[m.id] === k ? null : k; paint(); }
-        }, conf.label);
-      }));
-      return h('div', { class: 'att-row' + (late ? ' att-late' : '') }, [
-        UI.avatar(Q.studentName(m.studentId)),
-        h('div', { class: 'nm' }, [
-          h('span', {}, Q.studentName(m.studentId)),
-          late ? h('span', { class: 'small muted' },
-            ' · ' + A.dateLabel(m.joinedAt) + ' dan yozilgan') : null
-        ].filter(Boolean)),
-        opts
-      ]);
+    members = A.sortBy(members, function (m) { return Q.studentName(m.studentId); });
+    if (!members.length) {
+      view.appendChild(UI.card(null, UI.empty({ title: 'Guruhda o’quvchi yo’q', text: 'Avval o’quvchi qo’shing.' })));
+      return;
     }
-    /** Shu darsdagi davomat foizi (belgilanganlar ichida "keldi" ulushi) */
-    function pct() {
-      var marked = 0, came = 0;
-      allMems.forEach(function (m) {
-        if (!state[m.id]) return;
-        marked++;
-        if (state[m.id] === 'keldi' || state[m.id] === 'kechikdi') came++;
+
+    /* harf: keldi/kelmadi = K (rang ajratadi), sababli = S, kechikdi = K */
+    var LETTER = { keldi: 'K', kelmadi: 'K', sababli: 'S', kechikdi: 'K' };
+    var PICK = ['keldi', 'kelmadi', 'sababli'];
+
+    function statusOf(date, mId) {
+      var r = (doc.items && doc.items[date]) || {};
+      return (r.attendance && r.attendance[mId] && r.attendance[mId].status) || null;
+    }
+    function paintDot(dot, st) {
+      dot.className = 'att-dot' + (st ? ' s-' + st : ' s-none');
+      dot.textContent = st ? LETTER[st] : '';
+    }
+
+    var curPop = null;
+    function onDocClick(e) { if (curPop && !curPop.contains(e.target)) closePop(); }
+    function closePop() {
+      if (curPop) { try { curPop.remove(); } catch (e) { } curPop = null; }
+      document.removeEventListener('click', onDocClick, true);
+      window.removeEventListener('resize', closePop, true);
+    }
+
+    function saveCell(date, m, status, dot) {
+      paintDot(dot, status);                              // darhol ko'rinadi
+      D.mutateLessons(g.id, ym, function (d) {
+        d.items = d.items || {};
+        var r = d.items[date] || { date: date };
+        r.attendance = r.attendance || {};
+        if (status) r.attendance[m.id] = { status: status, at: A.nowStamp(), by: App.user.name };
+        else delete r.attendance[m.id];
+        r.status = 'otkazildi'; r.markedBy = App.user.name; r.markedAt = A.nowStamp();
+        d.items[date] = r;
+      }).then(function () {
+        try {
+          A.Ops.audit(App.user, 'Davomat belgilandi', g.name,
+            A.dateLabel(date) + ' · ' + Q.studentName(m.studentId) + ' · ' + (status ? A.ATT[status].label : 'tozalandi'));
+        } catch (e) { }
+      }).catch(function () {
+        paintDot(dot, statusOf(date, m.id));              // yozilmasa — qaytaramiz
+        UI.toast('Saqlanmadi — qayta urinib ko’ring.', 'bad');
       });
-      return { marked: marked, came: came, jami: allMems.length,
-        foiz: marked ? Math.round(came * 100 / marked) : 0 };
     }
-    var pctBox = h('div', { class: 'small muted' });
-    function paintPct() {
-      var r = pct();
-      pctBox.textContent = 'Belgilangan: ' + r.marked + '/' + r.jami +
-        (r.marked ? ' · kelganlar: ' + r.foiz + '%' : '');
-    }
-    function paint() {
-      UI.clear(rowsBox);
-      members.forEach(function (m) { rowsBox.appendChild(attRow(m, false)); });
-      if (later.length) {
-        rowsBox.appendChild(h('div', { class: 'att-sep small muted' },
-          'Bu darsdan keyin guruhga yozilganlar (' + later.length + ' ta)'));
-        if (App.can('group.edit')) {
-          rowsBox.appendChild(h('div', { style: 'padding:0 16px 10px' }, [
-            h('button', {
-              class: 'btn sm', onclick: function (e) {
-                var btn = e.currentTarget;
-                UI.busy(btn, async function () {
-                  /* To'lov kuni O'ZGARMAYDI — faqat guruhga kirgan sana
-                     orqaga suriladi, aks holda hisob sanasi ham siljirdi. */
-                  for (var i = 0; i < later.length; i++) {
-                    var m = later[i];
-                    var upd = Object.assign({}, m, {
-                      joinedAt: date,
-                      dueDay: Number(m.dueDay) || A.dueDayOf(m, D.settings)
-                    });
-                    await D.save('memberships', upd);
-                  }
-                  UI.toast('Guruhga kirgan sana ' + A.dateLabel(date) +
-                    ' ga surildi. To’lov kuni o’zgarmadi.', 'ok');
-                  App.render();
-                });
-              }
-            }, 'Hammasi shu darsdan yozilgan deb belgilash')
-          ]));
-        }
-        later.forEach(function (m) { rowsBox.appendChild(attRow(m, true)); });
-      }
-      paintPct();
-    }
-    paint();
 
-    var unmarkedCount = function () {
-      return allMems.filter(function (m) { return !state[m.id]; }).length;
-    };
-    var footer = h('div', { class: 'rowflex', style: 'padding:14px 16px;border-top:1px solid var(--line);justify-content:space-between' }, [
-      h('div', {}, [
-        pctBox,
-        h('div', { class: 'small muted' }, rec.markedAt ? ('Oxirgi o’zgartirish: ' + rec.markedAt + ' · ' + (rec.markedBy || '')) :
-          'Belgilanmagan o’quvchilar avtomatik "Kelmadi" hisoblanmaydi.')
-      ]),
-      App.can('attendance.mark') ? h('div', { class: 'rowflex' }, [
-        h('button', {
-          class: 'btn', onclick: function () {
-            /* EKRANDAGI hammasi — keyinroq yozilganlar ham. Ilgari
-               faqat "o'z vaqtida yozilganlar" belgilanardi, shuning
-               uchun eski darsda bu tugma hech nima qilmasdi.        */
-            allMems.forEach(function (m) { if (!state[m.id]) state[m.id] = 'keldi'; });
-            paint();
-          }
-        }, 'Hammani "Keldi" deb belgilash'),
-        h('button', {
-          class: 'btn primary', onclick: function (e) {
-            var btn = e.currentTarget;
-            UI.busy(btn, async function () {
-              await D.mutateLessons(g.id, ym, function (d) {
-                var r = d.items[date] || {};
-                r.attendance = r.attendance || {};
-                allMems.forEach(function (m) {
-                  if (state[m.id]) {
-                    r.attendance[m.id] = { status: state[m.id], at: A.nowStamp(), by: App.user.name };
-                  } else {
-                    delete r.attendance[m.id];
-                  }
-                });
-                r.status = 'otkazildi';
-                r.markedBy = App.user.name;
-                r.markedAt = A.nowStamp();
-                d.items[date] = r;
-              });
-              await A.Ops.audit(App.user, 'Davomat saqlandi', g.name, A.dateLabel(date) +
-                ' · belgilangan: ' + (allMems.length - unmarkedCount()) + '/' + allMems.length);
-              if (A.Bot) {
-                try {
-                  await A.Bot.notifyAttendance(g.id, date, allMems.map(function (m) {
-                    return { studentId: m.studentId, status: state[m.id] };
-                  }), App.user.name);
-                } catch (e) { console.error('bot', e); }
-              }
-              /* Saqlagandan keyin SAHIFADAN CHIQIB KETMAYDI: ketma-ket
-                 bir necha darsning davomati qo'yiladi. Keyingi
-                 belgilanmagan dars o'zi ochiladi, bo'lmasa shu dars
-                 qoladi (✓ belgisi bilan).                              */
-              var nextUn = lessons.filter(function (l) {
-                return l.date > date && l.date <= today &&
-                  !(l.attendance && Object.keys(l.attendance).length);
-              })[0];
-              UI.toast(nextUn
-                ? 'Saqlandi. Keyingi dars: ' + A.dateLabel(nextUn.date)
-                : 'Davomat saqlandi.', 'ok');
-              App.go('attendance', { groupId: g.id, date: nextUn ? nextUn.date : date });
-            });
-          }
-        }, 'Saqlash')
-      ]) : null
-    ]);
+    function openPop(dot, date, m) {
+      closePop();
+      var cur = statusOf(date, m.id);
+      var pop = h('div', { class: 'att-pop' },
+        PICK.map(function (k) {
+          return h('button', {
+            type: 'button', class: 'att-pick' + (cur === k ? ' on' : ''),
+            onclick: function (e) { e.stopPropagation(); closePop(); saveCell(date, m, cur === k ? null : k, dot); }
+          }, [h('span', { class: 'att-dot s-' + k }, LETTER[k]), A.ATT[k].label]);
+        }).concat([
+          h('button', {
+            type: 'button', class: 'att-pick att-clear',
+            onclick: function (e) { e.stopPropagation(); closePop(); saveCell(date, m, null, dot); }
+          }, 'Tozalash')
+        ]));
+      document.body.appendChild(pop);
+      var r = dot.getBoundingClientRect();
+      var pw = pop.offsetWidth || 160, ph = pop.offsetHeight || 180;
+      var left = Math.min(Math.max(8, r.left), window.innerWidth - pw - 8);
+      var top = r.bottom + 6;
+      if (top + ph > window.innerHeight - 8) top = Math.max(8, r.top - ph - 6);
+      pop.style.left = left + 'px';
+      pop.style.top = top + 'px';
+      curPop = pop;
+      setTimeout(function () {
+        document.addEventListener('click', onDocClick, true);
+        window.addEventListener('resize', closePop, true);
+      }, 0);
+    }
 
-    view.appendChild(UI.card(g.name + ' · ' + A.dateLabel(date),
-      allMems.length ? [rowsBox, footer]
-        : UI.empty({ title: 'Guruhda o’quvchi yo’q', text: 'Avval o’quvchi qo’shing.' }),
-      null, true));
+    /* Ota-onalarga yuborish — bitta dars kuni uchun (ixtiyoriy) */
+    function sendDay(date) {
+      if (!A.Bot || !A.Bot.notifyAttendance) { UI.toast('Bot ulanmagan.', 'warn'); return; }
+      var any = members.some(function (m) { return statusOf(date, m.id); });
+      if (!any) { UI.toast('Avval shu kunga belgi qo’ying.', 'warn'); return; }
+      (async function () {
+        if (!await UI.confirm('Ota-onalarga yuborilsinmi?', A.dateLabel(date) + ' davomati bog’langan ota-onalarga yuboriladi.', 'Yuborish')) return;
+        try {
+          await A.Bot.notifyAttendance(g.id, date, members.map(function (m) {
+            return { studentId: m.studentId, status: statusOf(date, m.id) };
+          }), App.user.name);
+          UI.toast('Yuborildi.', 'ok');
+        } catch (e) { UI.toast('Yuborilmadi.', 'bad'); }
+      })();
+    }
+
+    var headCells = [h('th', { class: 'att-name-h' }, 'O’quvchi')];
+    lessons.forEach(function (l) {
+      var p = l.date.slice(8, 10) + '.' + l.date.slice(5, 7);
+      headCells.push(h('th', { class: 'att-d' + (l.date === today ? ' att-td' : '') }, h('span', { class: 'att-dnum' }, p)));
+    });
+    var thead = h('thead', {}, h('tr', {}, headCells));
+
+    var tbody = h('tbody');
+    members.forEach(function (m) {
+      var late = m.joinedAt && m.joinedAt > A.monthStart(ym);
+      var cells = [h('th', { class: 'att-name' + (late ? ' att-late' : ''), scope: 'row' },
+        h('span', { class: 'att-nm' }, Q.studentName(m.studentId)))];
+      lessons.forEach(function (l) {
+        var td = h('td', { class: 'att-c' });
+        var dot = h('button', {
+          type: 'button', class: 'att-dot', disabled: !canMark,
+          'aria-label': Q.studentName(m.studentId) + ' · ' + A.dateLabel(l.date)
+        });
+        paintDot(dot, statusOf(l.date, m.id));
+        if (canMark) (function (dd, ll, mm) { dd.addEventListener('click', function (e) { e.stopPropagation(); openPop(dd, ll.date, mm); }); })(dot, l, m);
+        td.appendChild(dot);
+        cells.push(td);
+      });
+      tbody.appendChild(h('tr', {}, cells));
+    });
+
+    var table = h('table', { class: 'att-sheet' }, [thead, tbody]);
+    var legend = h('div', { class: 'att-legend small muted' }, [
+      h('span', {}, [h('span', { class: 'att-dot s-keldi' }, 'K'), ' Keldi']),
+      h('span', {}, [h('span', { class: 'att-dot s-kelmadi' }, 'K'), ' Kelmadi']),
+      h('span', {}, [h('span', { class: 'att-dot s-sababli' }, 'S'), ' Sababli']),
+      canMark ? h('span', { class: 'muted' }, '· belgini bossangiz tanlov chiqadi, darhol saqlanadi') : null
+    ].filter(Boolean));
+    var todayLesson = lessons.some(function (l) { return l.date === today; });
+    var footer = (canMark && A.Bot && A.Bot.notifyAttendance && todayLesson)
+      ? h('div', { class: 'att-foot' }, h('button', {
+        class: 'btn', onclick: function () { sendDay(today); }
+      }, '✉ Bugungi davomatni ota-onalarga yuborish')) : null;
+    view.appendChild(UI.card(null, [h('div', { class: 'att-wrap' }, table), legend, footer].filter(Boolean), null, null, true));
+    if (!canMark) view.appendChild(h('p', { class: 'small muted', style: 'padding:6px 4px 0' }, 'Sizda belgilash huquqi yo’q — faqat ko’rish.'));
   };
 })(typeof window !== 'undefined' ? window : globalThis);

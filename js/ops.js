@@ -412,6 +412,19 @@
     await audit(actor, 'To’lov bekor qilindi', rec.receiptNo, reason || '');
   }
 
+  /* To'lovni BUTUNLAY o'chirish (xato kiritilgan yozuv). Qoldiq o'zi
+     qayta hisoblanadi, chunki u to'lovlardan kelib chiqadi.          */
+  async function deletePayment(pay, reason, actor) {
+    if (D.mode === 'server') {
+      await D.api('POST', 'api/payment/delete', { id: pay.id, reason: reason });
+      if (D.col.payments) delete D.col.payments[pay.id];
+      await D.loadBootstrap();
+      return;
+    }
+    await D.remove('payments', pay.id);
+    await audit(actor, 'To’lov o’chirildi', pay.receiptNo, reason || '');
+  }
+
   /* =============== XARAJATLAR =============== */
   async function saveExpense(exp, actor) {
     var isNew = !exp.id;
@@ -497,6 +510,7 @@
     createPayment: createPayment,
     applyAdvance: applyAdvance,
     voidPayment: voidPayment,
+    deletePayment: deletePayment,
     refundCap: refundCap,
     localReceiptNo: localReceiptNo,
     saveExpense: saveExpense,

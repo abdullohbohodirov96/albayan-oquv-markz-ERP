@@ -293,32 +293,28 @@ async function typeIn(page, sel, val) {
   const gid = await page.evaluate(() => window.A.App.route.groupId);
 
   async function mark(label) {
-    // kerak bo'lsa davomat sahifasiga qaytamiz
+    // kerak bo'lsa davomat sahifasiga (jadval) qaytamiz
     await page.evaluate(g => {
-      if (window.A.App.route.name !== 'attendance') {
-        window.A.App.go('attendance', { groupId: g, date: window.A.today() });
-      }
+      if (window.A.App.route.name !== 'attendance') window.A.App.go('attendance', { groupId: g });
     }, gid);
-    await page.waitForTimeout(900);
-    const clicked = await page.evaluate(async (lbl) => {
-      const btns = Array.from(document.querySelectorAll('#view button'))
-        .filter(b => b.textContent.trim() === lbl);
-      if (!btns.length) return false;
-      btns[0].click();
-      await new Promise(r => setTimeout(r, 250));
-      const save = Array.from(document.querySelectorAll('#view button'))
-        .find(b => /^Saqlash$/.test(b.textContent.trim()));
-      if (save) save.click();
-      return true;
+    await page.waitForSelector('#view .att-sheet', { timeout: 10000 });
+    await page.waitForTimeout(400);
+    /* Birinchi dumaloq belgini bosib, tanlov oynasidan kerakli
+       holatni tanlaymiz — darhol saqlanadi.                        */
+    await page.evaluate(() => { const d = document.querySelector('#view tbody .att-dot:not([disabled])'); if (d) d.click(); });
+    await page.waitForTimeout(300);
+    await page.evaluate((lbl) => {
+      const b = Array.from(document.querySelectorAll('.att-pop .att-pick')).find(x => x.textContent.trim().indexOf(lbl) >= 0);
+      if (b) b.click();
     }, label);
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1300);
     return page.evaluate(async (g) => {
       const A = window.A, D = A.Data, ym = A.thisMonth();
       await D.loadLessons(g, ym);
       const doc = D.lessonsCached(g, ym) || {};
-      const day = (doc.items || {})[A.today()] || {};
-      const first = Object.values(day.attendance || {})[0] || {};
-      return { status: first.status, clicked: true };
+      let st = null;
+      Object.values(doc.items || {}).forEach(it => { if (it.attendance) { const f = Object.values(it.attendance)[0]; if (f) st = f.status; } });
+      return { status: st, clicked: true };
     }, gid);
   }
 

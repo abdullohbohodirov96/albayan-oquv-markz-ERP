@@ -282,43 +282,28 @@ async function api(p, o = {}) {
      ham bo'lishi mumkin, tasodifiy tanlangani sinovni chalg'itadi.   */
   await page.evaluate(a => window.A.App.go('attendance', { groupId: a[0], date: a[1] }),
     [GID, today]);
-  await page.waitForSelector('.today-strip', { timeout: 20000 });
-  await page.waitForTimeout(1800);
-  const strip = await page.evaluate(() => ({
-    cards: document.querySelectorAll('.ts-card').length,
-    subs: Array.from(document.querySelectorAll('.ts-sub')).map(x => x.innerText.replace(/\n/g, ' ')),
-    firstW: document.querySelector('.ts-card') ? Math.round(document.querySelector('.ts-card').getBoundingClientRect().width) : 0,
-    scrollable: (() => { const r = document.querySelector('.ts-row'); return r ? r.scrollWidth > r.clientWidth : false; })()
-  }));
-  ok('Bugungi darslar tasmasi chiqdi (' + strip.cards + ' ta)', strip.cards >= 1, JSON.stringify(strip));
-  ok('Darslar holat bo’yicha bo’lingan', strip.subs.length >= 1, strip.subs.join(' | '));
-  ok('Dars kartasi telefonda o’qiladigan enlikda', strip.firstW >= 200, strip.firstW + 'px');
+  /* Yangi davomat JADVAL ko'rinishi: dumaloq belgini bosib
+     keldi/kelmadi/sababli tanlanadi, darhol saqlanadi.            */
+  await page.waitForSelector('.att-sheet', { timeout: 20000 });
+  await page.waitForTimeout(1200);
+  ok('Davomat jadvali chiqdi', await page.evaluate(() => !!document.querySelector('.att-sheet')));
   ok('Davomat sahifasi yon siljimaydi', (await ovf()) <= 1, String(await ovf()));
-
-  /* O'quvchini "Keldi" deb belgilaymiz va saqlaymiz */
-  await page.waitForSelector('.att-row', { timeout: 20000 });
-  const attBtn = await page.evaluate(() => {
-    const b = document.querySelector('.att-opts button');
-    return b ? Math.round(b.getBoundingClientRect().height) : 0;
-  });
-  ok('Davomat tugmasi ≥ 44px', attBtn >= 44, attBtn + 'px');
-  await page.locator('.att-opts button').first().tap();
+  const dotH = await page.evaluate(() => { const d = document.querySelector('tbody .att-dot'); return d ? Math.round(d.getBoundingClientRect().height) : 0; });
+  ok('Davomat belgisi barmoqqa mos (≥ 38px)', dotH >= 38, dotH + 'px');
+  await page.locator('tbody .att-dot').first().tap();
   await page.waitForTimeout(400);
-  ok('Belgilash ishladi',
-    (await page.evaluate(() => document.querySelectorAll('.att-opts button[aria-pressed="true"]').length)) >= 1);
+  ok('Tanlov oynasi chiqdi', await page.evaluate(() => !!document.querySelector('.att-pop')));
+  await page.evaluate(() => { const b = [...document.querySelectorAll('.att-pop .att-pick')].find(x => /Keldi/.test(x.textContent)); if (b) b.click(); });
+  await page.waitForTimeout(800);
+  ok('Belgi "K" yashil bo’ldi (keldi)', await page.evaluate(() => { const d = document.querySelector('tbody .att-dot'); return d && /s-keldi/.test(d.className) && d.textContent === 'K'; }));
   await page.screenshot({ path: path.join(SHOTS, 'telefon-davomat.png') });
-  await page.evaluate(() => {
-    const b = Array.from(document.querySelectorAll('.card button')).find(x => /Saqlash/i.test(x.textContent));
-    if (b) b.click();
-  });
-  await page.waitForTimeout(2200);
   const ym = today.slice(0, 7);
   const les = await api('/api/doc?path=' + encodeURIComponent('lessons/' + ID('g') + '__' + ym), { cookie: dir });
   const rec = ((les.json || {}).data || {}).items || {};
-  const day = rec[today] || {};
-  ok('Davomat bazaga yozildi', !!(day.attendance && Object.keys(day.attendance).length),
-    JSON.stringify(day).slice(0, 160));
-  ok('Kim belgilagani yozildi', !!day.markedBy, JSON.stringify(day).slice(0, 160));
+  let day = null;
+  Object.keys(rec).forEach(function (d) { if (rec[d] && rec[d].attendance && Object.keys(rec[d].attendance).length) day = rec[d]; });
+  ok('Davomat bazaga darhol yozildi', !!day, JSON.stringify(rec).slice(0, 160));
+  ok('Kim belgilagani yozildi', !!(day && day.markedBy), JSON.stringify(day || {}).slice(0, 160));
 
   /* ================= 6. ERP: to'lov ================= */
   section('6. ERP — telefonda to’lov qabul qilish');

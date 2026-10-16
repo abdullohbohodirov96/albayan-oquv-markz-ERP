@@ -22,10 +22,14 @@
     _hashLock: false,
 
     go: function (name, params) {
+      /* Sahifa NOMI o'zgarsagina tepaga ko'tariladi. O'sha sahifani
+         qayta ochish (masalan davomat saqlangach) — joyida qoladi,
+         ekran tepaga sakramaydi.                                   */
+      var changed = !App.route || App.route.name !== name;
       App.route = Object.assign({ name: name }, params || {});
       App.pushHash(App.route);
       App.render();
-      window.scrollTo(0, 0);
+      if (changed) window.scrollTo(0, 0);
     },
 
     /** Joriy sahifani manzil satriga yozish — Orqaga tugmasi va yangilash ishlaydi */
@@ -57,6 +61,13 @@
          yashaydi, shuning uchun ekranda hech qachon eski raqam
          qolmaydi (to'lov yozilgach darhol yangilanadi).            */
       if (A.Q && A.Q.resetCache) A.Q.resetCache();
+      /* Qayta chizishda ekran holatini (scroll) saqlab qolamiz: UI.clear
+         sahifani bo'shatganda balandlik 0 ga tushib, brauzer scroll ni
+         tepaga tortib yuboradi. Shuning uchun oldin eslab olamiz,
+         chizgandan keyin qaytaramiz — toza sahifa almashganda esa
+         App.go o'zi tepaga olib chiqadi.                              */
+      var scEl = document.scrollingElement || document.documentElement;
+      var prevY = scEl ? scEl.scrollTop : 0;
       var view = document.getElementById('view');
       UI.clear(view);
       renderNav();
@@ -71,6 +82,7 @@
           h('div', {}, [h('b', {}, 'Sahifani ochib bo’lmadi. '), e.message || String(e)])
         ]));
       }
+      if (prevY && scEl) { try { scEl.scrollTop = prevY; } catch (e2) { } }
     },
     softRender: function () {
       clearTimeout(App._renderTimer);
@@ -124,9 +136,10 @@
     }
     var r = hashToRoute();
     if (!r) return;
+    var changed = !App.route || App.route.name !== r.name;
     App.route = r;
     App.render();
-    window.scrollTo(0, 0);
+    if (changed) window.scrollTo(0, 0);
   }
 
   /* ---------- Menyu ---------- */

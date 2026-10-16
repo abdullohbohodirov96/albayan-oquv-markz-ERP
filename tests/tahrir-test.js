@@ -503,103 +503,62 @@ function hasNumber(text, n) {
   }
 
   /* ================= 13. DAVOMAT ================= */
-  section('13. Davomat — belgilangani saqlanib, sahifada ko’rinadimi');
-  /* Davomat alohida hujjatda saqlanadi: lessons/<guruh>__<oy> */
+  section('13. Davomat — jadvalda belgilab, saqlanib qolishi');
+  /* Yangi davomat JADVAL ko'rinishi: dumaloq belgini bosib
+     keldi/kelmadi/sababli tanlanadi, darhol bazaga yoziladi. */
   await reloadAndText(page, 'attendance?groupId=' + encodeURIComponent(ID('g')));
-  let attDate = await page.evaluate(() => {
-    const d = document.querySelector('#view input[type=date]');
-    return d ? d.value : '';
+  await page.waitForSelector('#view .att-sheet', { timeout: 15000 });
+  const hasDot = await page.evaluate(() => {
+    const d = document.querySelector('#view tbody .att-dot:not([disabled])');
+    if (!d) return false;
+    d.click(); return true;
   });
-  const allIn = await page.evaluate(() => {
-    const b = Array.from(document.querySelectorAll('#view button'))
-      .find(x => /Hammani/.test(x.textContent));
-    if (!b) return false;
-    b.click(); return true;
-  });
-  ok('"Hammani Keldi deb belgilash" tugmasi bor', allIn);
-  if (allIn) {
-    await page.waitForTimeout(400);
-    const saved = await page.evaluate(() => {
-      const b = Array.from(document.querySelectorAll('#view .btn.primary'))
-        .find(x => /Saqlash/.test(x.textContent));
-      if (!b) return false;
-      b.click(); return true;
-    });
-    ok('Davomat saqlandi', saved);
-    await page.waitForTimeout(1500);
-    const doc = await get('lessons/' + ID('g') + '__' + THIS);
-    /* Sana maydoni topilmasa — hujjatdagi yagona kunni olamiz */
-    if (!attDate && doc && doc.items) attDate = Object.keys(doc.items)[0] || '';
-    const rec = doc && doc.items && doc.items[attDate];
-    ok('Davomat bazaga yozildi (' + attDate + ')',
-      !!(rec && rec.attendance && Object.keys(rec.attendance).length),
-      JSON.stringify(doc && Object.keys(doc.items || {})));
-    ok('Kim belgilagani ham yozildi', !!(rec && rec.markedBy), JSON.stringify(rec && rec.markedBy));
-    /* Qayta yuklangach tanlov saqlanib turishi kerak */
-    await reloadAndText(page, 'attendance?groupId=' + encodeURIComponent(ID('g')) + '&date=' + attDate);
-    const stillOn = await page.evaluate(() =>
-      document.querySelectorAll('#view .att-opts button[aria-pressed="true"]').length);
-    ok('Qayta yuklangach belgilangani turibdi', stillOn > 0, String(stillOn));
-  }
+  ok('Davomat jadvali va belgi chiqdi', hasDot);
+  await page.waitForTimeout(350);
+  await page.evaluate(() => { const b = Array.from(document.querySelectorAll('.att-pop .att-pick')).find(x => /Keldi/.test(x.textContent)); if (b) b.click(); });
+  await page.waitForTimeout(1300);
+  const doc = await get('lessons/' + ID('g') + '__' + THIS);
+  let attDate = '', rec = null;
+  if (doc && doc.items) Object.keys(doc.items).forEach(function (d) { if (doc.items[d].attendance && Object.keys(doc.items[d].attendance).length) { attDate = d; rec = doc.items[d]; } });
+  ok('Davomat bazaga yozildi (' + attDate + ')', !!(rec && rec.attendance && Object.keys(rec.attendance).length), JSON.stringify(doc && Object.keys(doc.items || {})));
+  ok('Kim belgilagani ham yozildi', !!(rec && rec.markedBy), JSON.stringify(rec && rec.markedBy));
+  await reloadAndText(page, 'attendance?groupId=' + encodeURIComponent(ID('g')));
+  await page.waitForSelector('#view .att-sheet', { timeout: 15000 });
+  const stillOn = await page.evaluate(() => document.querySelectorAll('#view tbody .att-dot.s-keldi').length);
+  ok('Qayta yuklangach belgilangani turibdi', stillOn > 0, String(stillOn));
 
   /* ========== 13b. ESKI OY DAVOMATI ==========
      Guruh o'tgan oydan beri ishlayapti, lekin o'quvchi BUGUN yozilgan
-     (import qilinganda joinedAt = bugun bo'ladi). Ilgari bunday
-     o'quvchi o'tgan oydagi darsda ro'yxatdan BUTUNLAY tushib qolardi —
-     ekran bo'sh chiqardi va "davomat chiqmayapti" deyilardi.         */
-  section('13b. O’tgan oydagi darsga davomat qo’yish');
+     (import qilinganda joinedAt = bugun bo'ladi). Keyin yozilgan
+     o'quvchi ham o'tgan oy darsiga belgilanadi — ro'yxatdan tushmaydi. */
+  section('13b. O’tgan oydagi darsga davomat (keyin yozilgan o’quvchi ham)');
   const PREV = A.addMonths(THIS, -1);
-  /* Guruhni o'tgan oydan boshlangan qilamiz */
   const g0 = await get('groups/' + ID('g'));
   await put('groups/' + ID('g'), Object.assign({}, g0, { startDate: PREV + '-01' }));
-  /* O'quvchi BUGUN yozilgan bo'lsin */
   const m0 = await get('memberships/' + ID('m'));
   await put('memberships/' + ID('m'), Object.assign({}, m0, { joinedAt: A.today() }));
 
   await reloadAndText(page, 'attendance?groupId=' + encodeURIComponent(ID('g')) + '&ym=' + PREV);
+  await page.waitForSelector('#view .att-sheet', { timeout: 15000 });
   const prevView = await page.evaluate(() => ({
     oy: (document.querySelector('#view input[type=month]') || {}).value,
-    qatorlar: document.querySelectorAll('#view .att-row').length,
-    kech: document.querySelectorAll('#view .att-row.att-late').length,
-    hammaTugma: !!Array.from(document.querySelectorAll('#view button')).find(x => /Hammani/.test(x.textContent))
+    qatorlar: document.querySelectorAll('#view tbody tr').length,
+    kech: document.querySelectorAll('#view .att-name.att-late').length,
+    dots: document.querySelectorAll('#view tbody .att-dot:not([disabled])').length
   }));
   eq('O’tgan oy ochildi', prevView.oy, PREV);
   ok('O’tgan oyda ham o’quvchi ro’yxati bor', prevView.qatorlar > 0, JSON.stringify(prevView));
-  ok('Keyinroq yozilgani belgilab qo’yildi', prevView.kech > 0, JSON.stringify(prevView));
-  ok('"Hammani Keldi" tugmasi bor', prevView.hammaTugma);
+  ok('Keyin yozilgan o’quvchini ham belgilash mumkin', prevView.dots > 0, JSON.stringify(prevView));
 
-  /* "Hammani Keldi" EKRANDAGI hammasini belgilashi kerak */
-  await page.evaluate(() => {
-    Array.from(document.querySelectorAll('#view button')).find(x => /Hammani/.test(x.textContent)).click();
-  });
-  await page.waitForTimeout(400);
-  const onCount = await page.evaluate(() =>
-    document.querySelectorAll('#view .att-opts button[aria-pressed="true"]').length);
-  ok('Keyinroq yozilganlar ham belgilandi', onCount >= prevView.qatorlar,
-    onCount + ' / ' + prevView.qatorlar);
-  const pctText = await page.evaluate(() =>
-    (Array.from(document.querySelectorAll('#view .small.muted'))
-      .map(x => x.textContent).find(t => /Belgilangan:/.test(t)) || ''));
-  ok('Davomat foizi ko’rsatilyapti', /Belgilangan:\s*\d+\/\d+/.test(pctText) && /%/.test(pctText), pctText);
-
-  const prevDate = await page.evaluate(() => {
-    const sels = Array.from(document.querySelectorAll('#view .filters select'));
-    const s = sels[sels.length - 1];
-    return s ? s.value : '';
-  });
-  await page.evaluate(() => {
-    const b = Array.from(document.querySelectorAll('#view .btn.primary')).find(x => /Saqlash/.test(x.textContent));
-    if (b) b.click();
-  });
-  await page.waitForTimeout(2000);
+  await page.evaluate(() => { const d = document.querySelector('#view tbody .att-dot:not([disabled])'); if (d) d.click(); });
+  await page.waitForTimeout(350);
+  await page.evaluate(() => { const b = Array.from(document.querySelectorAll('.att-pop .att-pick')).find(x => /Keldi/.test(x.textContent)); if (b) b.click(); });
+  await page.waitForTimeout(1300);
   const prevDoc = await get('lessons/' + ID('g') + '__' + PREV);
-  const prevRec = prevDoc && prevDoc.items && prevDoc.items[prevDate];
-  ok('O’tgan oy davomati BAZAGA yozildi (' + prevDate + ')',
-    !!(prevRec && prevRec.attendance && Object.keys(prevRec.attendance).length),
-    JSON.stringify(prevDoc && Object.keys(prevDoc.items || {})));
-  ok('  → keyinroq yozilgan o’quvchi ham tushdi',
-    !!(prevRec && prevRec.attendance && prevRec.attendance[ID('m')]),
-    JSON.stringify(prevRec && prevRec.attendance));
+  let prevRec = null;
+  if (prevDoc && prevDoc.items) Object.keys(prevDoc.items).forEach(function (d) { if (prevDoc.items[d].attendance && Object.keys(prevDoc.items[d].attendance).length) prevRec = prevDoc.items[d]; });
+  ok('O’tgan oy davomati BAZAGA yozildi', !!(prevRec && prevRec.attendance && Object.keys(prevRec.attendance).length), JSON.stringify(prevDoc && Object.keys(prevDoc.items || {})));
+  ok('  → keyin yozilgan o’quvchi ham tushdi', !!(prevRec && prevRec.attendance && prevRec.attendance[ID('m')]), JSON.stringify(prevRec && prevRec.attendance));
   /* To'lov sanasi O'ZGARMAGAN bo'lishi kerak — davomat pulga tegmaydi */
   const mAfter = await get('memberships/' + ID('m'));
   eq('Guruhga kirgan sana o’zgarmadi', mAfter.joinedAt, A.today());

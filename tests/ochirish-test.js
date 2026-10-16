@@ -281,8 +281,11 @@ const A = globalThis.A;
     startDate: A.monthStart(YM), fee: 500000, feeHistory: [{ fee: 500000, from: YM }],
     limit: 20, status: 'rejalashtirilgan'
   });
+  /* g2 uchun ALOHIDA o'quvchi — sb allaqachon boshqa guruhda
+     (bir o'quvchi bitta guruh qoidasi uni g2 ga qo'ymaydi). */
+  await put('students/' + ID('sg2'), { id: ID('sg2'), firstName: 'Bo’sh', lastName: 'Guruh ' + R, phone: '+998901118866', status: 'faol' });
   await put('memberships/' + ID('mg2'), {
-    id: ID('mg2'), studentId: ID('sb'), groupId: ID('g2'),
+    id: ID('mg2'), studentId: ID('sg2'), groupId: ID('g2'),
     joinedAt: A.monthStart(YM), leftAt: null, status: 'faol', discount: null
   });
   const gdry = await api('/api/groups/purge', { method: 'POST', body: { groupId: ID('g2'), dryRun: true } });
@@ -293,7 +296,34 @@ const A = globalThis.A;
   ok('Bo’sh guruh o’chdi', gdel.json && gdel.json.ok && !gdel.json.blocked, JSON.stringify(gdel.json));
   ok('Guruh yozuvi yo’q', !(await get('groups/' + ID('g2'))));
   ok('Guruh a’zoligi ham o’chdi', !(await get('memberships/' + ID('mg2'))));
-  ok('O’quvchi kartasi esa qoldi (faqat guruhdan chiqdi)', !!(await get('students/' + ID('sb'))));
+  ok('O’quvchi kartasi esa qoldi (faqat guruhdan chiqdi)', !!(await get('students/' + ID('sg2'))));
+
+  /* =============== 7c. Bir o'quvchi — bitta guruh =============== */
+  section('7c. Bir o’quvchi faqat bitta guruhda bo’ladi');
+  await put('groups/' + ID('bgA'), {
+    id: ID('bgA'), code: 'BA' + String(Date.now() % 90 + 9), name: 'Guruh A ' + R, courseId: ID('c'), teacherId: ID('t'),
+    days: [1, 3], startTime: '09:00', endTime: '10:30', startDate: A.monthStart(YM), fee: 500000,
+    feeHistory: [{ fee: 500000, from: YM }], limit: 20, status: 'faol'
+  });
+  await put('groups/' + ID('bgB'), {
+    id: ID('bgB'), code: 'BB' + String(Date.now() % 90 + 9), name: 'Guruh B ' + R, courseId: ID('c'), teacherId: ID('t'),
+    days: [2, 4], startTime: '11:00', endTime: '12:30', startDate: A.monthStart(YM), fee: 500000,
+    feeHistory: [{ fee: 500000, from: YM }], limit: 20, status: 'faol'
+  });
+  await put('students/' + ID('bgs'), { id: ID('bgs'), firstName: 'Bitta', lastName: 'Guruh ' + R, phone: '+998901119977', status: 'faol' });
+  var e1 = await put('memberships/' + ID('bgm1'), { id: ID('bgm1'), studentId: ID('bgs'), groupId: ID('bgA'), joinedAt: A.monthStart(YM), status: 'faol' });
+  eq('Birinchi guruhga yozildi', e1.status, 200);
+  var e2 = await put('memberships/' + ID('bgm2'), { id: ID('bgm2'), studentId: ID('bgs'), groupId: ID('bgB'), joinedAt: A.monthStart(YM), status: 'faol' });
+  eq('Ikkinchi guruhga yozilmadi (bitta guruh qoidasi)', e2.status, 400);
+  ok('Ikkinchi a’zolik bazaga tushmadi', !(await get('memberships/' + ID('bgm2'))));
+  /* Mavjud a'zolikni TAHRIRLAB boshqa guruhga ko'chirish mumkin (o'sha id) */
+  var mA = await get('memberships/' + ID('bgm1'));
+  var mv = await put('memberships/' + ID('bgm1'), Object.assign({}, mA, { groupId: ID('bgB') }));
+  eq('Ko’chirish (o’sha a’zolik) mumkin', mv.status, 200);
+  /* Eski guruhdan chiqgach (leftAt), yangi guruhga yozsa bo'ladi */
+  await put('memberships/' + ID('bgm1'), Object.assign({}, mA, { groupId: ID('bgA'), leftAt: A.today() }));
+  var e3 = await put('memberships/' + ID('bgm3'), { id: ID('bgm3'), studentId: ID('bgs'), groupId: ID('bgB'), joinedAt: A.today(), status: 'faol' });
+  eq('Chiqgandan keyin yangi guruhga yozildi', e3.status, 200);
 
   /* =============== 8. Tozalash =============== */
   section('8. Sinov ma’lumotlari tozalandi');

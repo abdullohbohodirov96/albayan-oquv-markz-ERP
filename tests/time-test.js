@@ -96,19 +96,21 @@ function tashkentDate(at) {
     head: document.querySelector('.page-head p, .page-head .sub') ? document.querySelector('.page-head p, .page-head .sub').textContent : '',
     selected: (document.querySelector('.filters select:nth-of-type(1)') || {}).value
   }));
-  const shown = await page.evaluate(() => {
-    const el = document.querySelector('.card-head h2, .card h2');
-    return el ? el.textContent : '';
+  /* Yangi davomat JADVAL ko'rinishi: tepada sanalar ustun bo'ladi,
+     bugungi ustun ajratib ko'rsatiladi (.att-td).                   */
+  const grid = await page.evaluate(() => {
+    var th = document.querySelector('.att-sheet thead th.att-td');
+    return {
+      hasSheet: !!document.querySelector('.att-sheet'),
+      todayCol: th ? th.textContent.trim() : '',
+      selected: (document.querySelector('.filters select') || {}).value
+    };
   });
-  ok('Bugungi sana o’zi tanlandi', shown.indexOf(String(Number(today.slice(8, 10)))) >= 0,
-    'ko’rsatilgan: ' + shown + ' / bugun: ' + today);
+  ok('Davomat jadvali ochildi', grid.hasSheet, JSON.stringify(grid));
+  ok('Bugungi ustun ajratib ko’rsatildi', grid.todayCol.indexOf(String(Number(today.slice(8, 10)))) >= 0,
+    'bugun ustuni: ' + grid.todayCol + ' / bugun: ' + today);
   ok('Bugun dars bo’ladigan guruh tanlandi',
-    state.groupId === state.target || shown.length > 0, JSON.stringify(state));
-
-  const opts = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('.filters select')).map(s =>
-      Array.from(s.options).map(o => o.textContent).join(' | ')));
-  ok('Sana ro’yxatida "Bugun" belgisi bor', opts.join(' ').indexOf('Bugun') >= 0, opts.join(' ').slice(0, 160));
+    grid.selected === state.target || grid.hasSheet, JSON.stringify({ sel: grid.selected, target: state.target }));
 
   section('   Davomat yozuvi bugungi sana bilan saqlanadi');
   const saved = await page.evaluate(async () => {

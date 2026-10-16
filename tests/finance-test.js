@@ -100,6 +100,17 @@ const ID = n => R + '_' + n;
   ok('Usul "terminal" bo’lib saqlandi', !!tItems[ID('p_term')] && tItems[ID('p_term')].method === 'terminal',
     JSON.stringify(tItems[ID('p_term')] && tItems[ID('p_term')].method));
 
+  /* ================= 1c. To'lovni butunlay o'chirish ================= */
+  section('1c. Xato to’lovni butunlay o’chirish (summa qayta hisoblanadi)');
+  var noReason = await req('/api/payment/delete', { method: 'POST', cookie: dir, body: { id: ID('p_term') } });
+  eq('Sababsiz o’chirilmadi', noReason.status, 400);
+  var delP = await req('/api/payment/delete', { method: 'POST', cookie: dir, body: { id: ID('p_term'), reason: 'xato kiritildi' } });
+  eq('Sabab bilan o’chirildi', delP.status, 200);
+  var afterDel = (((await req('/api/collection?name=payments', { cookie: dir })).json) || {}).items || {};
+  ok('To’lov ro’yxatdan butunlay o’chdi', !afterDel[ID('p_term')], JSON.stringify(Object.keys(afterDel).filter(function (k) { return k === ID('p_term'); })));
+  var auditD = Object.values((((await req('/api/collection?name=audit', { cookie: dir })).json) || {}).items || {});
+  ok('O’chirish tarixda qoldi', auditD.some(function (a) { return /To’lov o’chirildi/.test(a.action || ''); }));
+
   /* ================= 1. Takroriy ajratma ================= */
   section('1. Bitta so’rovda takroriy ajratma hisobdan oshirmaydi');
   const dbl = await pay({

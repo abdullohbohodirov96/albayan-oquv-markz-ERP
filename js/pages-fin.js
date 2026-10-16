@@ -16,8 +16,9 @@
   function methodLabel(m) { return METHOD_LABELS[m] || m; }
 
   /* ================= TO'LOV QABUL QILISH ================= */
-  A.paymentForm = function (studentId, App) {
+  A.paymentForm = function (studentId, App, prefill) {
     App.guard('payment.create');
+    prefill = prefill || {};
     var payId = A.uid('pay'); // takroriy bosishda bir xil id — ikkinchi yozuv yaratilmaydi
     var students = A.sortBy(D.all('students').filter(function (s) { return s.status !== 'arxiv'; }),
       function (s) { return s.lastName + ' ' + s.firstName; });
@@ -40,10 +41,11 @@
     fillOptions();
     search.input.addEventListener('input', function () { fillOptions(); refresh(); });
 
-    var fAmount = UI.field({ label: 'Summa (so’m)', type: 'number', required: true, value: '' });
-    var fDate = UI.field({ label: 'Sana', type: 'date', required: true, value: A.today() });
+    var fAmount = UI.field({ label: 'Summa (so’m)', type: 'number', required: true, value: prefill.amount != null ? prefill.amount : '' });
+    var fDate = UI.field({ label: 'Sana', type: 'date', required: true, value: prefill.date || A.today() });
     var fMethod = UI.field({ label: 'To’lov usuli', type: 'select', options: METHODS });
-    var fNote = UI.field({ label: 'Izoh', full: true });
+    if (prefill.method) fMethod.input.value = prefill.method;
+    var fNote = UI.field({ label: 'Izoh', full: true, value: prefill.note || '' });
 
     var allocBox = h('div', { class: 'field full' });
     var allocInputs = {};
@@ -633,7 +635,7 @@
         label: '', right: true, render: function (p) {
           return h('div', { class: 'rowflex', style: 'justify-content:flex-end;gap:6px' }, [
             h('button', { class: 'btn sm', onclick: function (e) { e.stopPropagation(); A.receiptModal(p, App); } }, 'Chek'),
-            (!p.voided && p.type !== 'refund' && App.can('payment.void')) ? h('button', {
+            (!p.voided && App.can('payment.void')) ? h('button', {
               class: 'btn sm danger', onclick: function (e) { e.stopPropagation(); voidOrRefund(p, App); }
             }, 'Tuzatish') : null
           ]);
@@ -661,26 +663,50 @@
     UI.modal({
       title: 'To’lovni tuzatish',
       body: [
-        h('p', { style: 'margin:0' }, 'Moliyaviy yozuv yashirin o’chirilmaydi. Ikki xil amal bor:'),
-        h('ul', { class: 'small muted', style: 'margin:0;padding-left:18px' }, [
-          h('li', {}, 'Bekor qilish — yozuv xato kiritilgan bo’lsa. Yozuv ro’yxatda qoladi, lekin hisobga olinmaydi.'),
-          h('li', {}, 'Pul qaytarish — mijozga pul qaytarilganda alohida yangi yozuv yaratiladi.')
+        h('p', { style: 'margin:0' }, A.som(pay.amount) + ' so’m · ' + Q.studentName(pay.studentId) + ' · chek ' + (pay.receiptNo || '—')),
+        h('p', { class: 'small muted', style: 'margin:8px 0 0' }, 'Qaysi biri kerak?'),
+        h('ul', { class: 'small muted', style: 'margin:4px 0 0;padding-left:18px' }, [
+          h('li', {}, 'Summani to’g’rilash — summa/sana/usul xato kiritilgan bo’lsa. Eski yozuv o’chib, yangisini kiritasiz.'),
+          h('li', {}, 'Butunlay o’chirish — yozuvni umuman olib tashlash (ro’yxatda qolmaydi).'),
+          h('li', {}, 'Bekor qilish — yozuv ro’yxatda qoladi, lekin hisobga olinmaydi.'),
+          h('li', {}, 'Pul qaytarish — mijozga pul qaytarilganda alohida yangi yozuv.')
         ])
       ],
       actions: [
+        pay.type !== 'refund' ? {
+          label: 'Summani to’g’rilash', cls: 'primary', onClick: async function (c) {
+            var reason = await UI.askReason('To’lovni to’g’rilash', 'Sababi (nega o’zgartiryapsiz)');
+            if (!reason) return;
+            await A.Ops.deletePayment(pay, 'To’g’rilash: ' + reason, App.user);
+            c();
+            UI.toast('Eski yozuv o’chdi — to’g’ri summani kiriting.', 'ok');
+            /* O'quvchi uchun to'lov oynasini ESKI qiymatlar bilan ochamiz,
+               faqat summani to'g'rilab saqlaydi.                          */
+            A.paymentForm(pay.studentId, App, { amount: pay.amount, date: pay.date, method: pay.method, note: pay.note });
+          }
+        } : null,
         {
-          label: 'Bekor qilish (xato yozuv)', cls: 'danger', onClick: async function (c) {
+          label: 'Butunlay o’chirish', cls: 'danger', onClick: async function (c) {
+            if (!await UI.confirm('To’lovni butunlay o’chirish', A.som(pay.amount) + ' so’m ' + (pay.type === 'refund' ? 'qaytarish ' : 'to’lov ') + 'butunlay o’chadi. Qoldiq qayta hisoblanadi.', 'O’chirish', true)) return;
+            var reason = await UI.askReason('To’lovni o’chirish', 'Sababi');
+            if (!reason) return;
+            await A.Ops.deletePayment(pay, reason, App.user);
+            c(); UI.toast('To’lov o’chirildi.', 'ok'); App.render();
+          }
+        },
+        {
+          label: 'Bekor qilish (yozuv qoladi)', onClick: async function (c) {
             var reason = await UI.askReason('To’lovni bekor qilish', 'Sababi');
             if (!reason) return;
             await A.Ops.voidPayment(pay, reason, App.user);
             c(); UI.toast('To’lov bekor qilindi.', 'ok'); App.render();
           }
         },
-        {
+        pay.type !== 'refund' ? {
           label: 'Pul qaytarish', onClick: function (c) { c(); refundForm(pay, App); }
-        },
+        } : null,
         { label: 'Yopish' }
-      ]
+      ].filter(Boolean)
     });
   }
 
