@@ -78,22 +78,102 @@
     return TEMPLATES;
   }
 
-  /* ================= RO'YXAT ================= */
+  /* ================= BO'LIMLAR ================= */
+  function catsList() {
+    return (D.settings && Array.isArray(D.settings.formCats)) ? D.settings.formCats : [];
+  }
+  function catName(id) {
+    var c = catsList().filter(function (x) { return x.id === id; })[0];
+    return c ? c.name : null;
+  }
+  /* catId='' bo'lsa — "Boshqa": bo'limsiz yoki o'chirilgan bo'limdagi formalar */
+  function formsInCat(catId) {
+    var known = {}; catsList().forEach(function (c) { known[c.id] = 1; });
+    return A.sortBy(D.all('forms').filter(function (f) {
+      if (catId === '') return !f.catId || !known[f.catId];
+      return f.catId === catId;
+    }), 'updatedAt', 'desc');
+  }
+  function leadsInCat(catId) {
+    return formsInCat(catId).reduce(function (s, f) { return s + subsOf(f.id).length; }, 0); }
+
+  async function catOp(body, App) {
+    try {
+      var r = await D.api('POST', 'api/forms/cats', body);
+      D.settings = D.settings || {};
+      D.settings.formCats = r.cats || [];
+      App.render();
+      return true;
+    } catch (e) { UI.toast(e.message || 'Bajarilmadi.', 'bad'); return false; }
+  }
+
+  /* ================= RO'YXAT: BO'LIMLAR → FORMALAR → LEADLAR ========= */
   A.Pages.forms = function (view, route, App) {
     App.guard('nav.leads');
-    var forms = A.sortBy(D.all('forms'), 'updatedAt', 'desc');
+    if (!TEMPLATES) { loadTemplates().then(function () { App.render(); }); }
+    if (route.cat === undefined) { renderSections(view, App); }
+    else { renderSection(view, route, App); }
+  };
 
-    view.appendChild(UI.pageHead('Formalar', 'Ariza shakllari — havolani ulashing, arizalar Murojaatlarga tushadi', [
-      App.can('lead.edit') ? h('button', {
-        class: 'btn primary', onclick: function () { formBuilder(null, App); }
-      }, [UI.icon('plus'), 'Yangi forma']) : null
-    ]));
+  function renderSections(view, App) {
+    var canEdit = App.can('lead.edit');
+    view.appendChild(UI.pageHead('Formalar', 'Bo’limlar bo’yicha: bo’limga kiring → formalar → tushgan murojaatlar', [
+      canEdit ? h('button', { class: 'btn', onclick: function () { addCat(App); } }, [UI.icon('plus'), 'Bo’lim qo’shish']) : null,
+      canEdit ? h('button', { class: 'btn primary', onclick: function () { formBuilder(null, App, { catId: '' }); } }, [UI.icon('plus'), 'Yangi forma']) : null
+    ].filter(Boolean)));
 
+    var cats = catsList().slice();
+    var sections = cats.map(function (c) { return { id: c.id, name: c.name }; });
+    /* "Boshqa" — faqat bo'limsiz forma bo'lsa ko'rsatiladi */
+    if (formsInCat('').length) sections.push({ id: '', name: 'Boshqa', other: true });
+
+    if (!sections.length && !D.all('forms').length) {
+      view.appendChild(UI.card(null, UI.empty({
+        title: 'Hali bo’lim ham forma ham yo’q',
+        text: 'Avval bo’lim oching (masalan “Ro’yxat”), keyin ichiga forma tuzasiz — havolani Instagram yoki Telegramga qo’yasiz.',
+        action: canEdit ? { label: 'Bo’lim qo’shish', onClick: function () { addCat(App); } } : null
+      })));
+      return;
+    }
+
+    var grid = h('div', { class: 'grid cols-3' });
+    sections.forEach(function (s) {
+      var nf = formsInCat(s.id).length, nl = leadsInCat(s.id);
+      grid.appendChild(h('button', {
+        class: 'card sec-card', type: 'button',
+        onclick: function () { App.go('forms', { cat: s.id }); }
+      }, h('div', { class: 'card-body', style: 'display:flex;flex-direction:column;gap:8px' }, [
+        h('div', { class: 'rowflex', style: 'justify-content:space-between;align-items:flex-start' }, [
+          h('h3', { style: 'font-size:16px;margin:0' }, [UI.icon('folder') || null, ' ' + s.name]),
+          s.other ? UI.pill('bo’limsiz', 'mute') : null
+        ]),
+        h('div', { class: 'rowflex', style: 'gap:6px' }, [
+          UI.pill(nf + ' ta forma', nf ? 'info' : 'mute'),
+          UI.pill(nl + ' ta murojaat', nl ? 'ok' : 'mute')
+        ]),
+        (App.can('lead.edit') && !s.other) ? h('div', { class: 'rowflex', style: 'gap:6px;margin-top:2px' }, [
+          h('button', { class: 'btn sm', onclick: function (e) { e.stopPropagation(); renameCat(s, App); } }, 'Nomini o’zgartirish'),
+          h('button', { class: 'btn sm danger', onclick: function (e) { e.stopPropagation(); delCat(s, App); } }, 'O’chirish')
+        ]) : null
+      ])));
+    });
+    view.appendChild(grid);
+  }
+
+  function renderSection(view, route, App) {
+    var cat = route.cat;
+    var title = cat === '' ? 'Boshqa (bo’limsiz)' : (catName(cat) || 'Boshqa (bo’limsiz)');
+    view.appendChild(h('button', { class: 'btn ghost sm', style: 'margin-bottom:8px', onclick: function () { App.go('forms'); } }, [UI.icon('back'), 'Bo’limlar']));
+    view.appendChild(UI.pageHead(title, 'Bo’limdagi formalar — formaga kiring, tushgan murojaatlar ko’rinadi', [
+      App.can('lead.edit') ? h('button', { class: 'btn primary', onclick: function () { formBuilder(null, App, { catId: cat }); } }, [UI.icon('plus'), 'Yangi forma']) : null
+    ].filter(Boolean)));
+
+    var forms = formsInCat(cat);
     if (!forms.length) {
       view.appendChild(UI.card(null, UI.empty({
-        title: 'Hali forma yo’q',
-        text: 'Birinchi formani tuzing: nom, savollar, fon — va havolani Instagram yoki Telegramga qo’ying.',
-        action: App.can('lead.edit') ? { label: 'Yangi forma', onClick: function () { formBuilder(null, App); } } : null
+        title: 'Bu bo’limda forma yo’q',
+        text: 'Yangi forma tuzing — u shu bo’limga tushadi.',
+        action: App.can('lead.edit') ? { label: 'Yangi forma', onClick: function () { formBuilder(null, App, { catId: cat }); } } : null
       })));
       return;
     }
@@ -125,20 +205,42 @@
           h('div', { class: 'rowflex', style: 'gap:6px;flex-wrap:wrap' }, [
             h('button', { class: 'btn sm', onclick: function () { UI.copy(formUrl(f)); UI.toast('Havola nusxalandi', 'ok'); } }, 'Havola'),
             h('a', { class: 'btn sm', href: '/f/' + f.slug, target: '_blank', rel: 'noopener' }, 'Ochish'),
-            h('button', { class: 'btn sm', onclick: function () { App.go('forms', { id: f.id, tab: 'arizalar' }); } }, 'Arizalar'),
-            App.can('lead.edit') ? h('button', { class: 'btn sm primary', onclick: function () { formBuilder(f, App); } }, 'Tahrirlash') : null
+            h('button', { class: 'btn sm' + (route.id === f.id ? ' primary' : ''), onclick: function () { App.go('forms', { cat: cat, id: f.id }); } }, 'Murojaatlar'),
+            App.can('lead.edit') ? h('button', { class: 'btn sm', onclick: function () { formBuilder(f, App); } }, 'Tahrirlash') : null
           ].filter(Boolean))
         ])
       ]));
     });
     view.appendChild(grid);
 
-    /* Tanlangan forma arizalari */
+    /* Tanlangan forma: statistika + tushgan murojaatlar (leadlar) */
     if (route.id) {
       var sel = D.one('forms', route.id);
       if (sel) { view.appendChild(statCard(sel)); view.appendChild(subsCard(sel, App)); }
     }
-  };
+  }
+
+  function addCat(App) {
+    (async function () {
+      var name = await UI.askReason('Yangi bo’lim', 'Bo’lim nomi (masalan “Ro’yxat”)');
+      if (name && name.trim()) await catOp({ op: 'add', name: name.trim() }, App);
+    })();
+  }
+  function renameCat(s, App) {
+    (async function () {
+      var name = await UI.askReason('Bo’lim nomini o’zgartirish', 'Yangi nom (hozir: ' + s.name + ')');
+      if (name && name.trim() && name.trim() !== s.name) await catOp({ op: 'rename', id: s.id, name: name.trim() }, App);
+    })();
+  }
+  function delCat(s, App) {
+    (async function () {
+      var nf = formsInCat(s.id).length;
+      var ok = await UI.confirm('Bo’limni o’chirish',
+        '“' + s.name + '” bo’limi o’chadi. ' + (nf ? 'Ichidagi ' + nf + ' ta forma O’CHMAYDI — ular “Boshqa” bo’limiga o’tadi.' : 'Bo’lim bo’sh.'),
+        'O’chirish', true);
+      if (ok) catOp({ op: 'del', id: s.id }, App);
+    })();
+  }
 
   function subsCard(f, App) {
     var rows = subsOf(f.id);
@@ -180,16 +282,22 @@
   }
 
   /* ================= KONSTRUKTOR ================= */
-  function formBuilder(form, App) {
+  function formBuilder(form, App, opts) {
     App.guard('lead.edit');
+    opts = opts || {};
     var isNew = !form;
     var f = form ? JSON.parse(JSON.stringify(form)) : {
       title: '', intro: '', thanks: '', button: 'Yuborish', bg: 'kok', active: true, contact: true, info: '',
+      catId: opts.catId || '',
       fields: [
         { id: 'ism', type: 'text', label: 'Ismingiz', required: true },
         { id: 'tel', type: 'phone', label: 'Telefon raqamingiz', required: true, cc: '+998' }
       ]
     };
+    var fCat = UI.field({
+      label: 'Bo’lim', type: 'select', value: f.catId || '',
+      options: [{ value: '', label: 'Boshqa (bo’limsiz)' }].concat(catsList().map(function (c) { return { value: c.id, label: c.name }; }))
+    });
     var fInfo = UI.field({ label: 'Qo’shimcha ma’lumot (kontaktlar bo’limida chiqadi)', type: 'textarea', rows: 2, value: f.info || '',
       placeholder: 'Masalan: darslar dushanba–shanba, 1-dars bepul.' });
     var fContact = UI.field({ label: 'Kontaktlar va ma’lumot bo’limi', type: 'select', value: f.contact === false ? 'off' : 'on',
@@ -377,7 +485,7 @@
       return {
         id: f.id, title: fTitle.input.value.trim(), slug: fSlug.input.value.trim(), intro: fIntro.input.value,
         thanks: fThanks.input.value, button: fButton.input.value, bg: f.bg,
-        courseId: fCourse.input.value, active: fActive.input.value === 'on', fields: f.fields,
+        courseId: fCourse.input.value, catId: fCat.input.value, active: fActive.input.value === 'on', fields: f.fields,
         contact: fContact.input.value === 'on', info: fInfo.input.value, contacts: contactList,
         logo: !!(f.logo && !removed.logo), banner: !!(f.banner && !removed.banner)
       };
@@ -397,7 +505,8 @@
         h('div', { class: 'grid2' }, [fTitle.wrap, fSlug.wrap]),
         fIntro.wrap,
         h('div', { class: 'grid2' }, [fThanks.wrap, fButton.wrap]),
-        h('div', { class: 'grid2' }, [fCourse.wrap, fActive.wrap]),
+        h('div', { class: 'grid2' }, [fCat.wrap, fCourse.wrap]),
+        h('div', { class: 'grid2' }, [fActive.wrap, h('div')]),
         h('div', { class: 'field full' }, [h('label', {}, 'Fon'), bgBox, bgFile]),
         h('div', { class: 'grid2' }, [logoPick, bannerPick]),
         h('div', { class: 'grid2' }, [fContact.wrap, fInfo.wrap]),
@@ -457,7 +566,7 @@
                 await D.loadBootstrap();
                 close();
                 UI.toast('Saqlandi. Havola: /f/' + r.form.slug, 'ok');
-                App.go('forms', { id: r.form.id });
+                App.go('forms', { cat: r.form.catId || '', id: r.form.id });
               } catch (e) { err.hidden = false; err.textContent = e.message || 'Saqlanmadi.'; }
             });
           }

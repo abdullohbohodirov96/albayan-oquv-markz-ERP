@@ -151,6 +151,8 @@ async function saveNow(store, data, opts) {
     fields: cleanFields(data && data.fields),
     active: !(data && data.active === false),
     courseId: txt(data && data.courseId, 60),
+    /* Bo'lim (kategoriya) — formalar bo'limlarga ajratiladi */
+    catId: txt(data && data.catId, 40),
     /* Kontaktlar bo'limi (telefon, manzil, Telegram) va qo'shimcha ma'lumot */
     contact: !(data && data.contact === false),
     contacts: cleanContacts(data && data.contacts),

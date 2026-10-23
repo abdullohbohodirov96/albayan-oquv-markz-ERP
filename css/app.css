@@ -2600,3 +2600,9 @@ button.cur-title:hover b{text-decoration:underline}
 }
 .att-foot{padding:12px 6px 2px;border-top:1px solid var(--line);margin-top:8px}
 .att-foot .btn{min-height:40px;white-space:normal;max-width:100%;height:auto}
+
+/* Forma bo'limlari (kategoriya kartochkalari) */
+.sec-card{cursor:pointer;text-align:start;font:inherit;color:inherit;border-width:1px;padding:0}
+.sec-card h3{display:flex;align-items:center;gap:6px}
+.sec-card h3 .ico{width:18px;height:18px;color:var(--brand)}
+.sec-card:hover{border-color:var(--brand-light);background:var(--surface-2)}

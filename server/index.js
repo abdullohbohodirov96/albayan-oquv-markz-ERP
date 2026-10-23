@@ -3159,7 +3159,50 @@ async function handleApi(req, res, url) {
   }
   if (route === 'forms/templates' && req.method === 'GET') {
     const settings = (await store.get('meta/settings')) || {};
-    return send(res, 200, { templates: forms.TEMPLATES, types: forms.TYPES, contacts: forms.defaultContacts(settings) });
+    return send(res, 200, {
+      templates: forms.TEMPLATES, types: forms.TYPES,
+      contacts: forms.defaultContacts(settings),
+      cats: Array.isArray(settings.formCats) ? settings.formCats : []
+    });
+  }
+  /* Forma BO'LIMLARI (kategoriyalar) — meta/settings.formCats ichida saqlanadi.
+     Bo'lim o'chsa, formalar yo'qolmaydi — ular "Boshqa" ga tushadi (catId
+     endi mavjud bo'lmagan bo'limga ishora qiladi, UI "Boshqa" deb ko'rsatadi). */
+  if (route === 'forms/cats' && req.method === 'POST') {
+    if (!A.can(user, 'lead.edit')) return nope();
+    const body = await readBody(req);
+    const op = String(body.op || '');
+    const r = await forms.serial('formcats', async () => {
+      const settings = (await store.get('meta/settings')) || {};
+      let cats = Array.isArray(settings.formCats) ? settings.formCats.slice() : [];
+      if (op === 'add') {
+        const name = String(body.name || '').trim().slice(0, 60);
+        if (!name) return { error: 'Bo’lim nomini yozing.' };
+        if (cats.length >= 40) return { error: 'Bo’limlar juda ko’p.' };
+        cats.push({ id: 'fc_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name });
+      } else if (op === 'rename') {
+        const id = String(body.id || ''); const name = String(body.name || '').trim().slice(0, 60);
+        if (!name) return { error: 'Bo’lim nomini yozing.' };
+        cats = cats.map(c => c.id === id ? Object.assign({}, c, { name }) : c);
+      } else if (op === 'del') {
+        const id = String(body.id || '');
+        cats = cats.filter(c => c.id !== id);
+      } else if (op === 'order') {
+        const ids = Array.isArray(body.ids) ? body.ids.map(String) : [];
+        const by = {}; cats.forEach(c => { by[c.id] = c; });
+        const next = []; ids.forEach(id => { if (by[id]) { next.push(by[id]); delete by[id]; } });
+        cats.forEach(c => { if (by[c.id]) next.push(c); });
+        cats = next;
+      } else {
+        return { error: 'Noto’g’ri amal.' };
+      }
+      const next = Object.assign({}, settings, { formCats: cats });
+      await store.set('meta/settings', next);
+      return { cats };
+    });
+    if (r.error) return send(res, 400, { error: r.error });
+    await writeAudit(user, 'Forma bo’limlari o’zgardi', op, '');
+    return send(res, 200, { ok: true, cats: r.cats });
   }
 
   if (route === 'parent' && req.method === 'POST') {
